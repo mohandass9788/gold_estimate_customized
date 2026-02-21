@@ -17,6 +17,7 @@ export default function LoginScreen() {
     const { login, biometricLogin, isBiometricSupported, isAuthenticated } = useAuth();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const router = useRouter();
 
@@ -74,13 +75,26 @@ export default function LoginScreen() {
 
                 <View style={styles.inputContainer}>
                     <Text style={styles.label}>Password</Text>
-                    <TextInput
-                        style={styles.input}
-                        value={password}
-                        onChangeText={setPassword}
-                        placeholder="Enter password"
-                        secureTextEntry
-                    />
+                    <View style={styles.passwordWrapper}>
+                        <TextInput
+                            style={[styles.input, styles.passwordInput]}
+                            value={password}
+                            onChangeText={setPassword}
+                            placeholder="Enter password"
+                            secureTextEntry={!showPassword}
+                        />
+                        <TouchableOpacity
+                            style={styles.eyeIcon}
+                            onPress={() => setShowPassword(!showPassword)}
+                            activeOpacity={0.7}
+                        >
+                            <Icon
+                                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                                size={22}
+                                color={COLORS.textLight}
+                            />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <TouchableOpacity style={styles.loginButton} onPress={() => handleLogin()}>
@@ -145,6 +159,21 @@ const styles = StyleSheet.create({
         fontSize: FONT_SIZES.md,
         borderWidth: 1,
         borderColor: COLORS.border,
+        color: COLORS.text,
+    },
+    passwordWrapper: {
+        position: 'relative',
+        justifyContent: 'center',
+    },
+    passwordInput: {
+        paddingRight: 50, // space for eye icon
+    },
+    eyeIcon: {
+        position: 'absolute',
+        right: SPACING.md,
+        height: '100%',
+        justifyContent: 'center',
+        paddingHorizontal: SPACING.xs,
     },
     errorText: {
         color: COLORS.error,
