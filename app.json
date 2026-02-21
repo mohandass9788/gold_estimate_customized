@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "Gold Estimation",
+    "slug": "gold-estimation",
+    "version": "1.0.0",
+    "scheme": "gold-estimation",
+    "newArchEnabled": true,
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nithy.goldestimation",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSBluetoothAlwaysUsageDescription": "This app needs Bluetooth access to connect to thermal printers for receipt printing."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.nithy.goldestimation",
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9271dd18-5040-470b-b0da-4df9705bbc78"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9271dd18-5040-470b-b0da-4df9705bbc78"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}
