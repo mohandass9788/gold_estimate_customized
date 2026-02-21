@@ -11,6 +11,7 @@ interface InputFieldProps {
     keyboardType?: KeyboardTypeOptions;
     secureTextEntry?: boolean;
     style?: ViewStyle;
+    textStyle?: any;
     error?: string;
     rightAction?: React.ReactNode;
     multiline?: boolean;
@@ -33,6 +34,7 @@ export default function InputField({
     keyboardType = 'default',
     secureTextEntry = false,
     style,
+    textStyle,
     error,
     rightAction,
     multiline = false,
@@ -54,7 +56,7 @@ export default function InputField({
                 multiline && { height: 100, alignItems: 'flex-start' }
             ]}>
                 <TextInput
-                    style={[styles.input, { color: activeColors.text }, multiline && { height: 90, textAlignVertical: 'top', paddingTop: SPACING.sm }, !editable && { opacity: 0.7 }]}
+                    style={[styles.input, { color: activeColors.text }, textStyle, multiline && { height: 90, textAlignVertical: 'top', paddingTop: SPACING.sm }, !editable && { opacity: 0.7 }]}
                     value={value}
                     onChangeText={onChangeText}
                     placeholder={placeholder}

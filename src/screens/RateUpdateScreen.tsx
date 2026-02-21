@@ -73,7 +73,7 @@ export default function RateUpdateScreen() {
                 }}
                 keyboardType="numeric"
                 placeholder="0.00"
-                style={{ fontSize: FONT_SIZES.lg, fontWeight: '900', color: activeColors.text }}
+                textStyle={{ fontSize: FONT_SIZES.lg, fontWeight: '900', color: activeColors.text }}
             />
         </View>
     );

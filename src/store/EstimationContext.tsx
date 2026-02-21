@@ -50,6 +50,7 @@ const initialState: EstimationState = {
         totalGST: 0,
         totalChit: 0,
         totalAdvance: 0,
+        totalPurchase: 0,
         grandTotal: 0,
     },
     history: [],

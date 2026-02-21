@@ -55,6 +55,7 @@ export default function ManualEntryScreen() {
             id: Date.now().toString(),
             name,
             pcs: 1,
+            metal: 'GOLD',
             grossWeight: weightNum,
             stoneWeight: 0,
             netWeight: weightNum,

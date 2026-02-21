@@ -1,0 +1,1 @@
+﻿src/screens/ManualEntryScreen.tsx(58,13): error TS2820: Type '"gold"' is not assignable to type '"GOLD" | "SILVER"'. Did you mean '"GOLD"'?
