@@ -35,7 +35,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const router = useRouter();
     const params = useLocalSearchParams();
     const { state, addTagItem, addManualItem, addPurchaseItem, addChitItem, addAdvanceItem, removeItem, clearEstimation } = useEstimation();
-    const { theme, t, shopDetails, deviceName } = useGeneralSettings();
+    const { theme, t, shopDetails, deviceName, requestPrint, currentEmployeeName } = useGeneralSettings();
     const [mode, setMode] = useState<Mode>((params.mode as Mode) || initialMode);
     const [editingItem, setEditingItem] = useState<EstimationItem | null>(null);
     const [viewingItem, setViewingItem] = useState<EstimationItem | null>(null);
@@ -57,7 +57,6 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     // Form State
     const [customerName, setCustomerName] = useState('');
-    const [employeeName, setEmployeeName] = useState('');
 
     // Purchase Panel State
     const [categories, setCategories] = useState<DBPurchaseCategory[]>([]);
@@ -221,60 +220,55 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     };
 
     const handlePrintSelected = async () => {
-        if (!employeeName.trim()) {
-            Alert.alert(t('operator_required') || 'Operator Required', t('enter_operator_msg') || 'Please enter employee name before printing.');
-            return;
-        }
-
         if (selectedItems.size === 0) {
             Alert.alert(t('no_items_selected') || 'No Items Selected');
             return;
         }
 
-        const items = state.items.filter(item => selectedItems.has(item.id));
-        const purchases = state.purchaseItems.filter(item => selectedItems.has(item.id));
-        const chits = state.chitItems.filter(item => selectedItems.has(item.id));
-        const advances = state.advanceItems.filter(item => selectedItems.has(item.id));
+        requestPrint(async (empName) => {
+            const items = state.items.filter(item => selectedItems.has(item.id));
+            const purchases = state.purchaseItems.filter(item => selectedItems.has(item.id));
+            const chits = state.chitItems.filter(item => selectedItems.has(item.id));
+            const advances = state.advanceItems.filter(item => selectedItems.has(item.id));
 
-        setItemsToPrint(items);
-        setPurchaseItemsToPrint(purchases);
-        setChitItemsToPrint(chits);
-        setAdvanceItemsToPrint(advances);
+            setItemsToPrint(items);
+            setPurchaseItemsToPrint(purchases);
+            setChitItemsToPrint(chits);
+            setAdvanceItemsToPrint(advances);
 
-        // Validation: If both product items and deduction items are selected, merged printing is not allowed
-        const hasProducts = items.length > 0 || purchases.length > 0;
-        const hasDeductions = chits.length > 0 || advances.length > 0;
+            // Validation: If both product items and deduction items are selected, merged printing is not allowed
+            const hasProducts = items.length > 0 || purchases.length > 0;
+            const hasDeductions = chits.length > 0 || advances.length > 0;
 
-        // Validation removed: Chit and Advance items can now be printed with product items
+            // If ONLY Chit or Advance items are selected, default to separate/one-by-one
+            if (hasDeductions && !hasProducts) {
+                setPreviewType('separate');
+                setShowPrintPreview(true);
+                return;
+            }
 
-        // If ONLY Chit or Advance items are selected, default to separate/one-by-one
-        if (hasDeductions && !hasProducts) {
-            setPreviewType('separate');
-            setShowPrintPreview(true);
-            return;
-        }
-
-        Alert.alert(
-            t('print'),
-            'Choose print format:',
-            [
-                {
-                    text: t('merged_receipt') || 'Single Receipt (Merged)',
-                    onPress: () => {
-                        setPreviewType('merged');
-                        setShowPrintPreview(true);
-                    }
-                },
-                {
-                    text: t('separate_receipts') || 'Separate Receipts',
-                    onPress: () => {
-                        setPreviewType('separate');
-                        setShowPrintPreview(true);
-                    }
-                },
-                { text: t('cancel'), style: 'cancel' }
-            ]
-        );
+            Alert.alert(
+                t('print'),
+                'Choose print format:',
+                [
+                    {
+                        text: t('merged_receipt') || 'Single Receipt (Merged)',
+                        onPress: () => {
+                            setPreviewType('merged');
+                            setShowPrintPreview(true);
+                        }
+                    },
+                    {
+                        text: t('separate_receipts') || 'Separate Receipts',
+                        onPress: () => {
+                            setPreviewType('separate');
+                            setShowPrintPreview(true);
+                        }
+                    },
+                    { text: t('cancel'), style: 'cancel' }
+                ]
+            );
+        });
     };
 
     const confirmPrint = async () => {
@@ -282,7 +276,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setShowPrintPreview(false);
         try {
             if (previewType === 'merged') {
-                await printEstimationReceipt(itemsToPrint, purchaseItemsToPrint, chitItemsToPrint, advanceItemsToPrint, { ...shopDetails, deviceName }, customerName, employeeName);
+                await printEstimationReceipt(itemsToPrint, purchaseItemsToPrint, chitItemsToPrint, advanceItemsToPrint, { ...shopDetails, deviceName }, customerName, currentEmployeeName);
 
                 // Save Order to History
                 try {
@@ -299,7 +293,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         orderId,
                         customerName,
                         customerMobile: '', // We should probably add this to state
-                        employeeName,
+                        employeeName: currentEmployeeName,
                         date: new Date().toISOString(),
                         grossTotal: totalGross,
                         netPayable,
@@ -327,10 +321,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     console.error('Error saving order:', saveError);
                 }
             } else {
-                for (const item of itemsToPrint) await printEstimationItem(item, shopDetails);
-                for (const item of purchaseItemsToPrint) await printPurchaseItem(item, shopDetails);
-                for (const item of chitItemsToPrint) await printChitItem(item, shopDetails);
-                for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails);
+                for (const item of itemsToPrint) await printEstimationItem(item, shopDetails, currentEmployeeName);
+                for (const item of purchaseItemsToPrint) await printPurchaseItem(item, shopDetails, currentEmployeeName);
+                for (const item of chitItemsToPrint) await printChitItem(item, shopDetails, currentEmployeeName);
+                for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails, currentEmployeeName);
             }
             Alert.alert(t('success'), t('printing_completed') || 'Printing completed');
             setSelectedItems(new Set());
@@ -484,6 +478,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     <div style="margin-bottom:20px;">
                         <div>Date: ${new Date().toLocaleString()}</div>
                         ${customerName ? `<div>Customer: ${customerName}</div>` : ''}
+                        ${currentEmployeeName ? `<div>By: ${currentEmployeeName}</div>` : ''}
                     </div>
                     <h4>Items</h4>
                     ${rows}
@@ -523,10 +518,24 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     const ModeButton = ({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) => (
         <TouchableOpacity
-            style={[styles.modeButton, active && { backgroundColor: activeColors.primary + '20', borderBottomColor: activeColors.primary, borderBottomWidth: 2 }]}
+            style={[
+                styles.modeButton,
+                active && {
+                    backgroundColor: activeColors.primary,
+                    shadowColor: activeColors.primary,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 5,
+                }
+            ]}
             onPress={onPress}
         >
-            <Text style={[styles.modeButtonText, { color: activeColors.textLight }, active && { color: activeColors.primary }]}>
+            <Text style={[
+                styles.modeButtonText,
+                { color: theme === 'light' ? '#666' : '#AAA' },
+                active && { color: '#FFF', fontWeight: '800' }
+            ]}>
                 {label}
             </Text>
         </TouchableOpacity>
@@ -585,11 +594,13 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             title={t('print') || 'Print'}
                             onPress={async () => {
                                 if (viewingItem) {
-                                    try {
-                                        await printEstimationItem(viewingItem, shopDetails);
-                                    } catch (e: any) {
-                                        Alert.alert('Error', e.message);
-                                    }
+                                    requestPrint(async (empName) => {
+                                        try {
+                                            await printEstimationItem(viewingItem, shopDetails, empName);
+                                        } catch (e: any) {
+                                            Alert.alert('Error', e.message);
+                                        }
+                                    });
                                 }
                             }}
                             style={{ flex: 1 }}
@@ -628,7 +639,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             <View style={styles.previewSubHeader}>
                                 <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>Date: {new Date().toLocaleDateString()}</Text>
                                 {customerName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>Cust: {customerName}</Text> : null}
-                                {employeeName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>By: {employeeName}</Text> : null}
+                                {currentEmployeeName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>By: {currentEmployeeName}</Text> : null}
                             </View>
                             <View style={styles.previewDivider} />
                             {/* Preview Body - Items */}
@@ -889,12 +900,6 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             />
                         </View>
                         <InputField
-                            label={t('employee_name') || 'Employee Name'}
-                            value={employeeName}
-                            onChangeText={setEmployeeName}
-                            style={{ flex: 1 }}
-                        />
-                        <InputField
                             label={t('rate')}
                             value={purchaseRate}
                             onChangeText={setPurchaseRate}
@@ -1094,16 +1099,23 @@ const styles = StyleSheet.create({
     },
     modeSelectorContainer: {
         flexDirection: 'row',
-        borderBottomWidth: 1,
-        height: 50,
+        height: 60,
         alignItems: 'center',
+        marginVertical: SPACING.md,
+        paddingHorizontal: SPACING.sm,
     },
     scrollArrow: {
-        width: 30,
-        height: '100%',
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.02)',
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
         zIndex: 10,
     },
     modeSelectorScroll: {
@@ -1112,12 +1124,14 @@ const styles = StyleSheet.create({
     },
     modeButton: {
         paddingHorizontal: SPACING.md,
-        paddingVertical: 10,
-        marginHorizontal: 4,
+        paddingVertical: 12,
+        marginHorizontal: 6,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: BORDER_RADIUS.sm,
-        minWidth: 100,
+        borderRadius: 25,
+        minWidth: 110,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
     },
     modeButtonText: {
         fontSize: FONT_SIZES.sm,
@@ -1125,13 +1139,15 @@ const styles = StyleSheet.create({
     },
     section: {
         padding: SPACING.md,
-        borderRadius: BORDER_RADIUS.md,
+        borderRadius: BORDER_RADIUS.lg,
         marginBottom: SPACING.lg,
-        elevation: 2,
+        elevation: 4,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.02)',
     },
     row: {
         flexDirection: 'row',

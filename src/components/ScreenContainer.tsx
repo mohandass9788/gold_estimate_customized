@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
+import EmployeeModal from '../modals/EmployeeModal';
 
 const View = RNView as any;
 
@@ -28,6 +29,7 @@ export default function ScreenContainer({ children, backgroundColor, keyboardAvo
                 enabled={keyboardAvoiding}
             >
                 <View style={styles.content}>{children}</View>
+                <EmployeeModal />
             </KeyboardAvoidingView>
         </SafeAreaView>
     );

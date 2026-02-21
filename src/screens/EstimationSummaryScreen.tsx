@@ -23,28 +23,31 @@ const TouchableOpacity = RNRTouchableOpacity as any;
 export default function EstimationSummaryScreen() {
     const router = useRouter();
     const { state, removeItem, clearEstimation, setCustomer } = useEstimation();
-    const { theme, t, shopDetails } = useGeneralSettings();
+    const { theme, t, shopDetails, requestPrint, currentEmployeeName } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [showCustomerModal, setShowCustomerModal] = React.useState(false);
     const [isPrinting, setIsPrinting] = React.useState(false);
 
     const handlePrint = async () => {
-        setIsPrinting(true);
-        try {
-            await printEstimationReceipt(
-                state.items,
-                state.purchaseItems,
-                state.chitItems,
-                state.advanceItems,
-                shopDetails,
-                state.customer?.name
-            );
-        } catch (error: any) {
-            Alert.alert(t('error'), error.message || t('print_failed') || 'Failed to print');
-        } finally {
-            setIsPrinting(false);
-        }
+        requestPrint(async (empName) => {
+            setIsPrinting(true);
+            try {
+                await printEstimationReceipt(
+                    state.items,
+                    state.purchaseItems,
+                    state.chitItems,
+                    state.advanceItems,
+                    shopDetails,
+                    state.customer?.name,
+                    empName
+                );
+            } catch (error: any) {
+                Alert.alert(t('error'), error.message || t('print_failed') || 'Failed to print');
+            } finally {
+                setIsPrinting(false);
+            }
+        });
     };
 
     const handleClear = () => {

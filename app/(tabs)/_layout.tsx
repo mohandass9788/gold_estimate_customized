@@ -1,35 +1,44 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { COLORS } from '../../src/constants/theme';
+import { View, StyleSheet, Platform } from 'react-native';
+import { COLORS, LIGHT_COLORS, DARK_COLORS } from '../../src/constants/theme';
+import { useGeneralSettings } from '../../src/store/GeneralSettingsContext';
 
 const Icon = Ionicons as any;
 const ViewAny = View as any;
 
 export default function TabsLayout() {
+    const { t, theme } = useGeneralSettings();
+    const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
+
     return (
         <Tabs screenOptions={{
             headerShown: false,
             tabBarActiveTintColor: COLORS.primary,
-            tabBarInactiveTintColor: COLORS.textLight,
+            tabBarInactiveTintColor: activeColors.textLight,
             tabBarStyle: {
-                backgroundColor: COLORS.white,
-                borderTopColor: COLORS.border,
+                backgroundColor: activeColors.cardBg,
+                borderTopColor: activeColors.border,
                 height: 60,
                 paddingBottom: 8,
+                elevation: 10,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
             }
         }}>
             <Tabs.Screen
                 name="index"
                 options={{
-                    title: 'Home',
+                    title: t('home'),
                     tabBarIcon: ({ color, size }) => <Icon name="home-outline" color={color} size={size} />,
                 }}
             />
             <Tabs.Screen
                 name="summary"
                 options={{
-                    title: 'Orders',
+                    title: t('history'),
                     tabBarIcon: ({ color, size }) => <Icon name="list-outline" color={color} size={size} />,
                 }}
             />
@@ -38,7 +47,7 @@ export default function TabsLayout() {
                 options={{
                     title: '',
                     tabBarIcon: ({ color, size }) => (
-                        <ViewAny style={styles.liftedButton}>
+                        <ViewAny style={[styles.liftedButton, { borderColor: activeColors.cardBg }]}>
                             <Icon name="scan" color={COLORS.white} size={30} />
                         </ViewAny>
                     ),
@@ -47,21 +56,21 @@ export default function TabsLayout() {
             <Tabs.Screen
                 name="rates"
                 options={{
-                    title: 'Rates',
+                    title: t('rate'),
                     tabBarIcon: ({ color, size }) => <Icon name="trending-up-outline" color={color} size={size} />,
                 }}
             />
             <Tabs.Screen
                 name="settings"
                 options={{
-                    title: 'Settings',
+                    title: t('settings'),
                     tabBarIcon: ({ color, size }) => <Icon name="settings-outline" color={color} size={size} />,
                 }}
             />
             {/* Hidden tabs that still show the bottom bar */}
-            <Tabs.Screen name="purchase" options={{ href: null, title: 'Purchase Mode' }} />
-            <Tabs.Screen name="manual" options={{ href: null, title: 'Manual Entry' }} />
-            <Tabs.Screen name="multi-scan" options={{ href: null, title: 'Multi-Tag Scan' }} />
+            <Tabs.Screen name="purchase" options={{ href: null, title: t('purchase') }} />
+            <Tabs.Screen name="manual" options={{ href: null, title: t('manual_entry') }} />
+            <Tabs.Screen name="multi-scan" options={{ href: null, title: t('multi_tag_scan') }} />
             <Tabs.Screen name="estimation" options={{ href: null }} />
         </Tabs>
     );

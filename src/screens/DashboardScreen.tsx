@@ -26,7 +26,7 @@ export default function DashboardScreen() {
     const router = useRouter();
     const { logout } = useAuth();
     const { state, updateGoldRate } = useEstimation();
-    const { theme, t, connectedPrinter, printerType, isPrinterConnected } = useGeneralSettings();
+    const { theme, t, connectedPrinter, printerType, isPrinterConnected, shopDetails, deviceName } = useGeneralSettings();
     const [isRateModalVisible, setIsRateModalVisible] = React.useState(false);
 
     const [shopName, setShopName] = React.useState('Gold Estimation App');
@@ -40,8 +40,7 @@ export default function DashboardScreen() {
 
 
     const init = async () => {
-        const name = await getSetting('shop_name');
-        if (name) setShopName(name);
+        // Init logic if needed
     };
 
     const getGreeting = () => {
@@ -106,9 +105,12 @@ export default function DashboardScreen() {
                         style={{ width: 50, height: 50, borderRadius: 25, marginRight: 10, borderWidth: 2, borderColor: COLORS.gold }}
                     />
                     <View>
-                        <Text style={{ fontSize: FONT_SIZES.sm, color: activeColors.textLight }}>{getGreeting()}</Text>
+                        <Text style={{ fontSize: FONT_SIZES.xs, color: activeColors.textLight }}>{getGreeting()}</Text>
                         <Text style={{ fontSize: FONT_SIZES.lg, fontWeight: 'bold', color: activeColors.text, fontFamily: 'serif' }}>
-                            {shopName}
+                            {shopDetails.name}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: activeColors.textLight, opacity: 0.7 }}>
+                            ID: {deviceName}
                         </Text>
                     </View>
                 </View>
@@ -122,19 +124,16 @@ export default function DashboardScreen() {
                             paddingHorizontal: 10,
                             paddingVertical: 6,
                             borderRadius: 20,
-                            marginRight: 12
+                            marginRight: -4
                         }}>
                         <View style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
+                            width: 6,
+                            height: 6,
+                            borderRadius: 3,
                             backgroundColor: (printerType === 'thermal' && !isPrinterConnected) ? activeColors.error : activeColors.success,
                             marginRight: 6
                         }} />
-                        <Icon name="print-outline" size={18} color={(printerType === 'thermal' && !isPrinterConnected) ? activeColors.error : activeColors.success} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-                        <Icon name="log-out-outline" size={24} color={activeColors.error} />
+                        <Icon name="print-outline" size={16} color={(printerType === 'thermal' && !isPrinterConnected) ? activeColors.error : activeColors.success} />
                     </TouchableOpacity>
                 </View>
             </View>

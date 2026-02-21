@@ -345,6 +345,43 @@ export const addSubProduct = async (productId: number, name: string): Promise<nu
     return result.lastInsertRowId;
 };
 
+export const ensureProduct = async (
+    name: string,
+    purity: number = 22,
+    wastage: number = 0,
+    wastageType: string = 'percentage',
+    makingCharge: number = 0,
+    makingChargeType: string = 'perGram',
+    metal: string = 'GOLD',
+    hsnCode: string = ''
+): Promise<{ id: number, created: boolean }> => {
+    if (!db) await initDatabase();
+
+    // Check if exists
+    const existing = await db!.getFirstAsync<{ id: number }>('SELECT id FROM products WHERE name = ?;', [name]);
+    if (existing) {
+        return { id: existing.id, created: false };
+    }
+
+    // Create new
+    const id = await addProduct(name, purity, wastage, wastageType, makingCharge, makingChargeType, metal, hsnCode);
+    return { id, created: true };
+};
+
+export const ensureSubProduct = async (productId: number, name: string): Promise<{ id: number, created: boolean }> => {
+    if (!db) await initDatabase();
+
+    // Check if exists
+    const existing = await db!.getFirstAsync<{ id: number }>('SELECT id FROM sub_products WHERE productId = ? AND name = ?;', [productId, name]);
+    if (existing) {
+        return { id: existing.id, created: false };
+    }
+
+    // Create new
+    const id = await addSubProduct(productId, name);
+    return { id, created: true };
+};
+
 export const deleteSubProduct = async (id: number): Promise<void> => {
     if (!db) await initDatabase();
     await db!.runAsync('DELETE FROM sub_products WHERE id = ?;', [id]);

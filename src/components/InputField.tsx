@@ -17,6 +17,7 @@ interface InputFieldProps {
     numberOfLines?: number;
     maxLength?: number;
     editable?: boolean;
+    helperText?: string;
 }
 
 // Fix for React 19 type mismatch
@@ -38,6 +39,7 @@ export default function InputField({
     numberOfLines = 1,
     maxLength,
     editable = true,
+    helperText,
 }: InputFieldProps) {
     const { theme } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
@@ -67,6 +69,7 @@ export default function InputField({
                 {rightAction && <View style={styles.rightAction}>{rightAction}</View>}
             </View>
             {error && <Text style={[styles.errorText, { color: activeColors.error }]}>{error}</Text>}
+            {helperText && !error && <Text style={[styles.helperText, { color: activeColors.textLight }]}>{helperText}</Text>}
         </View>
     );
 }
@@ -99,5 +102,10 @@ const styles = StyleSheet.create({
     errorText: {
         fontSize: FONT_SIZES.xs,
         marginTop: 2,
+    },
+    helperText: {
+        fontSize: 10,
+        marginTop: 2,
+        fontStyle: 'italic',
     },
 });

@@ -22,7 +22,8 @@ const Icon = Ionicons as any;
 export default function PrinterSettingsScreen() {
     const {
         theme, t, printerType, setPrinterType, connectedPrinter, setConnectedPrinter,
-        isPrinterConnected, setIsPrinterConnected, isBluetoothEnabled, setIsBluetoothEnabled
+        isPrinterConnected, setIsPrinterConnected, isBluetoothEnabled, setIsBluetoothEnabled,
+        requestPrint
     } = useGeneralSettings();
 
     // Silence NativeEventEmitter warnings
@@ -149,16 +150,18 @@ export default function PrinterSettingsScreen() {
     };
 
     const handleTestPrint = async () => {
-        setIsPrinting(true);
-        try {
-            await sendTestPrint();
-            setIsPrinterConnected(true);
-        } catch (e) {
-            setIsPrinterConnected(false);
-            Alert.alert('Print Error', 'Failed to send print job. Ensure printer is ON and within range.');
-        } finally {
-            setIsPrinting(false);
-        }
+        requestPrint(async (empName) => {
+            setIsPrinting(true);
+            try {
+                await sendTestPrint(empName);
+                setIsPrinterConnected(true);
+            } catch (e) {
+                setIsPrinterConnected(false);
+                Alert.alert('Print Error', 'Failed to send print job. Ensure printer is ON and within range.');
+            } finally {
+                setIsPrinting(false);
+            }
+        });
     };
 
     return (

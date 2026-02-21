@@ -284,6 +284,19 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
                 </View>
             )}
 
+            {/* Quick Rates Bar */}
+            <View style={[styles.ratesBar, { backgroundColor: activeColors.cardBg }]}>
+                <View style={styles.rateItem}>
+                    <Icon name="flash" size={12} color={COLORS.gold} />
+                    <Text style={[styles.rateText, { color: activeColors.text }]}> 22K: ₹{state.goldRate.rate22k.toLocaleString()}</Text>
+                </View>
+                <View style={[styles.rateDivider, { backgroundColor: activeColors.border }]} />
+                <View style={styles.rateItem}>
+                    <Icon name="leaf" size={12} color="#C0C0C0" />
+                    <Text style={[styles.rateText, { color: activeColors.text }]}> Silver: ₹{state.goldRate.silver.toLocaleString()}</Text>
+                </View>
+            </View>
+
             <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                 {/* Group 1: Type & Purity */}
                 <View style={styles.formGroup}>
@@ -460,14 +473,16 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     section: {
-        padding: SPACING.sm,
-        borderRadius: BORDER_RADIUS.md,
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.lg,
         marginBottom: SPACING.md,
-        elevation: 2,
+        elevation: 10,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.08,
+        shadowRadius: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.1)',
     },
     row: {
         flexDirection: 'row',
@@ -510,5 +525,29 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         marginBottom: SPACING.sm,
         opacity: 0.8,
+    },
+    ratesBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: SPACING.xs,
+        borderRadius: BORDER_RADIUS.md,
+        marginBottom: SPACING.sm,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+    },
+    rateItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: SPACING.md,
+    },
+    rateText: {
+        fontSize: FONT_SIZES.xs,
+        fontWeight: 'bold',
+    },
+    rateDivider: {
+        width: 1,
+        height: 12,
+        opacity: 0.2,
     },
 });

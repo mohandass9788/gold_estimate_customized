@@ -28,51 +28,10 @@ export default function SettingsScreen() {
     const { logout } = useAuth();
     const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName } = useGeneralSettings();
     const [showHelpModal, setShowHelpModal] = useState(false);
-    const [showShopDetailsModal, setShowShopDetailsModal] = useState(false);
-
-    // Shop Details State (initialized from context)
-    const [shopName, setShopName] = useState(shopDetails.name);
-    const [shopAddress, setShopAddress] = useState(shopDetails.address);
-    const [shopPhone, setShopPhone] = useState(shopDetails.phone);
-    const [shopGst, setShopGst] = useState(shopDetails.gstNumber);
-    const [footerMsg, setFooterMsg] = useState(shopDetails.footerMessage);
-    const [localDeviceName, setLocalDeviceName] = useState(deviceName);
-
-    const handleSaveShopDetails = () => {
-        updateShopDetails({
-            name: shopName,
-            address: shopAddress,
-            phone: shopPhone,
-            gstNumber: shopGst,
-            footerMessage: footerMsg
-        });
-        updateDeviceName(localDeviceName);
-        setShowShopDetailsModal(false);
-    };
 
 
 
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
-
-    React.useEffect(() => {
-        loadSettings();
-    }, []);
-
-    const loadSettings = async () => {
-        try {
-            const name = await getSetting('shop_name');
-            if (name) setShopName(name);
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
-
-
-    const handleShopNameChange = async (text: string) => {
-        setShopName(text);
-        await setSetting('shop_name', text);
-    };
 
     const SettingItem = ({ icon, label, onPress, color = activeColors.text, rightElement }: any) => (
         <TouchableOpacity style={[styles.item, { borderBottomColor: activeColors.border }]} onPress={onPress}>
@@ -107,8 +66,8 @@ export default function SettingsScreen() {
                         <Icon name="person" size={40} color={activeColors.primary} />
                     </View>
                     <View>
-                        <Text style={[styles.shopNameDisplay, { color: activeColors.text }]}>{shopName || 'Admin'}</Text>
-                        <Text style={[styles.profileSub, { color: activeColors.textLight }]}>{deviceName ? `Device ID: ${deviceName}` : t('account_settings')}</Text>
+                        <Text style={[styles.shopNameDisplay, { color: activeColors.text }]}>{shopDetails.name || 'Admin'}</Text>
+                        <Text style={[styles.profileSub, { color: activeColors.textLight }]}>{deviceName ? `ID: ${deviceName}` : t('account_settings')}</Text>
                     </View>
                 </View>
 
@@ -126,11 +85,11 @@ export default function SettingsScreen() {
                     <SettingItem
                         icon="business-outline"
                         label={t('business_info')}
-                        onPress={() => setShowShopDetailsModal(true)}
+                        onPress={() => (router as any).push('/settings/shop-info')}
                     />
                     <SettingItem
                         icon="image-outline"
-                        label="Shop Info"
+                        label={t('shop_info')}
                         onPress={() => (router as any).push('/settings/general')}
                     />
                 </View>
@@ -144,7 +103,7 @@ export default function SettingsScreen() {
                     />
                     <SettingItem
                         icon="color-palette-outline"
-                        label="Manage Gold & Silver"
+                        label={t('manage_gold_silver')}
                         onPress={() => (router as any).push('/settings/manage-gold')}
                     />
                     <SettingItem
@@ -249,69 +208,6 @@ export default function SettingsScreen() {
                             </View>
                             <Icon name="chevron-forward" size={20} color={activeColors.textLight} />
                         </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
-            <Modal
-                visible={showShopDetailsModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowShopDetailsModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>{t('business_info')}</Text>
-                            <TouchableOpacity onPress={() => setShowShopDetailsModal(false)}>
-                                <Icon name="close" size={24} color={activeColors.text} />
-                            </TouchableOpacity>
-                        </View>
-                        <ScrollView style={{ maxHeight: 400 }}>
-                            <InputField
-                                label={t('shop_name')}
-                                placeholder={t('enter_shop_name')}
-                                value={shopName}
-                                onChangeText={setShopName}
-                            />
-                            <InputField
-                                label={t('shop_address')}
-                                placeholder={t('enter_shop_address')}
-                                value={shopAddress}
-                                onChangeText={setShopAddress}
-                                multiline
-                            />
-                            <InputField
-                                label={t('phone_number')}
-                                placeholder="Enter Phone Number"
-                                value={shopPhone}
-                                onChangeText={setShopPhone}
-                                keyboardType="phone-pad"
-                            />
-                            <InputField
-                                label="GST Number"
-                                placeholder="Enter GST Number"
-                                value={shopGst}
-                                onChangeText={setShopGst}
-                            />
-                            <InputField
-                                label="Footer Message"
-                                placeholder="Thank You message"
-                                value={footerMsg}
-                                onChangeText={setFooterMsg}
-                            />
-                            <InputField
-                                label={t('device_name')}
-                                placeholder={t('enter_device_name')}
-                                value={localDeviceName}
-                                onChangeText={setLocalDeviceName}
-                            />
-                            <PrimaryButton
-                                title={t('save')}
-                                onPress={handleSaveShopDetails}
-                                style={{ marginTop: SPACING.md }}
-                            />
-                        </ScrollView>
                     </View>
                 </View>
             </Modal>

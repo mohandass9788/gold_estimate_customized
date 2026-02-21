@@ -4,7 +4,7 @@ import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { getSetting, setSetting } from '../services/dbService';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import CategoryManagementModal from '../modals/CategoryManagementModal';
@@ -19,7 +19,9 @@ const KeyboardAvoidingView = KeyboardAvoidingViewRN as any;
 const FlatList = RNFlatList as any;
 
 export default function GlobalSettingsScreen() {
-    const { t } = useGeneralSettings();
+    const { t, theme } = useGeneralSettings();
+    const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
+
     const [gstPercentage, setGstPercentage] = useState('3');
     const [shopName, setShopName] = useState('');
     const [shopAddress, setShopAddress] = useState('');
@@ -51,12 +53,16 @@ export default function GlobalSettingsScreen() {
     };
 
     return (
-        <ScreenContainer>
+        <ScreenContainer backgroundColor={activeColors.background}>
             <HeaderBar title={t('app_settings')} showBack />
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                <ScrollView style={styles.container}>
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>{t('business_info')}</Text>
+                <ScrollView
+                    style={styles.container}
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('business_info')}</Text>
                         <InputField
                             label={t('shop_name')}
                             value={shopName}
@@ -72,8 +78,8 @@ export default function GlobalSettingsScreen() {
                         />
                     </View>
 
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>{t('tax_settings')}</Text>
+                    <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('tax_settings')}</Text>
                         <InputField
                             label={t('default_gst')}
                             value={gstPercentage}
@@ -83,8 +89,8 @@ export default function GlobalSettingsScreen() {
                         />
                     </View>
 
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>{t('product_management')}</Text>
+                    <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('product_management')}</Text>
                         <PrimaryButton
                             title={t('manage_purchase_categories')}
                             variant="outline"
@@ -112,36 +118,28 @@ export default function GlobalSettingsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    scrollContent: {
         padding: SPACING.md,
+        paddingBottom: SPACING.xl * 2,
     },
     section: {
-        backgroundColor: COLORS.white,
         padding: SPACING.md,
         borderRadius: BORDER_RADIUS.md,
         elevation: 2,
         marginBottom: SPACING.lg,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
     },
     sectionTitle: {
         fontSize: FONT_SIZES.md,
         fontWeight: 'bold',
-        color: COLORS.primary,
         marginBottom: SPACING.md,
     },
-    infoCard: {
-        backgroundColor: COLORS.primary + '10',
-        padding: SPACING.md,
-        borderRadius: BORDER_RADIUS.md,
-        borderWidth: 1,
-        borderColor: COLORS.primary + '30',
-    },
-    infoText: {
-        color: COLORS.primary,
-        fontSize: FONT_SIZES.sm,
-        textAlign: 'center',
-        lineHeight: 20,
-    },
     saveButton: {
-        marginTop: SPACING.lg,
+        marginTop: SPACING.sm,
         marginBottom: SPACING.xl,
     },
 });

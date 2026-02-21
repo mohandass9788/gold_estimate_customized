@@ -155,14 +155,16 @@ const ensureThermalConnection = async (macAddress: string) => {
     }
 };
 
-export const sendTestPrint = async (): Promise<void> => {
+export const sendTestPrint = async (employeeName?: string): Promise<void> => {
     const { type, printer } = await getPrinterConfig();
 
     if (type === 'thermal' && printer?.address) {
         const connected = await ensureThermalConnection(printer.address);
         if (connected) {
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
-            const payload = `${thermalCommands.reset}${thermalCommands.center}${thermalCommands.doubleOn}TEST PRINT${thermalCommands.doubleOff}\x0aSTATUS: SUCCESSFUL\x0a${thermalCommands.divider}${new Date().toLocaleString()}\x0a\x0a\x0a\x0a`;
+            let payload = `${thermalCommands.reset}${thermalCommands.center}${thermalCommands.doubleOn}TEST PRINT${thermalCommands.doubleOff}\x0aSTATUS: SUCCESSFUL\x0a`;
+            if (employeeName) payload += `By: ${employeeName}\x0a`;
+            payload += `${thermalCommands.divider}${new Date().toLocaleString()}\x0a\x0a\x0a\x0a`;
             BLEPrinter.printText(payload);
             return;
         } else {
@@ -177,6 +179,7 @@ export const sendTestPrint = async (): Promise<void> => {
             <body>
                 ${header}
                 <div class="receipt-title">TEST PRINT</div>
+                ${employeeName ? `<div class="row"><span>By:</span><span>${employeeName}</span></div>` : ''}
                 <div class="row">
                     <span>Status:</span>
                     <span style="color: green; font-weight: bold;">SUCCESSFUL</span>
@@ -194,7 +197,7 @@ export const sendTestPrint = async (): Promise<void> => {
     await Print.printAsync({ html });
 };
 
-export const printEstimationItem = async (item: EstimationItem, shopDetails?: any): Promise<void> => {
+export const printEstimationItem = async (item: EstimationItem, shopDetails?: any, employeeName?: string): Promise<void> => {
     const { type, printer } = await getPrinterConfig();
 
     if (type === 'thermal' && printer?.address) {
@@ -236,6 +239,7 @@ export const printEstimationItem = async (item: EstimationItem, shopDetails?: an
             <body>
                 ${header}
                 <div class="receipt-title">ESTIMATION DETAILS</div>
+                ${employeeName ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
                 <div class="item-name">${item.name.toUpperCase()}</div>
                 ${item.subProductName ? `<div class="shop-info">${item.subProductName}</div>` : ''}
                 ${item.tagNumber ? `<div class="shop-info">Tag: ${item.tagNumber}</div>` : ''}
@@ -276,7 +280,7 @@ export const printEstimationItem = async (item: EstimationItem, shopDetails?: an
     await Print.printAsync({ html });
 };
 
-export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any): Promise<void> => {
+export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, employeeName?: string): Promise<void> => {
     const { type, printer } = await getPrinterConfig();
 
     if (type === 'thermal' && printer?.address) {
@@ -311,6 +315,7 @@ export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any): 
             <body>
                 ${header}
                 <div class="receipt-title">PURCHASE / OLD GOLD</div>
+                ${employeeName ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
                 <div class="item-name">${item.category.toUpperCase()}</div>
                 ${item.subCategory ? `<div class="shop-info">${item.subCategory}</div>` : ''}
                 
@@ -541,7 +546,7 @@ export const printEstimationReceipt = async (
     await Print.printAsync({ html });
 };
 
-export const printChitItem = async (item: ChitItem, shopDetails: any) => {
+export const printChitItem = async (item: ChitItem, shopDetails: any, employeeName?: string) => {
     const header = await getShopHeaderHTML(shopDetails);
     const html = `
         <html>
@@ -550,6 +555,7 @@ export const printChitItem = async (item: ChitItem, shopDetails: any) => {
                 ${header}
                 <div class="receipt-title">CHIT RECEIPT</div>
                 <div class="row"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
+                ${employeeName ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
                 <div class="divider"></div>
                 <div class="row" style="font-size: 16px; margin-top: 10px;">
                     <span>CHIT ID:</span>
@@ -574,7 +580,7 @@ export const printChitItem = async (item: ChitItem, shopDetails: any) => {
             const deviceName = await getSetting('device_name') || '';
             const text = `
 ${shopDetails?.name || 'RECEIPT'}
-${deviceName ? `Device: ${deviceName}\n` : ''}CHIT RECEIPT
+${deviceName ? `Device: ${deviceName}\n` : ''}${employeeName ? `Operator: ${employeeName}\n` : ''}CHIT RECEIPT
 --------------------------------
 Date: ${new Date().toLocaleString()}
 CHIT ID: ${item.chitId}
@@ -594,7 +600,7 @@ ${shopDetails?.footerMessage || ''}
     await Print.printAsync({ html });
 };
 
-export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any) => {
+export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, employeeName?: string) => {
     const header = await getShopHeaderHTML(shopDetails);
     const html = `
         <html>
@@ -603,6 +609,7 @@ export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any) => {
                 ${header}
                 <div class="receipt-title">ADVANCE RECEIPT</div>
                 <div class="row"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
+                ${employeeName ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
                 <div class="divider"></div>
                 <div class="row" style="font-size: 16px; margin-top: 10px;">
                     <span>ADVANCE ID:</span>
@@ -627,7 +634,7 @@ export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any) => {
             const deviceName = await getSetting('device_name') || '';
             const text = `
 ${shopDetails?.name || 'RECEIPT'}
-${deviceName ? `Device: ${deviceName}\n` : ''}ADVANCE RECEIPT
+${deviceName ? `Device: ${deviceName}\n` : ''}${employeeName ? `Operator: ${employeeName}\n` : ''}ADVANCE RECEIPT
 --------------------------------
 Date: ${new Date().toLocaleString()}
 ADVANCE ID: ${item.advanceId}

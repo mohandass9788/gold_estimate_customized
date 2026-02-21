@@ -35,6 +35,8 @@ import {
     addSubProduct,
     deleteSubProduct,
     updateProduct,
+    ensureProduct,
+    ensureSubProduct,
     DBProduct,
     DBSubProduct
 } from '../services/dbService';
@@ -232,6 +234,9 @@ export default function ProductManagementScreen() {
 
             // Simple import logic: Expecting columns Name, Metal (GOLD/SILVER), Purity, Wastage, WastageType, MC, MCType, HSN, SubProducts (comma separated)
             let importedCount = 0;
+            let skippedCount = 0;
+            let subProductsAdded = 0;
+
             for (const row of data) {
                 const name = row.Name || row.name || row.ProductName;
                 if (!name) continue;
@@ -244,8 +249,8 @@ export default function ProductManagementScreen() {
                 const mc = parseFloat(row.MC || row.mc || '0');
                 const mcType = row.MCType || row.mc_type || 'perGram';
 
-                const productId = await addProduct(
-                    name,
+                const { id: productId, created } = await ensureProduct(
+                    name.trim(),
                     purity,
                     wastage,
                     wastageType,
@@ -255,18 +260,29 @@ export default function ProductManagementScreen() {
                     hsn
                 );
 
+                if (created) importedCount++;
+                else skippedCount++;
+
                 const subs = row.SubProducts || row.sub_products || '';
                 if (subs) {
                     const subList = subs.split(',').map((s: string) => s.trim());
                     for (const subName of subList) {
-                        if (subName) await addSubProduct(productId, subName);
+                        if (subName) {
+                            const { created: subCreated } = await ensureSubProduct(productId, subName);
+                            if (subCreated) subProductsAdded++;
+                        }
                     }
                 }
-                importedCount++;
             }
 
             loadProducts();
-            Alert.alert(t('success'), `Imported ${importedCount} products successfully`);
+
+            let message = t('import_summary') || 'Import Summary:';
+            message += `\n\n• ${t('new_products') || 'New Products'}: ${importedCount}`;
+            if (skippedCount > 0) message += `\n• ${t('existing_products') || 'Existing (Skipped)'}: ${skippedCount}`;
+            message += `\n• ${t('sub_products_added') || 'Sub-products Added'}: ${subProductsAdded}`;
+
+            Alert.alert(t('success'), message);
         } catch (error) {
             console.error('Import error:', error);
             Alert.alert(t('error'), 'Failed to import products. Ensure file format is correct.');

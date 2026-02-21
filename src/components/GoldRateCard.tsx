@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { GoldRate } from '../types';
 import { format } from 'date-fns';
+import { useGeneralSettings } from '../store/GeneralSettingsContext';
+import { LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 
 const View = RNView as any;
 const Text = RNText as any;
@@ -16,64 +18,63 @@ interface GoldRateCardProps {
 }
 
 export default function GoldRateCard({ rate, onEdit }: GoldRateCardProps) {
-    const GoldRateItem = ({ label, value, color = COLORS.primary }: { label: string; value: number; color?: string }) => (
-        <View style={styles.item}>
-            <Text style={styles.label}>{label}</Text>
-            <Text style={[styles.value, { color }]}>₹{value.toLocaleString()}</Text>
-        </View>
-    );
+    const { theme } = useGeneralSettings();
+    const colors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
-    const SilverRateItem = ({ label, value }: { label: string; value: number }) => (
-        <View style={styles.silverItem}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                <Icon name="leaf-outline" size={12} color="#C0C0C0" style={{ marginRight: 4 }} />
-                <Text style={styles.label}>{label}</Text>
-            </View>
-            <Text style={[styles.value, { color: '#C0C0C0' }]}>₹{value.toLocaleString()}</Text>
+    const MetalItem = ({ label, value, color }: { label: string; value: number; color: string }) => (
+        <View style={styles.metalItem}>
+            <Text style={styles.metalItemLabel}>{label}</Text>
+            <Text style={[styles.metalItemValue, { color }]}>₹{value.toLocaleString()}</Text>
         </View>
     );
 
     return (
-        <View style={styles.card}>
-            <View style={styles.header}>
-                <View style={styles.titleRow}>
-                    <View style={styles.indicator} />
-                    <Text style={styles.headerTitle}>Live Metal Rates (1g)</Text>
+        <View style={[styles.card, { backgroundColor: theme === 'light' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 30, 30, 0.8)' }]}>
+            <View style={styles.cardHeader}>
+                <View style={styles.titleInfo}>
+                    <View style={styles.liveIndicator}>
+                        <View style={styles.dot} />
+                        <Text style={styles.liveText}>LIVE RATES</Text>
+                    </View>
+                    <Text style={[styles.dateText, { color: colors.textLight }]}>{format(new Date(rate.date), 'MMMM dd, yyyy')}</Text>
                 </View>
-                <View style={styles.headerRight}>
-                    <Text style={styles.date}>{format(new Date(rate.date), 'dd MMM')}</Text>
-                    {onEdit && (
-                        <TouchableOpacity onPress={onEdit} style={styles.editButton}>
-                            <Icon name="create-outline" size={18} color={COLORS.primary} />
-                        </TouchableOpacity>
-                    )}
-                </View>
+                {onEdit && (
+                    <TouchableOpacity onPress={onEdit} style={[styles.editBtn, { backgroundColor: colors.primary + '15' }]}>
+                        <Icon name="pencil" size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                )}
             </View>
 
-            <View style={styles.content}>
-                {/* Gold Row */}
-                <View style={styles.metalRow}>
-                    <View style={styles.metalHeader}>
-                        <Icon name="flash-outline" size={14} color={COLORS.gold} />
-                        <Text style={styles.metalLabel}>Gold</Text>
+            <View style={styles.divider} />
+
+            <View style={styles.mainContent}>
+                {/* Gold Section */}
+                <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeader}>
+                        <View style={[styles.iconBox, { backgroundColor: '#FFD70015' }]}>
+                            <Icon name="medal-outline" size={18} color="#FFD700" />
+                        </View>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Gold Rates (per gram)</Text>
                     </View>
-                    <View style={styles.ratesContainer}>
-                        <GoldRateItem label="24K" value={rate.rate24k} />
-                        <View style={styles.divider} />
-                        <GoldRateItem label="22K" value={rate.rate22k} />
-                        <View style={styles.divider} />
-                        <GoldRateItem label="18K" value={rate.rate18k} />
+                    <View style={styles.ratesRow}>
+                        <MetalItem label="24K (Fine)" value={rate.rate24k} color={colors.primary} />
+                        <View style={styles.verticalDivider} />
+                        <MetalItem label="22K (Jewel)" value={rate.rate22k} color={colors.primary} />
+                        <View style={styles.verticalDivider} />
+                        <MetalItem label="18K (Standard)" value={rate.rate18k} color={colors.primary} />
                     </View>
                 </View>
 
-                {/* Silver Row */}
-                <View style={[styles.metalRow, { marginTop: SPACING.sm, borderColor: 'rgba(192, 192, 192, 0.2)' }]}>
-                    <View style={styles.metalHeader}>
-                        <Icon name="leaf-outline" size={14} color="#C0C0C0" />
-                        <Text style={[styles.metalLabel, { color: '#C0C0C0' }]}>Silver</Text>
+                {/* Silver Section */}
+                <View style={[styles.sectionContainer, { marginTop: SPACING.md }]}>
+                    <View style={styles.sectionHeader}>
+                        <View style={[styles.iconBox, { backgroundColor: '#C0C0C015' }]}>
+                            <Icon name="leaf-outline" size={18} color="#C0C0C0" />
+                        </View>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Silver Rates (per gram)</Text>
                     </View>
-                    <View style={styles.ratesContainer}>
-                        <SilverRateItem label="Common" value={rate.silver} />
+                    <View style={styles.ratesRow}>
+                        <MetalItem label="Pure Silver" value={rate.silver} color="#C0C0C0" />
                     </View>
                 </View>
             </View>
@@ -83,107 +84,113 @@ export default function GoldRateCard({ rate, onEdit }: GoldRateCardProps) {
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: COLORS.secondary,
-        borderRadius: BORDER_RADIUS.md,
-        padding: SPACING.sm,
-        marginBottom: SPACING.md,
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.md,
+        marginBottom: SPACING.lg,
         borderWidth: 1,
-        borderColor: 'rgba(255, 215, 0, 0.1)',
+        borderColor: 'rgba(212, 175, 55, 0.2)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
     },
-    header: {
+    cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: SPACING.xs,
-        marginBottom: SPACING.xs,
+        marginBottom: SPACING.sm,
     },
-    titleRow: {
+    titleInfo: {
+        flex: 1,
+    },
+    liveIndicator: {
         flexDirection: 'row',
         alignItems: 'center',
+        marginBottom: 2,
     },
-    indicator: {
-        width: 3,
-        height: 12,
-        backgroundColor: COLORS.primary,
-        borderRadius: 2,
+    dot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#4BB543',
         marginRight: 6,
+        shadowColor: '#4BB543',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 4,
     },
-    headerTitle: {
-        color: COLORS.white,
-        fontWeight: '700',
+    liveText: {
         fontSize: 10,
-        letterSpacing: 0.5,
+        fontWeight: '900',
+        color: '#4BB543',
+        letterSpacing: 1,
     },
-    headerRight: {
-        flexDirection: 'row',
+    dateText: {
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    editBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
         alignItems: 'center',
-    },
-    date: {
-        color: COLORS.textLight,
-        fontSize: 10,
-        marginRight: SPACING.sm,
-    },
-    editButton: {
-        padding: 4,
-        backgroundColor: 'rgba(255, 215, 0, 0.1)',
-        borderRadius: 6,
-    },
-    content: {
-        paddingTop: 4,
-    },
-    metalRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        padding: SPACING.sm,
-        borderRadius: BORDER_RADIUS.sm,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 215, 0, 0.2)',
-    },
-    metalHeader: {
-        width: 50,
-        alignItems: 'center',
-        borderRightWidth: 1,
-        borderRightColor: 'rgba(255,255,255,0.1)',
-        marginRight: SPACING.sm,
-    },
-    metalLabel: {
-        color: COLORS.gold,
-        fontSize: 10,
-        fontWeight: 'bold',
-        marginTop: 2,
-    },
-    ratesContainer: {
-        flex: 1,
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-    },
-    item: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    silverItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    label: {
-        color: COLORS.textLight,
-        fontSize: 9,
-        fontWeight: 'bold',
-    },
-    value: {
-        fontSize: FONT_SIZES.sm,
-        fontWeight: 'bold',
     },
     divider: {
+        height: 1,
+        backgroundColor: 'rgba(212, 175, 55, 0.1)',
+        marginVertical: SPACING.sm,
+    },
+    mainContent: {
+        paddingTop: SPACING.xs,
+    },
+    sectionContainer: {
+        width: '100%',
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: SPACING.sm,
+    },
+    iconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    sectionTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        letterSpacing: 0.3,
+    },
+    ratesRow: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(0,0,0,0.03)',
+        borderRadius: BORDER_RADIUS.md,
+        padding: SPACING.sm,
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    metalItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    metalItemLabel: {
+        fontSize: 10,
+        color: '#777',
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    metalItemValue: {
+        fontSize: 15,
+        fontWeight: '900',
+    },
+    verticalDivider: {
         width: 1,
-        height: 15,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        height: 20,
+        backgroundColor: 'rgba(0,0,0,0.05)',
     },
 });

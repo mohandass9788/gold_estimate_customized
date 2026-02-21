@@ -29,6 +29,8 @@ export default function SummaryCard({ totals, style }: SummaryCardProps) {
         setExpanded(!expanded);
     };
 
+    const colors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
+
     const metalLabel = React.useMemo(() => {
         const metals = new Set(state.items.map(item => item.metal));
         if (metals.size === 1) {
@@ -45,10 +47,10 @@ export default function SummaryCard({ totals, style }: SummaryCardProps) {
     );
 
     return (
-        <View style={[styles.card, { backgroundColor: activeColors.cardBg, borderTopColor: activeColors.border }, style]}>
+        <View style={[styles.card, { backgroundColor: theme === 'light' ? '#FFF' : '#1A1A1A', borderTopColor: colors.primary + '30' }, style]}>
             <TouchableOpacity style={styles.expandToggle} onPress={toggleExpand}>
-                <View style={[styles.indicator, { backgroundColor: activeColors.border }]} />
-                <Icon name={expanded ? "chevron-down" : "chevron-up"} size={20} color={activeColors.textLight} />
+                <View style={[styles.indicator, { backgroundColor: colors.border }]} />
+                <Icon name={expanded ? "chevron-down" : "chevron-up"} size={22} color={colors.primary} />
             </TouchableOpacity>
 
             {expanded && (
@@ -62,20 +64,27 @@ export default function SummaryCard({ totals, style }: SummaryCardProps) {
                     {totals?.totalPurchase > 0 && <SummaryRow label={t('purchase_deduction') || 'Old Gold Deduction'} value={`- ₹ ${totals.totalPurchase.toLocaleString()}`} />}
                     {totals?.totalChit > 0 && <SummaryRow label={t('chit_deduction')} value={`- ₹ ${totals.totalChit.toLocaleString()}`} />}
                     {totals?.totalAdvance > 0 && <SummaryRow label={t('advance_deduction')} value={`- ₹ ${totals.totalAdvance.toLocaleString()}`} />}
-                    <View style={[styles.divider, { backgroundColor: activeColors.border }]} />
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 </View>
             )}
 
-            <View style={styles.grandTotalRow}>
-                <View>
-                    <Text style={[styles.grandTotalLabel, { color: activeColors.text }]}>{t('net_payable')}</Text>
+            <View style={styles.grandTotalContainer}>
+                <View style={styles.grandTotalHeader}>
+                    <Text style={[styles.grandTotalLabel, { color: colors.text }]}>{t('net_payable')}</Text>
                     {!expanded && (
-                        <Text style={[styles.summaryShort, { color: activeColors.textLight }]}>
-                            {state.items.length} {t('items')} | {(totals?.totalWeight || 0).toFixed(3)} g
-                        </Text>
+                        <View style={[styles.badge, { backgroundColor: colors.primary + '15' }]}>
+                            <Text style={[styles.badgeText, { color: colors.primary }]}>
+                                {state.items.length} {t('items')}
+                            </Text>
+                        </View>
                     )}
                 </View>
-                <Text style={[styles.grandTotalValue, { color: activeColors.success }]}>₹ {(totals?.grandTotal || 0).toLocaleString()}</Text>
+                <View style={styles.priceRow}>
+                    <Text style={[styles.currencySymbol, { color: colors.success }]}>₹</Text>
+                    <Text style={[styles.grandTotalValue, { color: colors.success }]}>
+                        {(totals?.grandTotal || 0).toLocaleString()}
+                    </Text>
+                </View>
             </View>
         </View>
     );
@@ -124,21 +133,42 @@ const styles = StyleSheet.create({
         height: 1,
         marginVertical: SPACING.sm,
     },
-    grandTotalRow: {
+    grandTotalContainer: {
+        paddingBottom: SPACING.md,
+    },
+    grandTotalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingBottom: SPACING.xs,
+        marginBottom: 4,
+    },
+    badge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 12,
+    },
+    badgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    priceRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    currencySymbol: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+        marginTop: 4,
+        marginRight: 2,
     },
     grandTotalLabel: {
         fontSize: FONT_SIZES.md,
-        fontWeight: 'bold',
-    },
-    summaryShort: {
-        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     grandTotalValue: {
-        fontSize: FONT_SIZES.xl,
-        fontWeight: 'bold',
+        fontSize: FONT_SIZES.xxxl,
+        fontWeight: '900',
+        letterSpacing: -1,
     },
 });

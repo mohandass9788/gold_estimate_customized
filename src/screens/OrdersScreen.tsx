@@ -24,7 +24,7 @@ const Modal = RNModal as any;
 
 export default function OrdersScreen() {
     const router = useRouter();
-    const { theme, t, shopDetails } = useGeneralSettings();
+    const { theme, t, shopDetails, requestPrint, currentEmployeeName } = useGeneralSettings();
     const { clearEstimation, addTagItem, addPurchaseItem, addChitItem, addAdvanceItem } = useEstimation();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
@@ -101,20 +101,22 @@ export default function OrdersScreen() {
     };
 
     const handlePrint = async (orderId: string) => {
-        setIsPrinting(true);
-        try {
-            const { order, items } = await getOrderDetails(orderId);
-            const products = items.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
-            const purchases = items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData));
-            const chits = items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData));
-            const advances = items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData));
+        requestPrint(async (empName) => {
+            setIsPrinting(true);
+            try {
+                const { order, items } = await getOrderDetails(orderId);
+                const products = items.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
+                const purchases = items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData));
+                const chits = items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData));
+                const advances = items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData));
 
-            await printEstimationReceipt(products, purchases, chits, advances, shopDetails, order.customerName, order.employeeName);
-        } catch (error: any) {
-            Alert.alert('Print Error', error.message || 'Failed to print');
-        } finally {
-            setIsPrinting(false);
-        }
+                await printEstimationReceipt(products, purchases, chits, advances, shopDetails, order.customerName, empName);
+            } catch (error: any) {
+                Alert.alert('Print Error', error.message || 'Failed to print');
+            } finally {
+                setIsPrinting(false);
+            }
+        });
     };
 
     const handleReload = async (orderId: string) => {
