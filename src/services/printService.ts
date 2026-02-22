@@ -3,6 +3,7 @@ import * as Print from 'expo-print';
 
 import { EstimationItem, PurchaseItem, ChitItem, AdvanceItem } from '../types';
 import { getSetting } from './dbService';
+import { ReceiptConfig } from '../store/GeneralSettingsContext';
 import { NativeModules, Alert } from 'react-native';
 
 const { RNBLEPrinter, RNUSBPrinter, RNNetPrinter } = NativeModules;
@@ -42,67 +43,114 @@ const thermalCommands = {
 const getCommonStyles = () => `
     <style>
         body {
-            font-family: 'Inter', sans-serif;
-            padding: 20px;
-            color: #333;
-            max-width: 400px;
+            font-family: 'Courier New', 'Courier', monospace;
+            padding: 4px;
+            color: #000;
+            max-width: 380px;
             margin: auto;
+            font-size: 12px;
+            line-height: 1.4;
         }
         .header {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 4px;
         }
         .shop-name {
-            font-size: 24px;
+            font-size: 16px;
             font-weight: bold;
-            margin-bottom: 5px;
             text-transform: uppercase;
+            letter-spacing: 1px;
         }
         .shop-info {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 2px;
+            font-size: 10px;
+            color: #000;
+            margin-bottom: 1px;
         }
-        .divider {
-            border-top: 1px dashed #ccc;
-            margin: 15px 0;
+        .rate-line {
+            font-size: 11px;
+            text-align: left;
+            margin: 1px 0;
+        }
+        .dash-line {
+            font-size: 11px;
+            letter-spacing: -1px;
+            margin: 3px 0;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .double-line {
+            font-size: 11px;
+            letter-spacing: -1px;
+            margin: 3px 0;
+            overflow: hidden;
+            white-space: nowrap;
         }
         .receipt-title {
             text-align: center;
-            font-size: 18px;
+            font-size: 14px;
             font-weight: bold;
-            margin-bottom: 15px;
+            margin: 4px 0;
             text-decoration: underline;
         }
+        .section-title {
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+            margin: 6px 0 2px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+        th {
+            text-align: left;
+            padding: 1px 2px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+        td {
+            padding: 1px 2px;
+            vertical-align: top;
+            font-size: 11px;
+        }
+        .text-right { text-align: right; }
         .row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 5px;
-            font-size: 14px;
+            margin-bottom: 1px;
+            font-size: 11px;
         }
-        .item-name {
+        .row-bold {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1px;
+            font-size: 12px;
             font-weight: bold;
-            margin-top: 10px;
-            font-size: 16px;
-        }
-        .total-section {
-            margin-top: 20px;
-            padding-top: 10px;
-            border-top: 2px solid #333;
         }
         .total-row {
             display: flex;
             justify-content: space-between;
+            font-size: 13px;
+            font-weight: bold;
+            margin: 2px 0;
+        }
+        .net-amt {
+            text-align: center;
             font-size: 16px;
             font-weight: bold;
-            margin-top: 5px;
+            margin: 6px 0;
         }
         .footer {
             text-align: center;
-            margin-top: 30px;
-            font-size: 12px;
-            color: #888;
-            font-style: italic;
+            margin-top: 8px;
+            font-size: 10px;
+            color: #000;
+        }
+        .customer-block {
+            font-size: 11px;
+            margin: 2px 0;
         }
         @media print {
             body { padding: 0; }
@@ -110,7 +158,9 @@ const getCommonStyles = () => `
     </style>
 `;
 
-const getShopHeaderHTML = async (shopDetailsInput?: any) => {
+const getShopHeaderHTML = async (shopDetailsInput?: any, config?: ReceiptConfig) => {
+    if (config && !config.showHeader) return '';
+
     const shopName = shopDetailsInput?.name || await getSetting('shop_name') || 'GOLD ESTIMATION';
     const shopAddress = shopDetailsInput?.address || await getSetting('shop_address') || '';
     const shopPhone = shopDetailsInput?.phone || await getSetting('shop_phone') || '';
@@ -120,12 +170,11 @@ const getShopHeaderHTML = async (shopDetailsInput?: any) => {
     return `
         <div class="header">
             <div class="shop-name">${shopName}</div>
-            ${deviceName ? `<div class="shop-info" style="font-weight: bold;">Device: ${deviceName}</div>` : ''}
             ${shopAddress ? `<div class="shop-info">${shopAddress}</div>` : ''}
             ${shopPhone ? `<div class="shop-info">Tel: ${shopPhone}</div>` : ''}
-            ${shopGst ? `<div class="shop-info">GSTIN: ${shopGst}</div>` : ''}
+            ${(config?.showGST !== false && shopGst) ? `<div class="shop-info">GSTIN: ${shopGst}</div>` : ''}
+            ${(config?.showDeviceName !== false && deviceName) ? `<div class="shop-info" style="font-weight: bold; margin-top: 2px;">Device: ${deviceName}</div>` : ''}
         </div>
-        <div class="divider"></div>
     `;
 };
 
@@ -155,15 +204,25 @@ const ensureThermalConnection = async (macAddress: string) => {
     }
 };
 
-export const sendTestPrint = async (employeeName?: string): Promise<void> => {
+export const sendTestPrint = async (employeeName?: string, config?: ReceiptConfig): Promise<void> => {
     const { type, printer } = await getPrinterConfig();
 
     if (type === 'thermal' && printer?.address) {
         const connected = await ensureThermalConnection(printer.address);
         if (connected) {
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
-            let payload = `${thermalCommands.reset}${thermalCommands.center}${thermalCommands.doubleOn}TEST PRINT${thermalCommands.doubleOff}\x0aSTATUS: SUCCESSFUL\x0a`;
-            if (employeeName) payload += `By: ${employeeName}\x0a`;
+            const shopName = await getSetting('shop_name') || 'GOLD ESTIMATION';
+            const deviceName = await getSetting('device_name') || '';
+
+            let payload = `${thermalCommands.reset}${thermalCommands.center}`;
+
+            if (!config || config.showHeader) {
+                payload += `${thermalCommands.doubleOn}${shopName}${thermalCommands.doubleOff}\x0a`;
+                if (config?.showDeviceName !== false && deviceName) payload += `Device: ${deviceName}\x0a`;
+            }
+
+            payload += `STATUS: SUCCESSFUL\x0a`;
+            if ((!config || config.showOperator) && employeeName) payload += `By: ${employeeName}\x0a`;
             payload += `${thermalCommands.divider}${new Date().toLocaleString()}\x0a\x0a\x0a\x0a`;
             BLEPrinter.printText(payload);
             return;
@@ -172,14 +231,14 @@ export const sendTestPrint = async (employeeName?: string): Promise<void> => {
         }
     }
 
-    const header = await getShopHeaderHTML();
+    const header = await getShopHeaderHTML(null, config);
     const html = `
         <html>
             <head>${getCommonStyles()}</head>
             <body>
                 ${header}
                 <div class="receipt-title">TEST PRINT</div>
-                ${employeeName ? `<div class="row"><span>By:</span><span>${employeeName}</span></div>` : ''}
+                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>By:</span><span>${employeeName}</span></div>` : ''}
                 <div class="row">
                     <span>Status:</span>
                     <span style="color: green; font-weight: bold;">SUCCESSFUL</span>
@@ -189,7 +248,7 @@ export const sendTestPrint = async (employeeName?: string): Promise<void> => {
                     <span>${new Date().toLocaleString()}</span>
                 </div>
                 <div class="divider"></div>
-                <div class="footer">Thank you for using Gold Estimation App</div>
+                ${(!config || config.showFooter) ? '<div class="footer">Thank you for using Gold Estimation App</div>' : ''}
             </body>
         </html>
     `;
@@ -197,7 +256,7 @@ export const sendTestPrint = async (employeeName?: string): Promise<void> => {
     await Print.printAsync({ html });
 };
 
-export const printEstimationItem = async (item: EstimationItem, shopDetails?: any, employeeName?: string): Promise<void> => {
+export const printEstimationItem = async (item: EstimationItem, shopDetails?: any, employeeName?: string, config?: ReceiptConfig): Promise<void> => {
     const { type, printer } = await getPrinterConfig();
 
     if (type === 'thermal' && printer?.address) {
@@ -205,8 +264,13 @@ export const printEstimationItem = async (item: EstimationItem, shopDetails?: an
         if (connected) {
             const shopName = shopDetails?.name || await getSetting('shop_name') || 'GOLD ESTIMATION';
             const deviceName = await getSetting('device_name') || '';
-            let payload = `${thermalCommands.reset}${thermalCommands.center}${thermalCommands.boldOn}${shopName}${thermalCommands.boldOff}\x0a`;
-            if (deviceName) payload += `Device: ${deviceName}\x0a`;
+            let payload = `${thermalCommands.reset}${thermalCommands.center}`;
+
+            if (!config || config.showHeader) {
+                payload += `${thermalCommands.boldOn}${shopName}${thermalCommands.boldOff}\x0a`;
+                if (config?.showDeviceName !== false && deviceName) payload += `Device: ${deviceName}\x0a`;
+            }
+
             payload += `${thermalCommands.divider}${thermalCommands.boldOn}ESTIMATION DETAILS${thermalCommands.boldOff}\x0a`;
             payload += `${thermalCommands.left}${item.name.toUpperCase()}\x0a`;
             if (item.tagNumber) payload += `Tag: ${item.tagNumber}\x0a`;
@@ -217,13 +281,27 @@ export const printEstimationItem = async (item: EstimationItem, shopDetails?: an
             payload += `Rate/g:   Rs. ${item.rate}\x0a`;
             payload += `${thermalCommands.divider}`;
             const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
-            payload += `Gold Val: Rs. ${item.goldValue.toLocaleString()}\x0a`;
-            payload += `VA (${item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`}): ${vWeight.toFixed(3)}g\x0a`;
-            const mcLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? 'Weight' : 'Fixed');
-            payload += `MC (${mcLabel}): Rs. ${item.makingChargeValue.toFixed(2)}\x0a`;
-            payload += `GST (3%):  Rs. ${item.gstValue.toFixed(2)}\x0a`;
+            payload += `Gold Val: Rs. ${Math.round(item.goldValue).toLocaleString()}\x0a`;
+
+            if (!config || config.showWastage) {
+                const wValue = config?.wastageDisplayType === 'grams' ? `${vWeight.toFixed(3)}g` : `${item.wastage}${item.wastageType === 'percentage' ? '%' : 'g'}`;
+                payload += `VA (${wValue}): Rs. ${Math.round(item.wastageValue).toLocaleString()}\x0a`;
+            }
+            if (!config || config.showMakingCharge) {
+                let mcLabel = '';
+                if (config?.makingChargeDisplayType === 'percentage') mcLabel = `${item.makingCharge}%`;
+                else if (config?.makingChargeDisplayType === 'grams') mcLabel = 'Weight';
+                else if (config?.makingChargeDisplayType === 'fixed') mcLabel = 'Fixed';
+                else mcLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? 'Weight' : 'Fixed');
+
+                payload += `MC (${mcLabel}): Rs. ${Math.round(item.makingChargeValue).toLocaleString()}\x0a`;
+            }
+            if (!config || config.showGST) {
+                payload += `GST (3%):  Rs. ${Math.round(item.gstValue).toLocaleString()}\x0a`;
+            }
+
             payload += `${thermalCommands.divider}`;
-            payload += `${thermalCommands.boldOn}${thermalCommands.doubleOn}TOTAL: Rs. ${item.totalValue.toLocaleString()}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.boldOn}${thermalCommands.doubleOn}TOTAL: Rs. ${Math.round(item.totalValue).toLocaleString()}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
             payload += `\x0a\x0a\x0a\x0a`;
 
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
@@ -232,14 +310,14 @@ export const printEstimationItem = async (item: EstimationItem, shopDetails?: an
         }
     }
 
-    const header = await getShopHeaderHTML(shopDetails);
+    const header = await getShopHeaderHTML(shopDetails, config);
     const html = `
         <html>
             <head>${getCommonStyles()}</head>
             <body>
                 ${header}
                 <div class="receipt-title">ESTIMATION DETAILS</div>
-                ${employeeName ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
+                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
                 <div class="item-name">${item.name.toUpperCase()}</div>
                 ${item.subProductName ? `<div class="shop-info">${item.subProductName}</div>` : ''}
                 ${item.tagNumber ? `<div class="shop-info">Tag: ${item.tagNumber}</div>` : ''}
@@ -254,25 +332,27 @@ export const printEstimationItem = async (item: EstimationItem, shopDetails?: an
                 
                 <div class="divider"></div>
                 
-                <div class="row"><span>Gold Value:</span><span>Rs. ${item.goldValue.toLocaleString()}</span></div>
+                <div class="row"><span>Gold Value:</span><span>Rs. ${Math.round(item.goldValue).toLocaleString()}</span></div>
+                ${(!config || config.showWastage) ? `
                 <div class="row">
-                    <span>VA (${item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`}):</span>
-                    <span>${(item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage).toFixed(3)} g</span>
-                </div>
+                    <span>VA (${config?.wastageDisplayType === 'grams' ? `${(item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage).toFixed(3)} g` : `${item.wastage}${item.wastageType === 'percentage' ? '%' : 'g'}`}):</span>
+                    <span>Rs. ${Math.round(item.wastageValue).toLocaleString()}</span>
+                </div>` : ''}
+                ${(!config || config.showMakingCharge) ? `
                 <div class="row">
-                    <span>MC (${item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? 'Weight' : 'Fixed')}):</span>
-                    <span>Rs. ${item.makingChargeValue.toFixed(2)}</span>
-                </div>
-                <div class="row"><span>GST (3%):</span><span>Rs. ${item.gstValue.toFixed(2)}</span></div>
+                    <span>MC (${config?.makingChargeDisplayType === 'percentage' ? `${item.makingCharge}%` : (config?.makingChargeDisplayType === 'grams' ? 'Weight' : (config?.makingChargeDisplayType === 'fixed' ? 'Fixed' : (item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? 'Weight' : 'Fixed'))))}):</span>
+                    <span>Rs. ${Math.round(item.makingChargeValue).toLocaleString()}</span>
+                </div>` : ''}
+                ${(!config || config.showGST) ? `<div class="row"><span>GST (3%):</span><span>Rs. ${Math.round(item.gstValue).toLocaleString()}</span></div>` : ''}
                 
                 <div class="total-section">
                     <div class="total-row">
                         <span>TOTAL:</span>
-                        <span>Rs. ${item.totalValue.toLocaleString()}</span>
+                        <span>Rs. ${Math.round(item.totalValue).toLocaleString()}</span>
                     </div>
                 </div>
                 
-                <div class="footer">This is a computer generated estimation.</div>
+                ${(!config || config.showFooter) ? '<div class="footer">This is a computer generated estimation.</div>' : ''}
             </body>
         </html>
     `;
@@ -280,7 +360,7 @@ export const printEstimationItem = async (item: EstimationItem, shopDetails?: an
     await Print.printAsync({ html });
 };
 
-export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, employeeName?: string): Promise<void> => {
+export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, employeeName?: string, config?: ReceiptConfig): Promise<void> => {
     const { type, printer } = await getPrinterConfig();
 
     if (type === 'thermal' && printer?.address) {
@@ -288,8 +368,13 @@ export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, e
         if (connected) {
             const shopName = shopDetails?.name || await getSetting('shop_name') || 'GOLD ESTIMATION';
             const deviceName = await getSetting('device_name') || '';
-            let payload = `${thermalCommands.reset}${thermalCommands.center}${thermalCommands.boldOn}${shopName}${thermalCommands.boldOff}\x0a`;
-            if (deviceName) payload += `Device: ${deviceName}\x0a`;
+            let payload = `${thermalCommands.reset}${thermalCommands.center}`;
+
+            if (!config || config.showHeader) {
+                payload += `${thermalCommands.boldOn}${shopName}${thermalCommands.boldOff}\x0a`;
+                if (config?.showDeviceName !== false && deviceName) payload += `Device: ${deviceName}\x0a`;
+            }
+
             payload += `${thermalCommands.divider}${thermalCommands.boldOn}PURCHASE RECEIPT${thermalCommands.boldOff}\x0a`;
             payload += `${thermalCommands.left}${item.category.toUpperCase()}\x0a`;
             payload += `${thermalCommands.divider}`;
@@ -306,7 +391,7 @@ export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, e
         }
     }
 
-    const header = await getShopHeaderHTML(shopDetails);
+    const header = await getShopHeaderHTML(shopDetails, config);
     const lessLabel = item.lessWeightType === 'percentage' ? `${item.lessWeight}%` : item.lessWeightType === 'amount' ? `Rs.${item.lessWeight}` : `${item.lessWeight}g`;
 
     const html = `
@@ -315,7 +400,7 @@ export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, e
             <body>
                 ${header}
                 <div class="receipt-title">PURCHASE / OLD GOLD</div>
-                ${employeeName ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
+                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
                 <div class="item-name">${item.category.toUpperCase()}</div>
                 ${item.subCategory ? `<div class="shop-info">${item.subCategory}</div>` : ''}
                 
@@ -336,6 +421,7 @@ export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, e
                         <span>Rs. ${item.amount.toLocaleString()}</span>
                     </div>
                 </div>
+                ${(!config || config.showFooter) ? `<div class="footer">${shopDetails?.footerMessage || 'Thank You! Visit Again.'}</div>` : ''}
             </body>
         </html>
     `;
@@ -350,7 +436,9 @@ export const printEstimationReceipt = async (
     advanceItems: AdvanceItem[] = [],
     shopDetailsInput: any,
     customerName?: string,
-    employeeName?: string
+    employeeName?: string,
+    config?: ReceiptConfig,
+    estimationNumber?: number
 ): Promise<void> => {
     const { type, printer } = await getPrinterConfig();
     const shopDetails = shopDetailsInput || {
@@ -365,68 +453,133 @@ export const printEstimationReceipt = async (
         if (connected) {
             const shopName = shopDetails?.name || await getSetting('shop_name') || 'GOLD ESTIMATION';
             const deviceName = await getSetting('device_name') || '';
-            let payload = `${thermalCommands.reset}${thermalCommands.center}${thermalCommands.boldOn}${shopName}${thermalCommands.boldOff}\x0a`;
-            if (deviceName) payload += `Device: ${deviceName}\x0a`;
-            payload += `Date: ${new Date().toLocaleDateString()}\x0a`;
-            if (customerName) payload += `Customer: ${customerName}\x0a`;
-            if (employeeName) payload += `Employee: ${employeeName}\x0a`;
-            payload += `${thermalCommands.divider}${thermalCommands.boldOn}ESTIMATION RECEIPT${thermalCommands.boldOff}\x0a`;
+            const thermGoldRate22k = await getSetting('rate_22k') || '0';
+            const thermGoldRate18k = await getSetting('rate_18k') || '0';
+            const thermSilverRate = await getSetting('rate_silver') || '0';
+            const thermDateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+            // Helper: pad string to fixed width for 32-char thermal printer
+            const padR = (s: string, w: number) => s.length >= w ? s.substring(0, w) : s + ' '.repeat(w - s.length);
+            const padL = (s: string, w: number) => s.length >= w ? s.substring(0, w) : ' '.repeat(w - s.length) + s;
+            const LINE = '================================\x0a';
+            const DASH = '--------------------------------\x0a';
+
+            let payload = `${thermalCommands.reset}${thermalCommands.center}`;
+
+            if (!config || config.showHeader) {
+                payload += `${thermalCommands.boldOn}${thermalCommands.doubleOn}${shopName}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
+                if (config?.showDeviceName !== false && deviceName) payload += `Device: ${deviceName}\x0a`;
+            }
+
+            payload += `${thermalCommands.boldOn}ESTIMATION SLIP${thermalCommands.boldOff}\x0a`;
+            if (estimationNumber) {
+                payload += `Est #: ${estimationNumber}\x0a`;
+            }
+            payload += `${thermalCommands.left}`;
+            payload += `Rate:22K:${parseFloat(thermGoldRate22k).toFixed(2)}  Date:${thermDateStr}\x0a`;
+            payload += `Rate:18K:${parseFloat(thermGoldRate18k).toFixed(2)}  Silver:${parseFloat(thermSilverRate).toFixed(2)}\x0a`;
+            payload += LINE;
+
+            if (config?.showCustomer !== false && customerName) {
+                payload += `Customer: ${customerName.toUpperCase()}\x0a`;
+            }
+            if (config?.showOperator !== false && employeeName) {
+                payload += `Operator: ${employeeName}\x0a`;
+            }
+            if ((config?.showCustomer !== false && customerName) || (config?.showOperator !== false && employeeName)) {
+                payload += LINE;
+            }
+
+            // Items header: 32 chars total
+            // NAME(8) PCS(3) WT(7) WST(5) MC(4) AMT(5) = 32
+            payload += `${thermalCommands.boldOn}${padR('ITEMS', 8)}${padR('Pcs', 3)}${padR('WT', 7)}${padR('WST', 5)}${padR('MC', 4)}${padL('AMT', 5)}${thermalCommands.boldOff}\x0a`;
+            payload += DASH;
 
             let totalTaxableValue = 0;
+            let totalGrossWeight = 0;
+            let totalNetWeight = 0;
             let totalPurchaseAmount = 0;
 
-            items.forEach((item, index) => {
+            items.forEach(item => {
                 const itemTaxable = item.goldValue + item.wastageValue + item.makingChargeValue;
                 totalTaxableValue += itemTaxable;
-                const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
-                payload += `${thermalCommands.left}${index + 1}. ${item.name} (${item.netWeight.toFixed(3)}g)\x0a`;
-                const mcSubLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? 'Weight' : 'Fixed');
-                payload += `   VA: ${vWeight.toFixed(3)}g | MC: Rs.${item.makingChargeValue.toFixed(2)}\x0a`;
-                payload += `   Item Total: Rs. ${itemTaxable.toLocaleString()}\x0a`;
+                totalGrossWeight += item.grossWeight;
+                totalNetWeight += item.netWeight;
+
+                // Item name on its own line
+                payload += `${item.name.substring(0, 20).toUpperCase()}\x0a`;
+                if (item.tagNumber) payload += `(${item.tagNumber})\x0a`;
+                // Data row: aligned columns
+                const pcsStr = item.pcs.toString();
+                const wtStr = item.grossWeight.toFixed(3);
+                const wstStr = Math.round(item.wastageValue).toString();
+                const mcStr = Math.round(item.makingChargeValue).toString();
+                const amtStr = Math.round(itemTaxable).toFixed(2);
+                payload += `${padR('', 8)}${padR(pcsStr, 3)}${padR(wtStr, 7)}${padR(wstStr, 5)}${padR(mcStr, 4)}${padL(amtStr, 5)}\x0a`;
             });
 
+            payload += DASH;
+            payload += `${thermalCommands.boldOn}${padR('TOTAL', 8)}${padR('', 3)}${padR(totalGrossWeight.toFixed(3), 7)}${padR('', 5)}${padR('', 4)}${padL(Math.round(totalTaxableValue).toFixed(2), 5)}${thermalCommands.boldOff}\x0a`;
+            payload += DASH;
+            payload += `${padR('NETWT', 8)}${padR('', 3)}${padR(totalNetWeight.toFixed(3), 7)}\x0a`;
+            payload += DASH;
+
+            // GST
+            const splitGST = (totalTaxableValue * 0.03) / 2;
+            const totalGST = totalTaxableValue * 0.03;
+            const estimationAmt = totalTaxableValue + totalGST;
+
+            if (!config || config.showGST) {
+                payload += `     CGST 1.50%  ${padL(Math.round(splitGST).toFixed(2), 10)}\x0a`;
+                payload += `     SGST 1.50%  ${padL(Math.round(splitGST).toFixed(2), 10)}\x0a`;
+            }
+            payload += `${thermalCommands.boldOn}Est.Amount:-  ${padL(Math.round(estimationAmt).toFixed(2), 12)}${thermalCommands.boldOff}\x0a`;
+
+            // Purchase section
             if (purchaseItems.length > 0) {
-                payload += `${thermalCommands.divider}OLD GOLD / PURCHASE\x0a`;
-                purchaseItems.forEach((item, index) => {
+                payload += LINE;
+                payload += `${thermalCommands.center}${thermalCommands.boldOn}* Purchase Quotation *${thermalCommands.boldOff}\x0a`;
+                payload += `${thermalCommands.left}Date : ${thermDateStr}\x0a`;
+                payload += `${padR('ITEMS', 14)}${padR('WT', 8)}${padL('Amount', 10)}\x0a`;
+                let totalPurWeight = 0;
+                purchaseItems.forEach(item => {
                     totalPurchaseAmount += item.amount;
-                    payload += `${index + 1}. ${item.category} -Rs. ${item.amount.toLocaleString()}\x0a`;
+                    totalPurWeight += item.netWeight;
+                    payload += `${padR(item.category.toUpperCase().substring(0, 14), 14)}${padR(item.netWeight.toFixed(3), 8)}${padL(Math.round(item.amount).toFixed(2), 10)}\x0a`;
                 });
+                payload += DASH;
+                payload += `${thermalCommands.boldOn}${padR('PurTot', 14)}${padR(totalPurWeight.toFixed(3), 8)}${padL(Math.round(totalPurchaseAmount).toFixed(2), 10)}${thermalCommands.boldOff}\x0a`;
             }
 
+            // Chit section
             let totalChit = 0;
             if (chitItems.length > 0) {
-                payload += `${thermalCommands.divider}CHITS\x0a`;
+                payload += DASH;
                 chitItems.forEach(item => {
                     totalChit += item.amount;
-                    payload += `Chit ${item.chitId}: -Rs. ${item.amount.toLocaleString()}\x0a`;
+                    payload += `${padR('Chit (' + item.chitId + ')', 20)}${padL('-' + Math.round(item.amount).toFixed(2), 12)}\x0a`;
                 });
             }
 
+            // Advance section
             let totalAdvance = 0;
             if (advanceItems.length > 0) {
-                payload += `${thermalCommands.divider}ADVANCES\x0a`;
+                payload += DASH;
                 advanceItems.forEach(item => {
                     totalAdvance += item.amount;
-                    payload += `Adv ${item.advanceId}: -Rs. ${item.amount.toLocaleString()}\x0a`;
+                    payload += `${padR('Advance (' + item.advanceId + ')', 20)}${padL('-' + Math.round(item.amount).toFixed(2), 12)}\x0a`;
                 });
             }
 
-            const totalGST = totalTaxableValue * 0.03;
-            const grossTotal = totalTaxableValue + totalGST;
-            const netPayable = grossTotal - totalPurchaseAmount - totalChit - totalAdvance;
+            const netPayable = estimationAmt - totalPurchaseAmount - totalChit - totalAdvance;
 
-            payload += `${thermalCommands.divider}`;
-            payload += `Taxable Val: Rs. ${totalTaxableValue.toLocaleString()}\x0a`;
-            payload += `GST (3%):    Rs. ${totalGST.toFixed(2)}\x0a`;
-            payload += `${thermalCommands.boldOn}Gross Total: Rs. ${grossTotal.toLocaleString()}${thermalCommands.boldOff}\x0a`;
-            if (totalPurchaseAmount > 0) payload += `Purchases:   -Rs. ${totalPurchaseAmount.toLocaleString()}\x0a`;
-            if (totalChit > 0) payload += `Chits:       -Rs. ${totalChit.toLocaleString()}\x0a`;
-            if (totalAdvance > 0) payload += `Advances:    -Rs. ${totalAdvance.toLocaleString()}\x0a`;
-            payload += `${thermalCommands.divider}`;
-            payload += `${thermalCommands.boldOn}${thermalCommands.doubleOn}NET: Rs. ${netPayable.toLocaleString()}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
-            payload += `${thermalCommands.divider}`;
-            payload += `${thermalCommands.center}THANK YOU VISIT AGAIN\x0a`;
-            payload += `\x0a\x0a\x0a\x0a`;
+            payload += LINE;
+            payload += `${thermalCommands.center}${thermalCommands.boldOn}${thermalCommands.doubleOn}Net Amt Rs.${Math.round(netPayable).toLocaleString('en-IN')}.00${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
+            payload += LINE;
+
+            // if (config?.showOperator !== false && employeeName) payload += `${employeeName}\x0a`;
+            if (!config || config.showFooter) payload += `THANK YOU VISIT AGAIN\x0a`;
+            payload += `\x0a\x0a\x0a\x00`;
 
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
             BLEPrinter.printText(payload);
@@ -434,111 +587,185 @@ export const printEstimationReceipt = async (
         }
     }
 
-    const headerHTMLContent = await getShopHeaderHTML(shopDetails);
+    // Fetch gold/silver rates for display
+    const goldRate22k = await getSetting('rate_22k') || '0';
+    const goldRate18k = await getSetting('rate_18k') || '0';
+    const silverRate = await getSetting('rate_silver') || '0';
+    const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-    const totalGoldValue = items.reduce((sum, item) => sum + item.goldValue, 0);
-    const totalVAMC = items.reduce((sum, item) => sum + item.makingChargeValue + item.wastageValue, 0);
-    const totalTaxableValue = totalGoldValue + totalVAMC;
+    const header = await getShopHeaderHTML(shopDetails, config);
+
+    // Calculate totals
+    const totalWeight = items.reduce((sum, item) => sum + item.netWeight, 0);
+    const totalGrossWeight = items.reduce((sum, item) => sum + item.grossWeight, 0);
+    const totalItemAmount = items.reduce((sum, item) => {
+        // Amount before GST = goldValue + wastageValue + makingChargeValue
+        return sum + item.goldValue + item.wastageValue + item.makingChargeValue;
+    }, 0);
     const totalGST = items.reduce((sum, item) => sum + item.gstValue, 0);
-    const grossTotal = items.reduce((sum, item) => sum + item.totalValue, 0);
+    const estimationAmount = totalItemAmount + totalGST;
 
     const totalPurchaseAmount = purchaseItems.reduce((sum, item) => sum + item.amount, 0);
+    const totalPurchaseWeight = purchaseItems.reduce((sum, item) => sum + item.netWeight, 0);
     const totalChitAmount = chitItems.reduce((sum, item) => sum + item.amount, 0);
     const totalAdvanceAmount = advanceItems.reduce((sum, item) => sum + item.amount, 0);
 
-    const netPayable = grossTotal - totalPurchaseAmount - totalChitAmount - totalAdvanceAmount;
+    const netPayable = estimationAmount - totalPurchaseAmount - totalChitAmount - totalAdvanceAmount;
 
-    const itemsHTML = items.map(item => `
+    const DASH = '--------------------------------------';
+    const DOUBLE_DASH = '======================================';
+
+    // --- Estimation Items Section ---
+    const itemsHTML = items.length > 0 ? `
+        <div class="dash-line">${DASH}</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ITEMS</th>
+                    <th class="text-right">Pcs</th>
+                    <th class="text-right">WT</th>
+                    <th class="text-right">WST</th>
+                    <th class="text-right">MC</th>
+                    <th class="text-right">AMOUNT</th>
+                </tr>
+            </thead>
+        </table>
+        <div class="dash-line">${DASH}</div>
+        ${items.map(item => {
+        const itemTotal = item.goldValue + item.wastageValue + item.makingChargeValue;
+        return `
+                <table>
+                    <tr>
+                        <td colspan="6" style="font-weight:bold;padding-bottom:0;">${item.name.toUpperCase()}</td>
+                    </tr>
+                    ${item.tagNumber ? `<tr><td colspan="6" style="font-size:10px;padding-top:0;">(${item.tagNumber})</td></tr>` : ''}
+                    ${item.subProductName ? `<tr><td colspan="6" style="font-size:10px;padding-top:0;">${item.subProductName}</td></tr>` : ''}
+                    <tr>
+                        <td></td>
+                        <td class="text-right">${item.pcs}</td>
+                        <td class="text-right">${item.grossWeight.toFixed(3)}</td>
+                        <td class="text-right">${Math.round(item.wastageValue)}</td>
+                        <td class="text-right">${Math.round(item.makingChargeValue)}</td>
+                        <td class="text-right">${Math.round(itemTotal).toFixed(2)}</td>
+                    </tr>
+                </table>
+            `;
+    }).join('')}
+        <div class="dash-line">${DASH}</div>
+        <div class="row-bold">
+            <span>TOTAL</span>
+            <span style="margin-left:auto;margin-right:40px;">${totalGrossWeight.toFixed(3)}</span>
+            <span>${Math.round(totalItemAmount).toFixed(2)}</span>
+        </div>
+        <div class="dash-line">${DASH}</div>
         <div class="row">
-            <div style="flex: 1;">
-                <div style="font-weight: bold;">${item.name}</div>
-                <div style="font-size: 10px; color: #666;">
-                    ${item.netWeight.toFixed(3)}g @ ₹${item.rate}
-                </div>
+            <span>NETWT</span>
+            <span>${totalWeight.toFixed(3)}</span>
+        </div>
+        <div class="dash-line">${DASH}</div>
+    ` : '';
+
+    // --- GST Section ---
+    const gstHTML = (!config || config.showGST) ? `
+        <div class="row"><span style="margin-left:40%;">CGST 1.50%</span><span>${Math.round(totalGST / 2).toFixed(2)}</span></div>
+        <div class="row"><span style="margin-left:40%;">SGST 1.50%</span><span>${Math.round(totalGST / 2).toFixed(2)}</span></div>
+        <div class="row-bold"><span style="margin-left:40%;">Est.Amount :-</span><span>${Math.round(estimationAmount).toFixed(2)}</span></div>
+    ` : `
+        <div class="row-bold"><span>Est.Amount :-</span><span>${Math.round(estimationAmount).toFixed(2)}</span></div>
+    `;
+
+    // --- Purchase Quotation Section ---
+    const purchaseHTML = purchaseItems.length > 0 ? `
+        <div class="double-line">${DOUBLE_DASH}</div>
+        <div class="section-title">* Purchase Quotation *</div>
+        <div class="rate-line">Date : ${dateStr}</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ITEMS</th>
+                    <th class="text-right">WT</th>
+                    <th class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${purchaseItems.map(p => `
+                    <tr>
+                        <td>${p.category.toUpperCase()}</td>
+                        <td class="text-right">${p.netWeight.toFixed(3)}</td>
+                        <td class="text-right">${Math.round(p.amount).toFixed(2)}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <div class="dash-line">${DASH}</div>
+        <div class="row-bold">
+            <span>PurTot</span>
+            <span>${totalPurchaseWeight.toFixed(3)}</span>
+            <span>${Math.round(totalPurchaseAmount).toFixed(2)}</span>
+        </div>
+    ` : '';
+
+    // --- Chit/Advance Deduction rows ---
+    const chitHTML = chitItems.length > 0 ? `
+        <div class="dash-line">${DASH}</div>
+        ${chitItems.map(item => `
+            <div class="row">
+                <span>Chit (${item.chitId})</span>
+                <span>-${Math.round(item.amount).toFixed(2)}</span>
             </div>
-            <div style="text-align: right;">₹${item.totalValue.toLocaleString()}</div>
-        </div>
-    `).join('');
+        `).join('')}
+    ` : '';
 
-    const purchaseHTML = purchaseItems.map(item => `
-        <div class="row">
-            <div style="flex: 1;">
-                <div>OLD GOLD: ${item.category}</div>
-                <div style="font-size: 10px; color: #666;">
-                    ${item.netWeight.toFixed(3)}g @ ₹${item.rate}
-                </div>
+    const advanceHTML = advanceItems.length > 0 ? `
+        <div class="dash-line">${DASH}</div>
+        ${advanceItems.map(item => `
+            <div class="row">
+                <span>Advance (${item.advanceId})</span>
+                <span>-${Math.round(item.amount).toFixed(2)}</span>
             </div>
-            <div style="text-align: right; color: #d32f2f;">-₹${item.amount.toLocaleString()}</div>
-        </div>
-    `).join('');
+        `).join('')}
+    ` : '';
 
-    const chitHTML = chitItems.map(item => `
-        <div class="row">
-            <div style="flex: 1;">CHIT: ${item.chitId}</div>
-            <div style="text-align: right; color: #2e7d32;">-₹${item.amount.toLocaleString()}</div>
-        </div>
-    `).join('');
-
-    const advanceHTML = advanceItems.map(item => `
-        <div class="row" style="color: #2e7d32; font-style: italic;">
-            <div style="flex: 1;">ADVANCE: ${item.advanceId}</div>
-            <div style="text-align: right;">-₹${item.amount.toLocaleString()}</div>
-        </div>
-    `).join('');
-
-    const header = await getShopHeaderHTML(shopDetails);
+    // --- Rate info lines ---
+    const rateInfoHTML = `
+        <div class="rate-line">Rate : Gold 91.6 : ${parseFloat(goldRate22k).toFixed(2)} &nbsp; Date :- ${dateStr}</div>
+        <div class="rate-line">Rate : 18 KT : ${parseFloat(goldRate18k).toFixed(2)} &nbsp; Silver : ${parseFloat(silverRate).toFixed(2)}</div>
+    `;
 
     const html = `
         <html>
             <head>${getCommonStyles()}</head>
             <body>
                 ${header}
-                <div class="receipt-title">ESTIMATION RECEIPT</div>
-                <div class="row"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
-                ${customerName ? `<div class="row"><span>Customer:</span><span>${customerName}</span></div>` : ''}
-                ${employeeName ? `<div class="row"><span>By:</span><span>${employeeName}</span></div>` : ''}
-                
-                <div class="divider"></div>
-                
-                <div style="font-weight: bold; text-align: center; margin-bottom: 10px;">ITEMS:</div>
-                ${itemsHTML}
-                
-                ${purchaseItems.length > 0 ? `
-                    <div class="divider"></div>
-                    <div style="font-weight: bold; text-align: center; margin-bottom: 5px;">OLD GOLD / PURCHASE:</div>
-                    ${purchaseHTML}
-                ` : ''}
-
-                ${chitItems.length > 0 ? `
-                    <div class="divider"></div>
-                    <div style="font-weight: bold; text-align: center; margin-bottom: 5px;">CHIT ADJUSTMENT:</div>
-                    ${chitHTML}
-                ` : ''}
-
-                ${advanceItems.length > 0 ? `
-                    <div class="divider"></div>
-                    <div style="font-weight: bold; text-align: center; margin-bottom: 5px;">ADVANCE ADJUSTMENT:</div>
-                    ${advanceHTML}
-                ` : ''}
-                
-                <div class="total-section">
-                    <div class="row"><span>Total Gold Value:</span><span>Rs. ${totalGoldValue.toLocaleString()}</span></div>
-                    <div class="row"><span>Total VA/MC:</span><span>Rs. ${totalVAMC.toFixed(2)}</span></div>
-                    <div class="row"><span>SubTotal:</span><span>Rs. ${totalTaxableValue.toLocaleString()}</span></div>
-                    <div class="row"><span>GST (3%):</span><span>Rs. ${totalGST.toFixed(2)}</span></div>
-                    <div class="divider"></div>
-                    <div class="row" style="font-size: 16px;"><span>GROSS TOTAL:</span><span>Rs. ${grossTotal.toLocaleString()}</span></div>
-                    ${totalPurchaseAmount > 0 ? `<div class="row"><span>Old Gold Deduction:</span><span>-Rs. ${totalPurchaseAmount.toLocaleString()}</span></div>` : ''}
-                    ${totalChitAmount > 0 ? `<div class="row"><span>Chit Deduction:</span><span>-Rs. ${totalChitAmount.toLocaleString()}</span></div>` : ''}
-                    ${totalAdvanceAmount > 0 ? `<div class="row"><span>Advance Deduction:</span><span>-Rs. ${totalAdvanceAmount.toLocaleString()}</span></div>` : ''}
-                    <div class="divider"></div>
-                    <div class="total-row">
-                        <span>NET:</span>
-                        <span>Rs. ${netPayable.toLocaleString()}</span>
+                <div class="receipt-title">ESTIMATION SLIP</div>
+                ${estimationNumber ? `<div class="row-bold" style="justify-content: center; margin-bottom: 5px;">Est #: ${estimationNumber}</div>` : ''}
+                ${rateInfoHTML}
+                <div class="double-line">${DOUBLE_DASH}</div>
+                ${(config?.showCustomer !== false && customerName) ? `
+                    <div class="customer-block">
+                        Customer Name : ${customerName.toUpperCase()}
                     </div>
-                </div>
-                
-                ${shopDetails?.footerMessage ? `<div class="footer">${shopDetails.footerMessage}</div>` : ''}
+                ` : ''}
+                <div class="double-line">${DOUBLE_DASH}</div>
+
+                ${itemsHTML}
+
+                ${gstHTML}
+
+                <div class="double-line">${DOUBLE_DASH}</div>
+
+                ${purchaseHTML}
+
+                ${chitHTML}
+
+                ${advanceHTML}
+
+                <div class="double-line">${DOUBLE_DASH}</div>
+                <div class="net-amt">Net Amt &nbsp; Rs.${Math.round(netPayable).toLocaleString('en-IN')}.00</div>
+                <div class="double-line">${DOUBLE_DASH}</div>
+
+                ${(config?.showOperator !== false && employeeName) ? `<div class="footer">${employeeName}</div>` : ''}
+                ${(!config || config.showFooter) ? `<div class="footer">${shopDetails?.footerMessage || 'THANK YOU VISIT AGAIN'}</div>` : ''}
             </body>
         </html>
     `;
@@ -546,8 +773,8 @@ export const printEstimationReceipt = async (
     await Print.printAsync({ html });
 };
 
-export const printChitItem = async (item: ChitItem, shopDetails: any, employeeName?: string) => {
-    const header = await getShopHeaderHTML(shopDetails);
+export const printChitItem = async (item: ChitItem, shopDetails: any, employeeName?: string, config?: ReceiptConfig) => {
+    const header = await getShopHeaderHTML(shopDetails, config);
     const html = `
         <html>
             <head>${getCommonStyles()}</head>
@@ -555,7 +782,7 @@ export const printChitItem = async (item: ChitItem, shopDetails: any, employeeNa
                 ${header}
                 <div class="receipt-title">CHIT RECEIPT</div>
                 <div class="row"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
-                ${employeeName ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
+                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
                 <div class="divider"></div>
                 <div class="row" style="font-size: 16px; margin-top: 10px;">
                     <span>CHIT ID:</span>
@@ -567,7 +794,7 @@ export const printChitItem = async (item: ChitItem, shopDetails: any, employeeNa
                         <span>Rs. ${item.amount.toLocaleString()}</span>
                     </div>
                 </div>
-                ${shopDetails?.footerMessage ? `<div class="footer">${shopDetails.footerMessage}</div>` : ''}
+                ${(!config || config.showFooter) ? `<div class="footer">${shopDetails?.footerMessage || ''}</div>` : ''}
             </body>
         </html>
     `;
@@ -579,15 +806,15 @@ export const printChitItem = async (item: ChitItem, shopDetails: any, employeeNa
             await ensureThermalConnection(macAddress);
             const deviceName = await getSetting('device_name') || '';
             const text = `
-${shopDetails?.name || 'RECEIPT'}
-${deviceName ? `Device: ${deviceName}\n` : ''}${employeeName ? `Operator: ${employeeName}\n` : ''}CHIT RECEIPT
+${(!config || config.showHeader) ? shopDetails?.name || 'RECEIPT' : ''}
+${(config?.showDeviceName !== false && deviceName) ? `Device: ${deviceName}\n` : ''}${(!config || config.showOperator) && employeeName ? `Operator: ${employeeName}\n` : ''}CHIT RECEIPT
 --------------------------------
 Date: ${new Date().toLocaleString()}
 CHIT ID: ${item.chitId}
 --------------------------------
 NET PAID: Rs. ${item.amount.toLocaleString()}
 --------------------------------
-${shopDetails?.footerMessage || ''}
+${(!config || config.showFooter) ? shopDetails?.footerMessage || '' : ''}
 
 \n\n\n`;
             await BLEPrinter.printText(text);
@@ -600,8 +827,8 @@ ${shopDetails?.footerMessage || ''}
     await Print.printAsync({ html });
 };
 
-export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, employeeName?: string) => {
-    const header = await getShopHeaderHTML(shopDetails);
+export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, employeeName?: string, config?: ReceiptConfig) => {
+    const header = await getShopHeaderHTML(shopDetails, config);
     const html = `
         <html>
             <head>${getCommonStyles()}</head>
@@ -609,7 +836,7 @@ export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, empl
                 ${header}
                 <div class="receipt-title">ADVANCE RECEIPT</div>
                 <div class="row"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
-                ${employeeName ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
+                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
                 <div class="divider"></div>
                 <div class="row" style="font-size: 16px; margin-top: 10px;">
                     <span>ADVANCE ID:</span>
@@ -621,7 +848,7 @@ export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, empl
                         <span>Rs. ${item.amount.toLocaleString()}</span>
                     </div>
                 </div>
-                ${shopDetails?.footerMessage ? `<div class="footer">${shopDetails.footerMessage}</div>` : ''}
+                ${(!config || config.showFooter) ? `<div class="footer">${shopDetails?.footerMessage || ''}</div>` : ''}
             </body>
         </html>
     `;
@@ -633,15 +860,15 @@ export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, empl
             await ensureThermalConnection(macAddress);
             const deviceName = await getSetting('device_name') || '';
             const text = `
-${shopDetails?.name || 'RECEIPT'}
-${deviceName ? `Device: ${deviceName}\n` : ''}${employeeName ? `Operator: ${employeeName}\n` : ''}ADVANCE RECEIPT
+${(!config || config.showHeader) ? shopDetails?.name || 'RECEIPT' : ''}
+${(config?.showDeviceName !== false && deviceName) ? `Device: ${deviceName}\n` : ''}${(!config || config.showOperator) && employeeName ? `Operator: ${employeeName}\n` : ''}ADVANCE RECEIPT
 --------------------------------
 Date: ${new Date().toLocaleString()}
 ADVANCE ID: ${item.advanceId}
 --------------------------------
 ADVANCE PAID: Rs. ${item.amount.toLocaleString()}
 --------------------------------
-${shopDetails?.footerMessage || ''}
+${(!config || config.showFooter) ? shopDetails?.footerMessage || '' : ''}
 
 \n\n\n`;
             await BLEPrinter.printText(text);

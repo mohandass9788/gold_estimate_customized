@@ -14,6 +14,19 @@ interface ConnectedPrinter {
     type?: string;
 }
 
+export interface ReceiptConfig {
+    showHeader: boolean;
+    showFooter: boolean;
+    showOperator: boolean;
+    showCustomer: boolean;
+    showGST: boolean;
+    showWastage: boolean;
+    showMakingCharge: boolean;
+    showDeviceName: boolean;
+    wastageDisplayType: 'percentage' | 'grams';
+    makingChargeDisplayType: 'percentage' | 'grams' | 'fixed';
+}
+
 type PrinterType = 'system' | 'thermal';
 
 interface GeneralSettingsContextType {
@@ -56,6 +69,8 @@ interface GeneralSettingsContextType {
     setShowEmployeeModal: (show: boolean) => void;
     handleEmployeeConfirm: (name: string) => Promise<void>;
     requestPrint: (callback: (employeeName: string) => Promise<void>) => void;
+    receiptConfig: ReceiptConfig;
+    updateReceiptConfig: (config: Partial<ReceiptConfig>) => void;
 }
 
 const GeneralSettingsContext = createContext<GeneralSettingsContextType | undefined>(undefined);
@@ -87,6 +102,18 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     const [deviceName, setDeviceNameState] = useState<string>('');
     const [currentEmployeeName, setCurrentEmployeeName] = useState<string>('');
     const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+    const [receiptConfig, setReceiptConfig] = useState<ReceiptConfig>({
+        showHeader: true,
+        showFooter: true,
+        showOperator: true,
+        showCustomer: true,
+        showGST: true,
+        showWastage: true,
+        showMakingCharge: true,
+        showDeviceName: true,
+        wastageDisplayType: 'percentage',
+        makingChargeDisplayType: 'fixed',
+    });
     const printCallbackRef = useRef<((employeeName: string) => Promise<void>) | null>(null);
 
     const requestPrint = (callback: (employeeName: string) => Promise<void>) => {
@@ -104,10 +131,8 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     };
 
     useEffect(() => {
-        // Load settings from DB on mount
         const loadSettings = async () => {
             try {
-                // Load shop details
                 const savedShopDetails = await Promise.all([
                     getSetting('shop_name'),
                     getSetting('shop_address'),
@@ -124,81 +149,37 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 if (savedShopDetails[4]) setShopDetails(prev => ({ ...prev, email: savedShopDetails[4]! }));
                 if (savedShopDetails[5]) setShopDetails(prev => ({ ...prev, footerMessage: savedShopDetails[5]! }));
 
-                // Load Admin PIN
                 const savedPin = await getSetting('admin_pin');
                 if (savedPin) setAdminPin(savedPin);
 
-                // Load Theme/Language if saved
                 const savedTheme = await getSetting('app_theme');
                 if (savedTheme) setTheme(savedTheme as ThemeMode);
 
                 const savedLang = await getSetting('app_language');
                 if (savedLang) setLanguageState(savedLang as Language);
 
-                // Load Connected Printer
                 const savedPrinter = await getSetting('connected_printer');
                 if (savedPrinter) {
-                    try {
-                        setConnectedPrinter(JSON.parse(savedPrinter));
-                    } catch (e) {
-                        console.error("Failed to parse saved printer", e);
-                    }
+                    try { setConnectedPrinter(JSON.parse(savedPrinter)); } catch (e) { }
                 }
 
-                // Load Printer Type
                 const savedPrinterType = await getSetting('printer_type');
                 if (savedPrinterType) setPrinterTypeState(savedPrinterType as PrinterType);
 
-                // Load Device Name
-                const savedDeviceName = await getSetting('device_name');
-                if (savedDeviceName && !savedDeviceName.startsWith('Device-')) {
-                    setDeviceNameState(savedDeviceName);
-                } else {
-                    let hardwareId = '';
-                    try {
-                        // More robust check: only require if we suspect the native module is actually there
-                        // or just catch the error more gracefully. 
-                        // The 'ExpoApplication' module name is standard for this package.
-                        const isModuleAvailable = NativeModules.ExpoApplication ||
-                            (global as any).ExpoModules?.ExpoApplication;
-
-                        if (isModuleAvailable) {
-                            const Application = require('expo-application');
-                            if (Application) {
-                                if (Platform.OS === 'android' && Application.getAndroidId) {
-                                    hardwareId = Application.getAndroidId();
-                                } else if (Platform.OS === 'ios' && Application.getIosIdForVendorAsync) {
-                                    hardwareId = await Application.getIosIdForVendorAsync() || '';
-                                }
-                            }
-                        }
-                    } catch (e: any) {
-                        // Silent catch - we already have fallbacks below
-                    }
-
-                    if (hardwareId) {
-                        setDeviceNameState(hardwareId);
-                        await setSetting('device_name', hardwareId);
-                    } else if (savedDeviceName) {
-                        setDeviceNameState(savedDeviceName);
-                    } else {
-                        const randomId = Math.random().toString(36).substring(7).toUpperCase();
-                        const defaultName = `Device-${randomId}`;
-                        setDeviceNameState(defaultName);
-                        await setSetting('device_name', defaultName);
-                    }
+                const savedReceiptConfig = await getSetting('receipt_config');
+                if (savedReceiptConfig) {
+                    try { setReceiptConfig(prev => ({ ...prev, ...JSON.parse(savedReceiptConfig) })); } catch (e) { }
                 }
 
-            } catch (e) {
-                console.error("Failed to load settings", e);
-            }
-        }
+                const savedDeviceName = await getSetting('device_name');
+                if (savedDeviceName) setDeviceNameState(savedDeviceName);
+            } catch (e) { }
+        };
         loadSettings();
     }, []);
 
     const updateShopDetails = async (details: Partial<typeof shopDetails>) => {
         setShopDetails(prev => ({ ...prev, ...details }));
-        // Save individually to DB
         if (details.name) await setSetting('shop_name', details.name);
         if (details.address) await setSetting('shop_address', details.address);
         if (details.phone) await setSetting('shop_phone', details.phone);
@@ -233,6 +214,12 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         await setSetting('device_name', name);
     };
 
+    const updateReceiptConfig = async (config: Partial<ReceiptConfig>) => {
+        const newConfig = { ...receiptConfig, ...config };
+        setReceiptConfig(newConfig);
+        await setSetting('receipt_config', JSON.stringify(newConfig));
+    };
+
     const t = (key: string, params?: Record<string, string>) => {
         let translation = translations[language][key] || key;
         if (params) {
@@ -254,13 +241,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             printerType,
             setConnectedPrinter: async (printer: ConnectedPrinter | null) => {
                 setConnectedPrinter(printer);
-                if (printer) {
-                    await setSetting('connected_printer', JSON.stringify(printer));
-                } else {
-                    // We don't have a specific removeSetting but setSetting with empty or null might work 
-                    // or we just set it to empty string/null string
-                    await setSetting('connected_printer', '');
-                }
+                await setSetting('connected_printer', printer ? JSON.stringify(printer) : '');
             },
             shopDetails,
             updateShopDetails,
@@ -278,7 +259,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             showEmployeeModal,
             setShowEmployeeModal,
             handleEmployeeConfirm,
-            requestPrint
+            requestPrint,
+            receiptConfig,
+            updateReceiptConfig
         }}>
             {children}
         </GeneralSettingsContext.Provider>
@@ -287,8 +270,6 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
 export const useGeneralSettings = () => {
     const context = useContext(GeneralSettingsContext);
-    if (context === undefined) {
-        throw new Error('useGeneralSettings must be used within a GeneralSettingsProvider');
-    }
+    if (context === undefined) throw new Error('useGeneralSettings must be used within a GeneralSettingsProvider');
     return context;
 };

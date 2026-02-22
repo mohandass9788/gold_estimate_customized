@@ -64,8 +64,9 @@ export const fetchTagDetailsFromApi = async (itemtag: string, employeename: stri
         }
 
         return {
-            tagNumber: data.ITEMTAG || data.TAGNO || itemtag,
+            tagNumber: data.ITEMTAG || itemtag || '',
             name: data.PRODUCTNAME || 'Unknown Product',
+            subProductName: data.SUBPRODUCTNAME || '',
             pcs: parseInt(data.NOOFPIECES || '1'),
             grossWeight: parseFloat(data.GRSWEIGHT || '0'),
             stoneWeight: parseFloat(data.LESSWT || '0'), // Assuming LESSWT is stone/less weight
@@ -75,7 +76,7 @@ export const fetchTagDetailsFromApi = async (itemtag: string, employeename: stri
             makingChargeType: makingChargeType,
             wastage: parseFloat(data.MAXWASTAGEPER || '0'),
             wastageType: 'percentage', // API has MAXWASTAGEPER, implying percentage
-            category: data.SUBPRODUCTNAME || data.PRODUCTNAME || 'General',
+            category: data.METNAME || 'Gold',
             rate: parseFloat(data.RATE || '0'),
             metal: (data.METNAME && data.METNAME.toUpperCase() === 'SILVER') ? 'SILVER' : 'GOLD',
         };

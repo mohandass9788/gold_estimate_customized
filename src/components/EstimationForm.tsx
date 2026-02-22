@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View as RNView, Text as RNText, StyleSheet, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import InputField from './InputField';
@@ -56,10 +56,12 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
     const [purity, setPurity] = useState('22'); // 18, 20, 22, 24
     const [rate, setRate] = useState('');
     const [customerName, setCustomerName] = useState('');
+    const isInitialLoad = useRef(false);
 
     // Load initial data for editing
     useEffect(() => {
         if (initialData) {
+            isInitialLoad.current = true;
             setTagNo(initialData.tagNumber || '');
             setProductName(initialData.name);
             setSubProductName(initialData.subProductName || '');
@@ -74,6 +76,13 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
             setPurity(initialData.purity.toString());
             setRate(initialData.rate.toString());
             setCustomerName(initialData.customerName || '');
+
+            // Allow other effects to run after this initial population
+            setTimeout(() => {
+                isInitialLoad.current = false;
+            }, 100);
+        } else {
+            isInitialLoad.current = false;
         }
     }, [initialData]);
 
@@ -95,9 +104,11 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
         return state.goldRate.rate22k;
     };
 
-    // Update rate when metal or purity changes
+    // Update rate when metal or purity changes (only if NOT loading initial data)
     useEffect(() => {
-        setRate(getDefaultRate().toString());
+        if (!isInitialLoad.current) {
+            setRate(getDefaultRate().toString());
+        }
     }, [metal, purity, state.goldRate]);
 
     // Load products and metal types from DB
@@ -124,8 +135,8 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
     // Load sub-products and defaults when product changes
     useEffect(() => {
         const loadProductDetails = async () => {
-            if (!productName) {
-                setAvailableSubProducts([]);
+            if (!productName || isInitialLoad.current) {
+                if (!productName) setAvailableSubProducts([]);
                 return;
             }
             const selectedProd = availableProducts.find(p => p.name === productName);
@@ -134,17 +145,24 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
                 const subs = await getSubProducts(selectedProd.id);
                 setAvailableSubProducts(subs);
 
-                // Apply defaults
-                if (selectedProd.defaultPurity) setPurity(selectedProd.defaultPurity.toString());
-                if (selectedProd.defaultWastage !== undefined) setWastage(selectedProd.defaultWastage.toString());
-                if (selectedProd.defaultWastageType) setWastageType(selectedProd.defaultWastageType as WastageType);
-                if (selectedProd.defaultMakingCharge !== undefined) setMakingCharge(selectedProd.defaultMakingCharge.toString());
-                if (selectedProd.defaultMakingChargeType) setMakingChargeType(selectedProd.defaultMakingChargeType as MakingChargeType);
-                if (selectedProd.metal) setMetal(selectedProd.metal as any);
+                // Apply defaults (only for NEW items, not during edit load)
+                if (!initialData) {
+                    if (selectedProd.defaultPurity) setPurity(selectedProd.defaultPurity.toString());
+                    if (selectedProd.defaultWastage !== undefined) setWastage(selectedProd.defaultWastage.toString());
+                    if (selectedProd.defaultWastageType) setWastageType(selectedProd.defaultWastageType as WastageType);
+                    if (selectedProd.defaultMakingCharge !== undefined) setMakingCharge(selectedProd.defaultMakingCharge.toString());
+                    if (selectedProd.defaultMakingChargeType) setMakingChargeType(selectedProd.defaultMakingChargeType as MakingChargeType);
+                    if (selectedProd.metal) setMetal(selectedProd.metal as any);
+                    // Reset sub-product when product changes
+                    setSubProductName('');
+                }
             }
         };
         loadProductDetails();
     }, [productName, availableProducts]);
+
+    // Compute filtered products based on metal (for MANUAL mode)
+    const filteredProducts = availableProducts.filter(p => !p.metal || p.metal === metal);
 
     const rateNum = parseFloat(rate) || 0;
     const netWeight = calculateNetWeight(parseFloat(grossWeight) || 0, parseFloat(stoneWeight) || 0);
@@ -177,10 +195,23 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
     const validateForm = () => {
         const newErrors: Record<string, string> = {};
         if (!productName) newErrors.productName = t('field_required');
-        if (!grossWeight || parseFloat(grossWeight) <= 0) newErrors.grossWeight = t('field_required');
-        if (!rate || parseFloat(rate) <= 0) newErrors.rate = t('field_required');
+
+        const gWeightNum = parseFloat(grossWeight);
+        if (!grossWeight || isNaN(gWeightNum) || gWeightNum <= 0) {
+            newErrors.grossWeight = t('field_required') || 'Required';
+        }
+
+        const rateValNum = parseFloat(rate);
+        if (!rate || isNaN(rateValNum) || rateValNum <= 0) {
+            newErrors.rate = t('field_required') || 'Required';
+        }
 
         setErrors(newErrors);
+
+        if (Object.keys(newErrors).length > 0) {
+            Alert.alert(t('error'), t('field_required') || 'Please fill mandatory fields: Gross Weight and Rate');
+        }
+
         return Object.keys(newErrors).length === 0;
     };
 
@@ -334,28 +365,44 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
                 <View style={styles.formGroup}>
                     <Text style={[styles.groupTitle, { color: activeColors.primary }]}>{t('product_information') || 'Product Information'}</Text>
                     {initialMode === 'TAG' ? (
+                        // In TAG mode: text field so user can see/edit scanned product name
                         <InputField
                             label={t('product_name')}
                             value={productName}
-                            editable={false}
-                            style={{ marginBottom: SPACING.sm, opacity: 0.7 }}
+                            onChangeText={setProductName}
+                            error={errors.productName}
+                            style={{ marginBottom: SPACING.sm }}
                         />
                     ) : (
+                        // In MANUAL mode: dropdown filtered by selected metal
                         <DropdownField
                             label={t('product_name')}
                             value={productName}
-                            options={availableProducts.map(p => ({ label: p.name, value: p.name }))}
+                            options={filteredProducts.map(p => ({ label: p.name, value: p.name }))}
                             onSelect={setProductName}
                             error={errors.productName}
                             style={{ marginBottom: SPACING.sm }}
                         />
                     )}
-                    <DropdownField
-                        label={t('sub_product_name')}
-                        value={subProductName}
-                        options={availableSubProducts.map(s => ({ label: s.name, value: s.name }))}
-                        onSelect={setSubProductName}
-                    />
+                    {/* Sub-product: TAG mode = text field, MANUAL mode = always dropdown */}
+                    {initialMode === 'TAG' ? (
+                        <InputField
+                            label={t('sub_product_name')}
+                            value={subProductName}
+                            onChangeText={setSubProductName}
+                            placeholder={t('optional') || 'Optional'}
+                        />
+                    ) : (
+                        <DropdownField
+                            label={t('sub_product_name')}
+                            value={subProductName}
+                            options={[
+                                { label: t('optional') || 'None', value: '' },
+                                ...availableSubProducts.map(sp => ({ label: sp.name, value: sp.name }))
+                            ]}
+                            onSelect={setSubProductName}
+                        />
+                    )}
                 </View>
 
                 {/* Group 3: Measurements */}
@@ -437,6 +484,7 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
                         onChangeText={setRate}
                         keyboardType="numeric"
                         error={errors.rate}
+                        placeholder={getDefaultRate().toString()}
                     />
                 </View>
 

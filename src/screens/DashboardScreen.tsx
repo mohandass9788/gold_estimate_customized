@@ -232,23 +232,56 @@ export default function DashboardScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {state.history.length > 0 ? (
-                        state.history.map((estimate) => (
-                            <View key={estimate.id} style={[styles.recentCard, { backgroundColor: activeColors.cardBg }]}>
-                                <View style={styles.recentInfo}>
-                                    <Text style={[styles.recentName, { color: activeColors.text }]}>{estimate.customerName}</Text>
-                                    <Text style={[styles.recentSub, { color: activeColors.textLight }]}>
-                                        {estimate.date ? format(new Date(estimate.date), 'dd MMM, HH:mm') : 'N/A'} • {estimate.totalWeight.toFixed(2)}g
-                                    </Text>
+                    {/* Grouping Logic for Recent Activity */}
+                    {(() => {
+                        const history = state.history || [];
+                        const groups: { [date: string]: typeof state.history } = {};
+
+                        history.forEach(item => {
+                            const dateKey = item.date ? format(new Date(item.date), 'yyyy-MM-dd') : 'unknown';
+                            if (!groups[dateKey]) groups[dateKey] = [];
+                            groups[dateKey].push(item);
+                        });
+
+                        const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+                        if (sortedDates.length === 0) {
+                            return (
+                                <View style={styles.emptyRecent}>
+                                    <Text style={[styles.emptyText, { color: activeColors.textLight }]}>{t('no_recent_activity')}</Text>
                                 </View>
-                                <Text style={styles.recentPrice}>₹ {estimate.grandTotal.toLocaleString()}</Text>
+                            );
+                        }
+
+                        return sortedDates.map(dateKey => (
+                            <View key={dateKey} style={{ marginBottom: SPACING.md }}>
+                                <Text style={[styles.dateHeader, { color: activeColors.textLight }]}>
+                                    {dateKey === 'unknown' ? 'Unknown Date' :
+                                        dateKey === format(new Date(), 'yyyy-MM-dd') ? 'Today' :
+                                            dateKey === format(new Date(Date.now() - 86400000), 'yyyy-MM-dd') ? 'Yesterday' :
+                                                format(new Date(dateKey), 'dd MMM yyyy')}
+                                </Text>
+                                {groups[dateKey].map((estimate) => (
+                                    <View key={estimate.id} style={[styles.recentCard, { backgroundColor: activeColors.cardBg }]}>
+                                        <View style={styles.recentInfo}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Text style={[styles.recentName, { color: activeColors.text }]}>{estimate.customerName || 'Walking Customer'}</Text>
+                                                {estimate.estimationNumber && (
+                                                    <View style={[styles.estNumBadge, { backgroundColor: activeColors.primary + '20' }]}>
+                                                        <Text style={[styles.estNumText, { color: activeColors.primary }]}>#{estimate.estimationNumber}</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Text style={[styles.recentSub, { color: activeColors.textLight }]}>
+                                                {estimate.date ? format(new Date(estimate.date), 'HH:mm') : 'N/A'} • {estimate.totalWeight.toFixed(2)}g
+                                            </Text>
+                                        </View>
+                                        <Text style={styles.recentPrice}>₹ {Math.round(estimate.grandTotal).toLocaleString()}</Text>
+                                    </View>
+                                ))}
                             </View>
-                        ))
-                    ) : (
-                        <View style={styles.emptyRecent}>
-                            <Text style={[styles.emptyText, { color: activeColors.textLight }]}>{t('no_recent_activity')}</Text>
-                        </View>
-                    )}
+                        ));
+                    })()}
                 </View>
             </ScrollView>
         </ScreenContainer>
@@ -390,6 +423,23 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontSize: FONT_SIZES.sm,
+    },
+    dateHeader: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        marginBottom: 8,
+        letterSpacing: 1,
+    },
+    estNumBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginLeft: 8,
+    },
+    estNumText: {
+        fontSize: 9,
+        fontWeight: '800',
     },
     alertBanner: {
         flexDirection: 'row',

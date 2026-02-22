@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableOpacity as RNRTouchableOpacity, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableOpacity as RNRTouchableOpacity, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Modal as RNModal } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
 import InputField from '../components/InputField';
@@ -14,6 +14,7 @@ const View = RNView as any;
 const Text = RNText as any;
 const ScrollView = RNScrollView as any;
 const TouchableOpacity = RNRTouchableOpacity as any;
+const Modal = RNModal as any;
 const Icon = Ionicons as any;
 
 export default function RateUpdateScreen() {
@@ -29,6 +30,8 @@ export default function RateUpdateScreen() {
         silver: state.goldRate.silver.toString(),
     });
 
+    const [showModal, setShowModal] = useState(false);
+
     const handleSave = () => {
         const newGoldRate = {
             rate18k: parseFloat(rates.rate18k) || 0,
@@ -40,6 +43,7 @@ export default function RateUpdateScreen() {
         };
 
         updateGoldRate(newGoldRate);
+        setShowModal(false);
         Alert.alert(t('success'), t('rates_updated_success') || 'Rates updated successfully');
     };
 
@@ -81,62 +85,128 @@ export default function RateUpdateScreen() {
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
             <HeaderBar title={t('manage_gold_silver')} showBack />
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
+
+            <ScrollView
+                style={styles.content}
+                contentContainerStyle={styles.scrollContent}
             >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <ScrollView
-                        style={styles.content}
-                        contentContainerStyle={styles.scrollContent}
-                        keyboardShouldPersistTaps="handled"
+                <View style={[styles.mainCard, { backgroundColor: activeColors.cardBg }]}>
+                    <View style={styles.cardHeader}>
+                        <Icon name="trending-up" size={24} color={COLORS.primary} />
+                        <Text style={[styles.mainCardTitle, { color: activeColors.text }]}>{t('current_rates') || 'Current Market Rates'}</Text>
+                    </View>
+
+                    <View style={styles.ratesDisplayGrid}>
+                        <View style={styles.displayItem}>
+                            <View style={styles.displayInfo}>
+                                <Icon name="flash" size={16} color={COLORS.gold} />
+                                <Text style={styles.displayLabel}>24K Gold</Text>
+                            </View>
+                            <Text style={[styles.displayValue, { color: COLORS.gold }]}>₹ {rates.rate24k}</Text>
+                        </View>
+                        <View style={styles.displayItem}>
+                            <View style={styles.displayInfo}>
+                                <Icon name="flash-outline" size={16} color={activeColors.text} />
+                                <Text style={styles.displayLabel}>22K Gold</Text>
+                            </View>
+                            <Text style={[styles.displayValue, { color: activeColors.text }]}>₹ {rates.rate22k}</Text>
+                        </View>
+                        <View style={styles.displayItem}>
+                            <View style={styles.displayInfo}>
+                                <Icon name="leaf" size={16} color="#94a3b8" />
+                                <Text style={styles.displayLabel}>Silver (1g)</Text>
+                            </View>
+                            <Text style={[styles.displayValue, { color: '#94a3b8' }]}>₹ {rates.silver}</Text>
+                        </View>
+                    </View>
+
+                    <TouchableOpacity
+                        style={[styles.updateTriggerButton, { backgroundColor: COLORS.primary }]}
+                        onPress={() => setShowModal(true)}
                     >
-                        {/* Gold Section */}
-                        <View style={[styles.card, { backgroundColor: activeColors.cardBg }]}>
-                            <View style={styles.cardHeader}>
-                                <Icon name="flash" size={18} color={COLORS.gold} />
-                                <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('gold_rates') || 'Gold Rates (per Gram)'}</Text>
+                        <Icon name="create-outline" size={20} color={COLORS.white} />
+                        <Text style={styles.updateTriggerText}>{t('update_rates')}</Text>
+                    </TouchableOpacity>
+
+                    <Text style={[styles.lastUpdated, { color: activeColors.textLight }]}>
+                        {t('last_updated')}: {new Date(state.goldRate.date).toLocaleString()}
+                    </Text>
+                </View>
+
+                {/* Info Text */}
+                <View style={styles.infoBox}>
+                    <Icon name="information-circle-outline" size={18} color={activeColors.textLight} />
+                    <Text style={[styles.infoText, { color: activeColors.textLight }]}>
+                        Purity rates (24K, 20K, 18K) are automatically calculated based on the 22K (91.6%) rate.
+                    </Text>
+                </View>
+            </ScrollView>
+
+            {/* Update Rates Modal */}
+            <Modal
+                visible={showModal}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                        <View style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}>
+                            <View style={styles.modalHeader}>
+                                <Text style={[styles.modalTitle, { color: activeColors.text }]}>{t('update_rates')}</Text>
+                                <TouchableOpacity onPress={() => setShowModal(false)} style={styles.closeButton}>
+                                    <Icon name="close" size={24} color={activeColors.text} />
+                                </TouchableOpacity>
                             </View>
 
-                            <RateInput label="Gold 22K (91.6%)" value={rates.rate22k} keyName="rate22k" icon="flash-outline" iconColor={COLORS.gold} />
+                            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                                <View style={styles.inputSection}>
+                                    <View style={styles.cardHeader}>
+                                        <Icon name="flash" size={18} color={COLORS.gold} />
+                                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('gold_rates')}</Text>
+                                    </View>
 
-                            <View style={[styles.calculatedBox, { backgroundColor: activeColors.background }]}>
-                                <Text style={[styles.subTitle, { color: activeColors.textLight }]}>{t('calculated_suggested') || 'Calculated Purity Rates'}</Text>
+                                    <RateInput label="Gold 22K (91.6%)" value={rates.rate22k} keyName="rate22k" icon="flash-outline" iconColor={COLORS.gold} />
 
-                                <View style={styles.rateRow}>
-                                    <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>24K (99.9%)</Text>
-                                    <View style={styles.rateHighlight}>
-                                        <Text style={[styles.rateValue, { color: activeColors.primary }]}>₹ {rates.rate24k}</Text>
+                                    <View style={[styles.calculatedBox, { backgroundColor: activeColors.background }]}>
+                                        <Text style={[styles.subTitle, { color: activeColors.textLight }]}>{t('calculated_suggested')}</Text>
+
+                                        <View style={styles.rateRow}>
+                                            <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>24K (99.9%)</Text>
+                                            <View style={styles.rateHighlight}>
+                                                <Text style={[styles.rateValue, { color: activeColors.primary }]}>₹ {rates.rate24k}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={styles.rateRow}>
+                                            <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>20K (83.3%)</Text>
+                                            <Text style={[styles.rateValue, { color: activeColors.text }]}>₹ {rates.rate20k}</Text>
+                                        </View>
+                                        <View style={styles.rateRow}>
+                                            <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>18K (75.0%)</Text>
+                                            <Text style={[styles.rateValue, { color: activeColors.text }]}>₹ {rates.rate18k}</Text>
+                                        </View>
                                     </View>
                                 </View>
-                                <View style={styles.rateRow}>
-                                    <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>20K (83.3%)</Text>
-                                    <Text style={[styles.rateValue, { color: activeColors.text }]}>₹ {rates.rate20k}</Text>
+
+                                <View style={[styles.inputSection, { marginTop: 20 }]}>
+                                    <View style={styles.cardHeader}>
+                                        <Icon name="leaf" size={18} color="#94a3b8" />
+                                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('silver_rates')}</Text>
+                                    </View>
+                                    <RateInput label="Common Silver (1g)" value={rates.silver} keyName="silver" icon="leaf-outline" iconColor="#94a3b8" />
                                 </View>
-                                <View style={styles.rateRow}>
-                                    <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>18K (75.0%)</Text>
-                                    <Text style={[styles.rateValue, { color: activeColors.text }]}>₹ {rates.rate18k}</Text>
-                                </View>
+                            </ScrollView>
+
+                            <View style={styles.modalFooter}>
+                                <PrimaryButton title={t('save_rates')} onPress={handleSave} style={styles.saveButton} />
                             </View>
                         </View>
-
-                        {/* Silver Section */}
-                        <View style={[styles.card, { backgroundColor: activeColors.cardBg, borderColor: '#C0C0C033' }]}>
-                            <View style={styles.cardHeader}>
-                                <Icon name="leaf" size={18} color="#C0C0C0" />
-                                <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('silver_rates') || 'Silver Rates'}</Text>
-                            </View>
-                            <RateInput label="Common Silver (1g)" value={rates.silver} keyName="silver" icon="leaf-outline" iconColor="#C0C0C0" />
-                        </View>
-
-                        <PrimaryButton title={t('save_rates') || 'Save Rates'} onPress={handleSave} style={styles.saveButton} />
-
-                        <Text style={[styles.lastUpdated, { color: activeColors.textLight }]}>
-                            {t('last_updated') || 'Last updated'}: {new Date(state.goldRate.date).toLocaleString()}
-                        </Text>
-                    </ScrollView>
-                </TouchableWithoutFeedback>
-            </KeyboardAvoidingView>
+                    </TouchableWithoutFeedback>
+                </KeyboardAvoidingView>
+            </Modal>
         </ScreenContainer>
     );
 }
@@ -187,15 +257,10 @@ const styles = StyleSheet.create({
     },
     saveButton: {
         marginTop: SPACING.md,
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
     },
     lastUpdated: {
         textAlign: 'center',
-        marginTop: SPACING.xl,
+        marginTop: SPACING.lg,
         fontSize: 10,
         opacity: 0.7,
     },
@@ -220,5 +285,120 @@ const styles = StyleSheet.create({
     rateValue: {
         fontSize: FONT_SIZES.md,
         fontWeight: '900',
+    },
+    mainCard: {
+        padding: SPACING.lg,
+        borderRadius: BORDER_RADIUS.lg,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+    },
+    mainCardTitle: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    ratesDisplayGrid: {
+        flexDirection: 'column',
+        marginTop: SPACING.md,
+        marginBottom: SPACING.lg,
+    },
+    displayItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: SPACING.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0,0,0,0.05)',
+    },
+    displayInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    displayLabel: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: COLORS.textLight,
+        textTransform: 'uppercase',
+        marginBottom: 8,
+    },
+    displayValue: {
+        fontSize: FONT_SIZES.lg,
+        fontWeight: '900',
+    },
+    updateTriggerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: SPACING.md,
+        borderRadius: BORDER_RADIUS.md,
+        gap: 8,
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    updateTriggerText: {
+        color: COLORS.white,
+        fontWeight: 'bold',
+        fontSize: FONT_SIZES.md,
+    },
+    infoBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.02)',
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.md,
+        marginTop: SPACING.xl,
+        gap: 10,
+    },
+    infoText: {
+        fontSize: 11,
+        flex: 1,
+        lineHeight: 16,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        borderTopLeftRadius: BORDER_RADIUS.xl,
+        borderTopRightRadius: BORDER_RADIUS.xl,
+        padding: SPACING.lg,
+        maxHeight: '90%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.lg,
+    },
+    modalTitle: {
+        fontSize: FONT_SIZES.lg,
+        fontWeight: 'bold',
+    },
+    closeButton: {
+        padding: 4,
+    },
+    modalBody: {
+        marginBottom: SPACING.lg,
+    },
+    inputSection: {
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+        backgroundColor: 'rgba(0,0,0,0.01)',
+    },
+    modalFooter: {
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
     }
 });

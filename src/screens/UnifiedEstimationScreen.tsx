@@ -15,7 +15,7 @@ import CardItemRow from '../components/CardItemRow';
 import { useEstimation } from '../store/EstimationContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { calculateNetWeight } from '../utils/calculations';
-import { getPurchaseCategories, getPurchaseSubCategories, DBPurchaseCategory, DBPurchaseSubCategory } from '../services/dbService';
+import { getPurchaseCategories, getPurchaseSubCategories, DBPurchaseCategory, DBPurchaseSubCategory, getNextEstimationNumber } from '../services/dbService';
 import { EstimationItem, PurchaseItem, ChitItem, AdvanceItem, LessWeightType } from '../types';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { printEstimationItem, printPurchaseItem, printEstimationReceipt, printChitItem, printAdvanceItem } from '../services/printService';
@@ -34,8 +34,8 @@ type Mode = 'TAG' | 'MANUAL' | 'PURCHASE' | 'CHIT' | 'ADVANCE';
 export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initialMode?: Mode }) {
     const router = useRouter();
     const params = useLocalSearchParams();
-    const { state, addTagItem, addManualItem, addPurchaseItem, addChitItem, addAdvanceItem, removeItem, clearEstimation } = useEstimation();
-    const { theme, t, shopDetails, deviceName, requestPrint, currentEmployeeName } = useGeneralSettings();
+    const { state, addTagItem, addManualItem, addPurchaseItem, addChitItem, addAdvanceItem, removeItem, resetEstimation, clearEstimation } = useEstimation();
+    const { theme, t, shopDetails, deviceName, requestPrint, currentEmployeeName, receiptConfig } = useGeneralSettings();
     const [mode, setMode] = useState<Mode>((params.mode as Mode) || initialMode);
     const [editingItem, setEditingItem] = useState<EstimationItem | null>(null);
     const [viewingItem, setViewingItem] = useState<EstimationItem | null>(null);
@@ -48,10 +48,12 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const [purchaseItemsToPrint, setPurchaseItemsToPrint] = useState<PurchaseItem[]>([]);
     const [chitItemsToPrint, setChitItemsToPrint] = useState<ChitItem[]>([]);
     const [advanceItemsToPrint, setAdvanceItemsToPrint] = useState<AdvanceItem[]>([]);
+    const [estimationNum, setEstimationNum] = useState<number | null>(null);
     const [scrollOffset, setScrollOffset] = useState(0);
     const [contentWidth, setContentWidth] = useState(0);
     const [containerWidth, setContainerWidth] = useState(0);
     const modeScrollRef = React.useRef<any>(null);
+    const isInitialLoadPurchase = React.useRef(false);
 
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
@@ -93,8 +95,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             try {
                 const scannedProduct = JSON.parse(params.scannedData as string);
 
-                // Check for duplicates in the list
-                const existingItem = state.items.find(item => item.tagNumber === scannedProduct.tagNumber);
+                // Check for duplicates in the list (only if tagNumber is present)
+                const existingItem = scannedProduct.tagNumber
+                    ? state.items.find(item => item.tagNumber === scannedProduct.tagNumber)
+                    : null;
 
                 if (existingItem) {
                     Alert.alert(
@@ -165,22 +169,22 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     }, [mode, containerWidth]);
 
     useEffect(() => {
-        if (purchaseCategoryId) {
+        if (purchaseCategoryId && !isInitialLoadPurchase.current) {
             const loadSubCategories = async () => {
                 const subs = await getPurchaseSubCategories(parseInt(purchaseCategoryId));
                 setSubCategories(subs);
                 setPurchaseSubCategoryId(''); // Reset sub when category changes
             };
             loadSubCategories();
-        } else {
+        } else if (!purchaseCategoryId) {
             setSubCategories([]);
         }
     }, [purchaseCategoryId]);
 
 
-    // Auto-fill rate based on purity
+    // Auto-fill rate based on purity (only if NOT loading initial data)
     useEffect(() => {
-        if (state.goldRate) {
+        if (state.goldRate && !isInitialLoadPurchase.current) {
             const purity = parseInt(purchasePurity);
             let rate = 0;
             if (purchaseMetal === 'SILVER') {
@@ -224,6 +228,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             Alert.alert(t('no_items_selected') || 'No Items Selected');
             return;
         }
+
+        // Fetch the next estimation number for today
+        const nextNum = await getNextEstimationNumber();
+        setEstimationNum(nextNum);
 
         requestPrint(async (empName) => {
             const items = state.items.filter(item => selectedItems.has(item.id));
@@ -276,7 +284,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setShowPrintPreview(false);
         try {
             if (previewType === 'merged') {
-                await printEstimationReceipt(itemsToPrint, purchaseItemsToPrint, chitItemsToPrint, advanceItemsToPrint, { ...shopDetails, deviceName }, customerName, currentEmployeeName);
+                await printEstimationReceipt(itemsToPrint, purchaseItemsToPrint, chitItemsToPrint, advanceItemsToPrint, { ...shopDetails, deviceName }, customerName, currentEmployeeName, receiptConfig, estimationNum || undefined);
 
                 // Save Order to History
                 try {
@@ -297,7 +305,8 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         date: new Date().toISOString(),
                         grossTotal: totalGross,
                         netPayable,
-                        status: 'completed'
+                        status: 'completed',
+                        estimationNumber: estimationNum
                     };
 
                     const orderItems: any[] = [
@@ -321,10 +330,24 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     console.error('Error saving order:', saveError);
                 }
             } else {
-                for (const item of itemsToPrint) await printEstimationItem(item, shopDetails, currentEmployeeName);
-                for (const item of purchaseItemsToPrint) await printPurchaseItem(item, shopDetails, currentEmployeeName);
-                for (const item of chitItemsToPrint) await printChitItem(item, shopDetails, currentEmployeeName);
-                for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails, currentEmployeeName);
+                // Group Estimation items and Purchase items into one detailed bill
+                if (itemsToPrint.length > 0 || purchaseItemsToPrint.length > 0) {
+                    await printEstimationReceipt(
+                        itemsToPrint,
+                        purchaseItemsToPrint,
+                        [],
+                        [],
+                        { ...shopDetails, deviceName },
+                        customerName,
+                        currentEmployeeName,
+                        receiptConfig,
+                        estimationNum || undefined
+                    );
+                }
+
+                // Print each Chit and Advance item as a completely separate receipt
+                for (const item of chitItemsToPrint) await printChitItem(item, shopDetails, currentEmployeeName, receiptConfig);
+                for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails, currentEmployeeName, receiptConfig);
             }
             Alert.alert(t('success'), t('printing_completed') || 'Printing completed');
             setSelectedItems(new Set());
@@ -337,7 +360,56 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     const handleEditItem = (item: EstimationItem) => {
         setEditingItem(item);
+        setMode(item.isManual ? 'MANUAL' : 'TAG');
         removeItem(item.id, 'estimation');
+    };
+
+    const handleEditPurchase = async (item: PurchaseItem) => {
+        isInitialLoadPurchase.current = true;
+        setPurchaseMetal(item.metal);
+        setPurchasePcs(item.pcs.toString());
+        setPurchaseGross(item.grossWeight.toString());
+        setPurchaseLess(item.lessWeight.toString());
+        setPurchaseLessType(item.lessWeightType);
+        setPurchaseRate(item.rate.toString());
+        setPurchasePurity(item.purity.toString());
+
+        // Find category ID
+        const cat = categories.find(c => c.name === item.category);
+        if (cat) {
+            setPurchaseCategoryId(cat.id.toString());
+            // Fetch and set subcategory
+            const subs = await getPurchaseSubCategories(cat.id);
+            setSubCategories(subs);
+            const sub = subs.find(s => s.name === item.subCategory);
+            if (sub) setPurchaseSubCategoryId(sub.id.toString());
+        }
+
+        setMode('PURCHASE');
+        removeItem(item.id, 'purchase');
+
+        // Brief timeout to let states settle before allowing effects
+        setTimeout(() => {
+            isInitialLoadPurchase.current = false;
+        }, 150);
+
+        Alert.alert(t('editing') || 'Editing', t('purchase_loaded') || 'Purchase item loaded into form.');
+    };
+
+    const handleEditChit = (item: ChitItem) => {
+        setChitId(item.chitId);
+        setChitAmount(item.amount.toString());
+        setMode('CHIT');
+        removeItem(item.id, 'chit');
+        Alert.alert(t('editing') || 'Editing', t('chit_loaded') || 'Chit details loaded into form.');
+    };
+
+    const handleEditAdvance = (item: AdvanceItem) => {
+        setAdvanceId(item.advanceId);
+        setAdvanceAmount(item.amount.toString());
+        setMode('ADVANCE');
+        removeItem(item.id, 'advance');
+        Alert.alert(t('editing') || 'Editing', t('advance_loaded') || 'Advance details loaded into form.');
     };
 
     const handleRemoveItem = (id: string, type: 'estimation' | 'purchase' | 'chit' | 'advance' = 'estimation') => {
@@ -354,26 +426,42 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const purchaseNetWeight = calculateNetWeight(parseFloat(purchaseGross) || 0, parseFloat(purchaseLess) || 0, purchaseLessType);
 
     const handleAddPurchase = () => {
-        if (!purchaseCategoryId || !purchaseGross || !purchaseRate) {
-            Alert.alert('Error', t('field_required'));
+        const gWeightNum = parseFloat(purchaseGross);
+        let rateValNum = parseFloat(purchaseRate);
+
+        // Smart Rate Auto-fill if missing
+        if ((!purchaseRate || isNaN(rateValNum) || rateValNum <= 0) && state.goldRate) {
+            const purity = parseInt(purchasePurity);
+            if (purchaseMetal === 'SILVER') {
+                rateValNum = state.goldRate.silver;
+            } else {
+                if (purity === 24) rateValNum = state.goldRate.rate24k;
+                else if (purity === 22) rateValNum = state.goldRate.rate22k;
+                else if (purity === 18) rateValNum = state.goldRate.rate18k;
+            }
+            if (rateValNum > 0) setPurchaseRate(rateValNum.toString());
+        }
+
+        if (!purchaseCategoryId || isNaN(gWeightNum) || gWeightNum <= 0 || isNaN(rateValNum) || rateValNum <= 0) {
+            Alert.alert(t('error') || 'Error', t('field_required') || 'Please fill mandatory fields: Category, Weight and Rate');
             return;
         }
 
         const categoryName = categories.find(c => c.id.toString() === purchaseCategoryId)?.name || '';
         const subCategoryName = subCategories.find(s => s.id.toString() === purchaseSubCategoryId)?.name || '';
 
-        const amount = purchaseNetWeight * parseFloat(purchaseRate);
+        const amount = purchaseNetWeight * rateValNum;
         const item: PurchaseItem = {
             id: Date.now().toString(),
             category: categoryName,
             subCategory: subCategoryName,
             purity: parseFloat(purchasePurity),
-            pcs: parseInt(purchasePcs),
-            grossWeight: parseFloat(purchaseGross),
-            lessWeight: parseFloat(purchaseLess),
+            pcs: parseInt(purchasePcs) || 1,
+            grossWeight: gWeightNum,
+            lessWeight: parseFloat(purchaseLess) || 0,
             lessWeightType: purchaseLessType,
             netWeight: purchaseNetWeight,
-            rate: parseFloat(purchaseRate),
+            rate: rateValNum,
             amount,
             metal: purchaseMetal,
         };
@@ -426,34 +514,18 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     text: t('reset') || 'Reset',
                     style: 'destructive',
                     onPress: () => {
-                        // We need a way to clear just the items from the context without saving
-                        // Since useEstimation doesn't expose a direct 'reset' that doesn't save, 
-                        // we might need to rely on clearEstimation but modify it or add a new method.
-                        // For now, we'll try to use the existing clearEstimation but WITHOUT saving history if possible,
-                        // OR (better) strict adherence to user request "Clear added item list". 
-
-                        // Actually, looking at context in previous turns, clearEstimation DOES save history. 
-                        // We need to implement a "clearCurrent" if it doesn't exist. 
-                        // Checking context usage: 
-                        // state.items.forEach(i => removeItem(i.id, 'estimation'));
-                        // state.purchaseItems.forEach(i => removeItem(i.id, 'purchase'));
-
-                        // A loop is inefficient but works without context changes for now.
-                        // Ideally we should add a 'reset' action to context. 
-                        // Let's assume for this step we will iterate remove.
-
-                        // WAIT: The user said "Reset button... delete added item list... keeping here erase".
-                        // And "reset logic... clear only added items list".
-
-                        // We will clear existing items.
-                        state.items.forEach(i => removeItem(i.id, 'estimation'));
-                        state.purchaseItems.forEach(i => removeItem(i.id, 'purchase'));
-                        state.chitItems.forEach(i => removeItem(i.id, 'chit'));
-                        state.advanceItems.forEach(i => removeItem(i.id, 'advance'));
-
-                        // Also clear purchase form just in case
-                        clearPurchaseForm();
-                        Alert.alert('Reset', 'Items list cleared.');
+                        resetEstimation();
+                        setCustomerName('');
+                        setPurchaseCategoryId('');
+                        setPurchaseSubCategoryId('');
+                        setPurchaseGross('');
+                        setPurchaseLess('0');
+                        setPurchaseRate('');
+                        setChitId('');
+                        setChitAmount('');
+                        setAdvanceId('');
+                        setAdvanceAmount('');
+                        Alert.alert('Reset', 'Items list and form cleared.');
                     }
                 }
             ]
@@ -461,31 +533,112 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     };
 
     const generateHtmlForCurrentEstimation = () => {
-        // Simple HTML generation for current items
-        const rows = state.items.map(i =>
-            `<div>${i.name} (${i.netWeight.toFixed(3)}g) - Rs.${i.totalValue.toLocaleString()}</div>`
-        ).join('');
+        const taxableValue = state.items.reduce((sum, i) => sum + i.goldValue + i.makingChargeValue + i.wastageValue, 0);
+        const gstTotal = taxableValue * 0.03;
+        const splitGst = gstTotal / 2;
 
-        const purchaseRows = state.purchaseItems.map(p =>
-            `<div>${p.category} (${p.netWeight.toFixed(3)}g) - Rs.${p.amount.toLocaleString()}</div>`
-        ).join('');
+        const rows = state.items.map(i => `
+            <tr>
+                <td style="padding: 6px 4px; border-bottom: 1px solid #eee;">
+                    ${i.name}${i.subProductName ? `<br/><small>(${i.subProductName})</small>` : ''}
+                </td>
+                <td style="padding: 6px 4px; text-align: right; border-bottom: 1px solid #eee;">${i.netWeight.toFixed(3)}g</td>
+                <td style="padding: 6px 4px; text-align: right; border-bottom: 1px solid #eee;">₹${Math.round(i.makingChargeValue + i.wastageValue).toLocaleString()}</td>
+                <td style="padding: 6px 4px; text-align: right; border-bottom: 1px solid #eee;">₹${Math.round(i.goldValue + i.makingChargeValue + i.wastageValue).toLocaleString()}</td>
+            </tr>
+        `).join('');
+
+        const purchaseRows = state.purchaseItems.map(p => `
+            <tr>
+                <td style="padding: 6px 4px; border-bottom: 1px dotted #eee;">${p.category}</td>
+                <td style="padding: 6px 4px; text-align: right; border-bottom: 1px dotted #eee;">${p.netWeight.toFixed(3)}g</td>
+                <td style="padding: 6px 4px; text-align: right; border-bottom: 1px dotted #eee;">₹${p.rate}</td>
+                <td style="padding: 6px 4px; text-align: right; color: #d32f2f; border-bottom: 1px dotted #eee;">-₹${Math.round(p.amount).toLocaleString()}</td>
+            </tr>
+        `).join('');
+
+        const chitRows = state.chitItems.map(c => `
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                <span>Chit ID: ${c.chitId}</span>
+                <span style="color: #d32f2f; font-weight: bold;">-₹${Math.round(c.amount).toLocaleString()}</span>
+            </div>
+        `).join('');
+
+        const advanceRows = state.advanceItems.map(a => `
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                <span>Advance ID: ${a.advanceId}</span>
+                <span style="color: #d32f2f; font-weight: bold;">-₹${Math.round(a.amount).toLocaleString()}</span>
+            </div>
+        `).join('');
 
         return `
             <html>
-                <body style="font-family: sans-serif; padding: 20px;">
-                    <h2 style="text-align:center;">Estimation</h2>
-                    <h3 style="text-align:center;">${shopDetails?.name || 'Gold Estimation'}</h3>
-                    <div style="margin-bottom:20px;">
-                        <div>Date: ${new Date().toLocaleString()}</div>
-                        ${customerName ? `<div>Customer: ${customerName}</div>` : ''}
-                        ${currentEmployeeName ? `<div>By: ${currentEmployeeName}</div>` : ''}
+                <body style="font-family: sans-serif; padding: 20px; font-size: 13px; color: #333;">
+                    <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">
+                        <h1 style="margin: 0; color: #f59e0b; font-size: 24px;">${shopDetails?.name || 'ESTIMATION'}</h1>
+                        <div style="font-size: 11px;">${shopDetails.address || ''}</div>
+                        <div style="font-size: 11px;">GSTIN: ${shopDetails.gstNumber || ''} | Ph: ${shopDetails.phone || ''}</div>
                     </div>
-                    <h4>Items</h4>
-                    ${rows}
-                    ${purchaseRows ? `<h4>Purchase / Exchange</h4>${purchaseRows}` : ''}
-                    <hr/>
-                    <div style="font-weight:bold; font-size:18px; text-align:right;">
-                        Grand Total: Rs. ${state.totals.grandTotal.toLocaleString()}
+
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 11px;">
+                        <div>Date: ${new Date().toLocaleString()}</div>
+                        ${estimationNum ? `<div>Est #: <b>${estimationNum}</b></div>` : ''}
+                        ${customerName ? `<div>Customer: <b>${customerName}</b></div>` : ''}
+                    </div>
+
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                        <thead>
+                            <tr style="background: #f8f9fa;">
+                                <th style="text-align: left; padding: 8px 4px;">Item</th>
+                                <th style="text-align: right; padding: 8px 4px;">Wt</th>
+                                <th style="text-align: right; padding: 8px 4px;">MC+VA</th>
+                                <th style="text-align: right; padding: 8px 4px;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+
+                    ${purchaseRows ? `
+                        <div style="font-weight: bold; background: #fff5f5; padding: 5px; margin-top: 15px;">DEDUCTIONS: OLD GOLD</div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                            <thead><tr style="color: #666;">
+                                <th style="text-align: left;">Cat</th>
+                                <th style="text-align: right;">Wt</th>
+                                <th style="text-align: right;">Rate</th>
+                                <th style="text-align: right;">Value</th>
+                            </tr></thead>
+                            <tbody>${purchaseRows}</tbody>
+                        </table>
+                    ` : ''}
+
+                    ${chitRows ? `<div style="font-weight: bold; background: #f0fff4; padding: 5px; margin-top: 10px;">CHIT ADJUSTMENTS</div>${chitRows}` : ''}
+                    ${advanceRows ? `<div style="font-weight: bold; background: #fffaf0; padding: 5px; margin-top: 10px;">ADVANCE ADJUSTMENTS</div>${advanceRows}` : ''}
+
+                    <div style="margin-top: 20px; border-top: 2px solid #333; padding-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                            <span>Taxable Value:</span>
+                            <span>₹${Math.round(taxableValue).toLocaleString()}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                            <span>SGST (1.5%):</span>
+                            <span>₹${Math.round(splitGst).toLocaleString()}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                            <span>CGST (1.5%):</span>
+                            <span>₹${Math.round(splitGst).toLocaleString()}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; font-weight: bold; font-size: 16px; border-top: 1px solid #eee;">
+                            <span>GROSS TOTAL:</span>
+                            <span>₹${Math.round(taxableValue + gstTotal).toLocaleString()}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; font-weight: bold; font-size: 20px; color: #000; border-top: 2px solid #333;">
+                            <span>NET PAYABLE:</span>
+                            <span>₹${Math.round(state.totals.grandTotal).toLocaleString()}</span>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 30px; font-style: italic; color: #666;">
+                        ${shopDetails.footerMessage || 'Thank you for your visit!'}
                     </div>
                 </body>
             </html>
@@ -596,7 +749,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                 if (viewingItem) {
                                     requestPrint(async (empName) => {
                                         try {
-                                            await printEstimationItem(viewingItem, shopDetails, empName);
+                                            await printEstimationItem(viewingItem, shopDetails, empName, receiptConfig);
                                         } catch (e: any) {
                                             Alert.alert('Error', e.message);
                                         }
@@ -637,56 +790,63 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             </View>
                             <View style={styles.previewDivider} />
                             <View style={styles.previewSubHeader}>
-                                <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>Date: {new Date().toLocaleDateString()}</Text>
-                                {customerName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>Cust: {customerName}</Text> : null}
-                                {currentEmployeeName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>By: {currentEmployeeName}</Text> : null}
+                                <View style={{ width: '45%' }}>
+                                    <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>Date: {new Date().toLocaleDateString()}</Text>
+                                    <Text style={[styles.previewInfo, { color: activeColors.textLight, fontWeight: 'bold' }]}>{t('estimation_number') || 'Est #'}: {estimationNum || '...'}</Text>
+                                </View>
+                                <View style={{ width: '45%', alignItems: 'flex-end' }}>
+                                    {customerName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>Cust: {customerName}</Text> : null}
+                                    {currentEmployeeName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>By: {currentEmployeeName}</Text> : null}
+                                </View>
                             </View>
                             <View style={styles.previewDivider} />
                             {/* Preview Body - Items */}
                             {itemsToPrint.map((item, index) => (
-                                <View key={item.id} style={styles.previewRow}>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{item.name} {item.subProductName ? `(${item.subProductName})` : ''}</Text>
-                                        <Text style={{ fontSize: 8, color: '#666' }}>{item.netWeight.toFixed(3)}g x ₹{item.rate.toLocaleString()}</Text>
+                                <View key={item.id} style={[styles.previewRow, { alignItems: 'flex-start', marginBottom: 6 }]}>
+                                    <View style={{ flex: 1, paddingRight: 10 }}>
+                                        <Text style={{ fontSize: 11, fontWeight: 'bold' }}>{item.name} {item.subProductName ? `(${item.subProductName})` : ''}</Text>
+                                        <Text style={{ fontSize: 9, color: '#444', marginTop: 1 }}>{item.netWeight.toFixed(3)}g x ₹{item.rate.toLocaleString()}</Text>
                                     </View>
-                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>₹ {item.totalValue.toLocaleString()}</Text>
+                                    <Text style={{ fontSize: 11, fontWeight: 'bold', textAlign: 'right' }}>₹ {Math.round(item.totalValue).toLocaleString()}</Text>
                                 </View>
                             ))}
 
-                            <View style={styles.previewDivider} />
+                            <View style={[styles.previewDivider, { height: 1, backgroundColor: '#000', opacity: 0.1, marginVertical: 8 }]} />
 
                             {/* Totals Section */}
                             <View style={styles.previewRow}>
-                                <Text style={styles.previewInfo}>Gross Total:</Text>
-                                <Text style={[styles.previewInfo, { fontWeight: 'bold' }]}>₹ {itemsToPrint.reduce((s, i) => s + i.totalValue, 0).toLocaleString()}</Text>
+                                <Text style={[styles.previewInfo, { fontSize: 10 }]}>Items Total:</Text>
+                                <Text style={[styles.previewInfo, { fontWeight: 'bold', fontSize: 10 }]}>₹ {Math.round(itemsToPrint.reduce((s, i) => s + i.totalValue, 0)).toLocaleString()}</Text>
                             </View>
 
                             {purchaseItemsToPrint.length > 0 && (
                                 <View style={styles.previewRow}>
-                                    <Text style={styles.previewInfo}>Old Gold Deduction:</Text>
-                                    <Text style={[styles.previewInfo, { color: 'red' }]}>- ₹ {purchaseItemsToPrint.reduce((s, i) => s + i.amount, 0).toLocaleString()}</Text>
+                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>Old Gold Deduction:</Text>
+                                    <Text style={[styles.previewInfo, { color: activeColors.error, fontSize: 10 }]}>- ₹ {Math.round(purchaseItemsToPrint.reduce((s, i) => s + i.amount, 0)).toLocaleString()}</Text>
                                 </View>
                             )}
 
                             {chitItemsToPrint.length > 0 && (
                                 <View style={styles.previewRow}>
-                                    <Text style={styles.previewInfo}>Chit Deduction:</Text>
-                                    <Text style={[styles.previewInfo, { color: 'red' }]}>- ₹ {chitItemsToPrint.reduce((s, i) => s + i.amount, 0).toLocaleString()}</Text>
+                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>Chit Deduction:</Text>
+                                    <Text style={[styles.previewInfo, { color: activeColors.error, fontSize: 10 }]}>- ₹ {Math.round(chitItemsToPrint.reduce((s, i) => s + i.amount, 0)).toLocaleString()}</Text>
                                 </View>
                             )}
 
                             {advanceItemsToPrint.length > 0 && (
                                 <View style={styles.previewRow}>
-                                    <Text style={styles.previewInfo}>Advance Deduction:</Text>
-                                    <Text style={[styles.previewInfo, { color: 'red' }]}>- ₹ {advanceItemsToPrint.reduce((s, i) => s + i.amount, 0).toLocaleString()}</Text>
+                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>Advance Deduction:</Text>
+                                    <Text style={[styles.previewInfo, { color: activeColors.error, fontSize: 10 }]}>- ₹ {Math.round(advanceItemsToPrint.reduce((s, i) => s + i.amount, 0)).toLocaleString()}</Text>
                                 </View>
                             )}
 
-                            <View style={styles.previewDivider} />
+                            {/* Add other deductions similarly with Math.round */}
+
+                            <View style={[styles.previewDivider, { height: 2, backgroundColor: '#000', opacity: 0.8, marginVertical: 10 }]} />
 
                             <View style={styles.previewRow}>
-                                <Text style={{ fontSize: 12, fontWeight: 'bold' }}>Net Payable:</Text>
-                                <Text style={{ fontSize: 14, fontWeight: 'bold' }}>₹ {(
+                                <Text style={{ fontSize: 13, fontWeight: 'bold' }}>Net Payable:</Text>
+                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: activeColors.success }}>₹ {Math.round(
                                     itemsToPrint.reduce((s, i) => s + i.totalValue, 0) -
                                     (purchaseItemsToPrint.reduce((s, i) => s + i.amount, 0) +
                                         chitItemsToPrint.reduce((s, i) => s + i.amount, 0) +
@@ -998,9 +1158,14 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                     {item.metal} | {item.purity}{item.metal === 'SILVER' ? '' : 'K'} | {item.pcs} Pcs | Gross: {item.grossWeight.toFixed(3)}g | Less: {item.lessWeight}{item.lessWeightType === 'percentage' ? '%' : item.lessWeightType === 'amount' ? '₹' : 'g'} | Net: {item.netWeight.toFixed(3)}g
                                 </Text>
                             </View>
-                            <TouchableOpacity onPress={() => handleRemoveItem(item.id, 'purchase')} style={{ marginLeft: 8 }}>
-                                <Icon name="trash-outline" size={20} color={activeColors.error} />
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row' }}>
+                                <TouchableOpacity onPress={() => handleEditPurchase(item)} style={{ marginLeft: 8, padding: 4 }}>
+                                    <Icon name="pencil-outline" size={20} color={activeColors.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleRemoveItem(item.id, 'purchase')} style={{ marginLeft: 8, padding: 4 }}>
+                                    <Icon name="trash-outline" size={20} color={activeColors.error} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                         <View style={styles.purchaseFooter}>
                             <Text style={[styles.purchasePrice, { color: activeColors.success }]}>₹ {item.amount.toLocaleString()}</Text>
@@ -1032,9 +1197,14 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                     CHIT: {item.chitId}
                                 </Text>
                             </View>
-                            <TouchableOpacity onPress={() => handleRemoveItem(item.id, 'chit')} style={{ marginLeft: 8 }}>
-                                <Icon name="trash-outline" size={20} color={activeColors.error} />
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row' }}>
+                                <TouchableOpacity onPress={() => handleEditChit(item)} style={{ marginLeft: 8, padding: 4 }}>
+                                    <Icon name="pencil-outline" size={20} color={activeColors.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleRemoveItem(item.id, 'chit')} style={{ marginLeft: 8, padding: 4 }}>
+                                    <Icon name="trash-outline" size={20} color={activeColors.error} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                         <View style={styles.purchaseFooter}>
                             <Text style={[styles.purchasePrice, { color: activeColors.text }]}>₹ {item.amount.toLocaleString()}</Text>
@@ -1066,9 +1236,14 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                     ADVANCE: {item.advanceId}
                                 </Text>
                             </View>
-                            <TouchableOpacity onPress={() => handleRemoveItem(item.id, 'advance')} style={{ marginLeft: 8 }}>
-                                <Icon name="trash-outline" size={20} color={activeColors.error} />
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row' }}>
+                                <TouchableOpacity onPress={() => handleEditAdvance(item)} style={{ marginLeft: 8, padding: 4 }}>
+                                    <Icon name="pencil-outline" size={20} color={activeColors.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleRemoveItem(item.id, 'advance')} style={{ marginLeft: 8, padding: 4 }}>
+                                    <Icon name="trash-outline" size={20} color={activeColors.error} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                         <View style={styles.purchaseFooter}>
                             <Text style={[styles.purchasePrice, { color: activeColors.text }]}>₹ {item.amount.toLocaleString()}</Text>

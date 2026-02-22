@@ -39,10 +39,10 @@ export default function SummaryCard({ totals, style }: SummaryCardProps) {
         return `${t('metal')} Value`;
     }, [state.items, t]);
 
-    const SummaryRow = ({ label, value }: { label: string; value: string }) => (
+    const SummaryRow = ({ label, value, isDeduction = false }: { label: string; value: string; isDeduction?: boolean }) => (
         <View style={styles.row}>
             <Text style={[styles.label, { color: activeColors.textLight }]}>{label}</Text>
-            <Text style={[styles.value, { color: activeColors.text }]}>{value}</Text>
+            <Text style={[styles.value, { color: isDeduction ? activeColors.error : activeColors.success }]}>{value}</Text>
         </View>
     );
 
@@ -57,33 +57,35 @@ export default function SummaryCard({ totals, style }: SummaryCardProps) {
                 <View style={styles.detailsContainer}>
                     <SummaryRow label={t('total_items')} value={state.items.length.toString()} />
                     <SummaryRow label={t('total_weight')} value={`${(totals?.totalWeight || 0).toFixed(3)} g`} />
-                    <SummaryRow label={metalLabel} value={`₹ ${(totals?.totalGoldValue || 0).toLocaleString()}`} />
-                    <SummaryRow label={`${t('wastage')} Value`} value={`₹ ${(totals?.totalWastage || 0).toLocaleString()}`} />
-                    <SummaryRow label={`${t('making_charge')} Value`} value={`₹ ${(totals?.totalMakingCharge || 0).toLocaleString()}`} />
-                    <SummaryRow label={`${t('gst')} (3%)`} value={`₹ ${(totals?.totalGST || 0).toLocaleString()}`} />
-                    {totals?.totalPurchase > 0 && <SummaryRow label={t('purchase_deduction') || 'Old Gold Deduction'} value={`- ₹ ${totals.totalPurchase.toLocaleString()}`} />}
-                    {totals?.totalChit > 0 && <SummaryRow label={t('chit_deduction')} value={`- ₹ ${totals.totalChit.toLocaleString()}`} />}
-                    {totals?.totalAdvance > 0 && <SummaryRow label={t('advance_deduction')} value={`- ₹ ${totals.totalAdvance.toLocaleString()}`} />}
+                    <SummaryRow label={metalLabel} value={`₹ ${Math.round(totals?.totalGoldValue || 0).toLocaleString()}`} />
+                    <SummaryRow label={`${t('wastage')} Value`} value={`₹ ${Math.round(totals?.totalWastage || 0).toLocaleString()}`} />
+                    <SummaryRow label={`${t('making_charge')} Value`} value={`₹ ${Math.round(totals?.totalMakingCharge || 0).toLocaleString()}`} />
+                    <SummaryRow label={`${t('gst')} (3%)`} value={`₹ ${Math.round(totals?.totalGST || 0).toLocaleString()}`} />
+                    {totals?.totalPurchase > 0 && <SummaryRow label={t('purchase_deduction') || 'Old Gold Deduction'} value={`- ₹ ${Math.round(totals.totalPurchase).toLocaleString()}`} isDeduction />}
+                    {totals?.totalChit > 0 && <SummaryRow label={t('chit_deduction')} value={`- ₹ ${Math.round(totals.totalChit).toLocaleString()}`} isDeduction />}
+                    {totals?.totalAdvance > 0 && <SummaryRow label={t('advance_deduction')} value={`- ₹ ${Math.round(totals.totalAdvance).toLocaleString()}`} isDeduction />}
                     <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 </View>
             )}
 
             <View style={styles.grandTotalContainer}>
-                <View style={styles.grandTotalHeader}>
-                    <Text style={[styles.grandTotalLabel, { color: colors.text }]}>{t('net_payable')}</Text>
-                    {!expanded && (
-                        <View style={[styles.badge, { backgroundColor: colors.primary + '15' }]}>
-                            <Text style={[styles.badgeText, { color: colors.primary }]}>
-                                {state.items.length} {t('items')}
-                            </Text>
-                        </View>
-                    )}
-                </View>
-                <View style={styles.priceRow}>
-                    <Text style={[styles.currencySymbol, { color: colors.success }]}>₹</Text>
-                    <Text style={[styles.grandTotalValue, { color: colors.success }]}>
-                        {(totals?.grandTotal || 0).toLocaleString()}
-                    </Text>
+                <View style={styles.grandTotalRow}>
+                    <View style={styles.grandTotalLeft}>
+                        <Text style={[styles.grandTotalLabel, { color: colors.text }]}>{t('net_payable')}</Text>
+                        {!expanded && (
+                            <View style={[styles.badge, { backgroundColor: colors.primary + '15' }]}>
+                                <Text style={[styles.badgeText, { color: colors.primary }]}>
+                                    {state.items.length} {t('items')}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                    <View style={styles.priceRow}>
+                        <Text style={[styles.currencySymbol, { color: colors.success }]}>₹</Text>
+                        <Text style={[styles.grandTotalValue, { color: colors.success }]}>
+                            {Math.round(totals?.grandTotal || 0).toLocaleString()}
+                        </Text>
+                    </View>
                 </View>
             </View>
         </View>
@@ -92,8 +94,9 @@ export default function SummaryCard({ totals, style }: SummaryCardProps) {
 
 const styles = StyleSheet.create({
     card: {
-        padding: SPACING.md,
+        paddingHorizontal: SPACING.md,
         paddingTop: SPACING.xs,
+        paddingBottom: SPACING.sm,
         borderTopWidth: 1,
         elevation: 20,
         shadowColor: '#000',
@@ -105,14 +108,14 @@ const styles = StyleSheet.create({
     },
     expandToggle: {
         alignItems: 'center',
-        paddingVertical: SPACING.xs,
-        marginBottom: SPACING.xs,
+        paddingVertical: 2,
+        marginBottom: 2,
     },
     indicator: {
         width: 40,
         height: 4,
         borderRadius: 2,
-        marginBottom: 4,
+        marginBottom: 2,
     },
     detailsContainer: {
         marginBottom: SPACING.xs,
@@ -120,55 +123,60 @@ const styles = StyleSheet.create({
     row: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: SPACING.xs,
+        marginBottom: 4,
     },
     label: {
-        fontSize: FONT_SIZES.sm,
+        fontSize: FONT_SIZES.xs,
     },
     value: {
-        fontSize: FONT_SIZES.sm,
-        fontWeight: '600',
+        fontSize: FONT_SIZES.xs,
+        fontWeight: 'bold',
     },
     divider: {
         height: 1,
-        marginVertical: SPACING.sm,
+        marginVertical: SPACING.xs,
     },
     grandTotalContainer: {
-        paddingBottom: SPACING.md,
+        paddingBottom: 2,
     },
-    grandTotalHeader: {
+    grandTotalRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 4,
+    },
+    grandTotalLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     badge: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 12,
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 10,
     },
     badgeText: {
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: 'bold',
     },
     priceRow: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'baseline',
     },
     currencySymbol: {
         fontSize: FONT_SIZES.md,
         fontWeight: 'bold',
-        marginTop: 4,
         marginRight: 2,
     },
     grandTotalLabel: {
-        fontSize: FONT_SIZES.md,
+        fontSize: FONT_SIZES.sm,
         fontWeight: '700',
+        textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     grandTotalValue: {
-        fontSize: FONT_SIZES.xxxl,
+        fontSize: FONT_SIZES.xl,
         fontWeight: '900',
-        letterSpacing: -1,
+        letterSpacing: -0.5,
     },
 });
+

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, Alert, Modal as RNModal } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, Alert, Modal as RNModal, KeyboardAvoidingView as RNKeyboardAvoidingView, Platform, TouchableWithoutFeedback as RNRTouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../../components/ScreenContainer';
@@ -17,6 +17,8 @@ const ScrollView = RNScrollView as any;
 const TouchableOpacity = RNRTouchableOpacity as any;
 const Icon = Ionicons as any;
 const Modal = RNModal as any;
+const KeyboardAvoidingView = RNKeyboardAvoidingView as any;
+const TouchableWithoutFeedback = RNRTouchableWithoutFeedback as any;
 
 export default function ManageGoldScreen() {
     const router = useRouter();
@@ -160,53 +162,62 @@ export default function ManageGoldScreen() {
 
             <Modal
                 visible={isModalVisible}
-                animationType="slide"
+                animationType="fade"
                 transparent={true}
                 onRequestClose={() => setIsModalVisible(false)}
             >
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>
-                                {editingMetal ? 'Edit Metal Type' : 'Add Metal Type'}
-                            </Text>
-                            <TouchableOpacity onPress={() => setIsModalVisible(false)}>
-                                <Icon name="close" size={24} color={activeColors.text} />
-                            </TouchableOpacity>
-                        </View>
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.modalOverlay}>
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                            style={styles.keyboardView}
+                        >
+                            <TouchableWithoutFeedback onPress={(e: any) => e.stopPropagation?.()}>
+                                <View style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}>
+                                    <View style={styles.modalHeader}>
+                                        <Text style={[styles.modalTitle, { color: activeColors.text }]}>
+                                            {editingMetal ? 'Edit Metal Type' : 'Add Metal Type'}
+                                        </Text>
+                                        <TouchableOpacity onPress={() => setIsModalVisible(false)}>
+                                            <Icon name="close" size={24} color={activeColors.text} />
+                                        </TouchableOpacity>
+                                    </View>
 
-                        <ScrollView>
-                            <DropdownField
-                                label="Metal Category"
-                                value={metal}
-                                onSelect={(val) => setMetal(val as any)}
-                                options={[
-                                    { label: 'Gold', value: 'GOLD' },
-                                    { label: 'Silver', value: 'SILVER' },
-                                ]}
-                            />
-                            <InputField
-                                label="Name (e.g. 22K KDM)"
-                                value={name}
-                                onChangeText={setName}
-                                placeholder="Enter display name"
-                            />
-                            <InputField
-                                label={metal === 'GOLD' ? "Purity (Karat)" : "Purity (%)"}
-                                value={purity}
-                                onChangeText={setPurity}
-                                placeholder={metal === 'GOLD' ? "e.g. 22" : "e.g. 92.5"}
-                                keyboardType="numeric"
-                            />
+                                    <ScrollView showsVerticalScrollIndicator={false}>
+                                        <DropdownField
+                                            label="Metal Category"
+                                            value={metal}
+                                            onSelect={(val) => setMetal(val as any)}
+                                            options={[
+                                                { label: 'Gold', value: 'GOLD' },
+                                                { label: 'Silver', value: 'SILVER' },
+                                            ]}
+                                        />
+                                        <InputField
+                                            label="Name (e.g. 22K KDM)"
+                                            value={name}
+                                            onChangeText={setName}
+                                            placeholder="Enter display name"
+                                        />
+                                        <InputField
+                                            label={metal === 'GOLD' ? "Purity (Karat)" : "Purity (%)"}
+                                            value={purity}
+                                            onChangeText={setPurity}
+                                            placeholder={metal === 'GOLD' ? "e.g. 22" : "e.g. 92.5"}
+                                            keyboardType="numeric"
+                                        />
 
-                            <PrimaryButton
-                                title={editingMetal ? t('save') : "Add Type"}
-                                onPress={handleSave}
-                                style={{ marginTop: SPACING.lg }}
-                            />
-                        </ScrollView>
+                                        <PrimaryButton
+                                            title={editingMetal ? t('save') : "Add Type"}
+                                            onPress={handleSave}
+                                            style={{ marginTop: SPACING.lg }}
+                                        />
+                                    </ScrollView>
+                                </View>
+                            </TouchableWithoutFeedback>
+                        </KeyboardAvoidingView>
                     </View>
-                </View>
+                </TouchableWithoutFeedback>
             </Modal>
         </ScreenContainer>
     );
@@ -281,13 +292,27 @@ const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: SPACING.lg,
+    },
+    keyboardView: {
+        width: '100%',
+        alignItems: 'center',
     },
     modalContent: {
-        borderTopLeftRadius: BORDER_RADIUS.lg,
-        borderTopRightRadius: BORDER_RADIUS.lg,
+        width: '100%',
+        borderRadius: BORDER_RADIUS.lg,
         padding: SPACING.lg,
-        maxHeight: '80%',
+        maxHeight: 'auto',
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
     modalHeader: {
         flexDirection: 'row',

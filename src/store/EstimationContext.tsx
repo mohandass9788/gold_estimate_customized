@@ -1,7 +1,7 @@
 import React, { createContext, useReducer, useContext } from 'react';
 import { EstimationItem, EstimationTotals, GoldRate, Customer, PurchaseItem, ChitItem, AdvanceItem } from '../types';
 import { calculateEstimationTotals } from '../utils/calculations';
-import { initDatabase, saveEstimation, getRecentEstimations, getSetting, setSetting, DBEstimation } from '../services/dbService';
+import { initDatabase, saveEstimation, getRecentEstimations, getSetting, setSetting, DBEstimation, getNextEstimationNumber, getEstimationsForRecentDays } from '../services/dbService';
 
 interface EstimationState {
     items: EstimationItem[];
@@ -149,7 +149,10 @@ const estimationReducer = (state: EstimationState, action: Action): EstimationSt
             // Logic to clear working form state could be here or managed in the component
             return state;
         case 'CLEAR_ESTIMATION':
-            return initialState;
+            return {
+                ...initialState,
+                goldRate: state.goldRate,
+            };
         default:
             return state;
     }
@@ -167,6 +170,7 @@ interface EstimationContextType {
     updateGoldRate: (rate: GoldRate) => void;
     setCustomer: (customer: Customer) => void;
     clearForm: () => void;
+    resetEstimation: () => void;
     clearEstimation: () => void;
 }
 
@@ -180,7 +184,11 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
     React.useEffect(() => {
         const setup = async () => {
             await initDatabase();
-            const history = await getRecentEstimations(5);
+            // Load history for the last 3 days
+            const history = await getRecentEstimations(10); // Still load some recent ones for initial list
+            // But we will use the date-filtered one for Dashboard soon if needed
+            // Actually, let's keep it simple and just load the recent 10 for now in global state.
+            // We can fetch specifically on Dashboard if required.
 
             // Load rates from DB
             const rate24k = await getSetting('rate_24k');
@@ -227,9 +235,11 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
     };
     const setCustomer = (customer: Customer) => dispatch({ type: 'SET_CUSTOMER', payload: customer });
     const clearForm = () => dispatch({ type: 'CLEAR_FORM' });
+    const resetEstimation = () => dispatch({ type: 'CLEAR_ESTIMATION' });
 
     const clearEstimation = async () => {
         if (state.items.length > 0) {
+            const estNum = await getNextEstimationNumber();
             // Auto-save to history when clearing/completing
             const dbEstimate: DBEstimation = {
                 id: Date.now().toString(),
@@ -242,9 +252,10 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                 advanceItems: JSON.stringify(state.advanceItems),
                 totalWeight: state.totals.totalWeight,
                 grandTotal: state.totals.grandTotal,
+                estimationNumber: estNum
             };
             await saveEstimation(dbEstimate);
-            const history = await getRecentEstimations(5);
+            const history = await getRecentEstimations(10);
             dispatch({ type: 'SET_HISTORY', payload: history });
         }
         dispatch({ type: 'CLEAR_ESTIMATION' });
@@ -264,6 +275,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                 updateGoldRate,
                 setCustomer,
                 clearForm,
+                resetEstimation,
                 clearEstimation,
             }}
         >

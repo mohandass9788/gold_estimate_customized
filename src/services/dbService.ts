@@ -13,6 +13,7 @@ export interface DBProduct {
     defaultMakingChargeType?: string;
     metal: 'GOLD' | 'SILVER';
     hsnCode?: string;
+    subProductCount?: number;
 }
 
 export interface DBSubProduct {
@@ -37,6 +38,7 @@ export interface DBEstimation {
     advanceItems?: string; // JSON stringified AdvanceItem[]
     totalWeight: number;
     grandTotal: number;
+    estimationNumber?: number;
 }
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -135,7 +137,8 @@ export const initDatabase = async () => {
                     chitItems TEXT,
                     advanceItems TEXT,
                     totalWeight REAL NOT NULL,
-                    grandTotal REAL NOT NULL
+                    grandTotal REAL NOT NULL,
+                    estimationNumber INTEGER
                 );
             `);
 
@@ -150,7 +153,8 @@ export const initDatabase = async () => {
                     date TEXT NOT NULL,
                     grossTotal REAL NOT NULL,
                     netPayable REAL NOT NULL,
-                    status TEXT DEFAULT 'completed'
+                    status TEXT DEFAULT 'completed',
+                    estimationNumber INTEGER
                 );
             `);
 
@@ -179,6 +183,18 @@ export const initDatabase = async () => {
             if (!estColumnNames.includes('advanceItems')) {
                 console.log('Migrating: Adding advanceItems column to estimations table');
                 await db.execAsync('ALTER TABLE estimations ADD COLUMN advanceItems TEXT;');
+            }
+            if (!estColumnNames.includes('estimationNumber')) {
+                console.log('Migrating: Adding estimationNumber column to estimations table');
+                await db.execAsync('ALTER TABLE estimations ADD COLUMN estimationNumber INTEGER;');
+            }
+
+            // Migration: Add estimationNumber column to orders if missing
+            const orderTableInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(orders);');
+            const orderColumnNames = orderTableInfo.map(c => c.name);
+            if (!orderColumnNames.includes('estimationNumber')) {
+                console.log('Migrating: Adding estimationNumber column to orders table');
+                await db.execAsync('ALTER TABLE orders ADD COLUMN estimationNumber INTEGER;');
             }
 
             // Create metal_types table
@@ -291,7 +307,13 @@ export const initDatabase = async () => {
 
 export const getProducts = async (): Promise<DBProduct[]> => {
     if (!db) await initDatabase();
-    return await db!.getAllAsync<DBProduct>('SELECT * FROM products ORDER BY name;');
+    return await db!.getAllAsync<DBProduct>(`
+        SELECT p.*, COUNT(s.id) as subProductCount 
+        FROM products p 
+        LEFT JOIN sub_products s ON p.id = s.productId 
+        GROUP BY p.id 
+        ORDER BY p.name;
+    `);
 };
 
 export const getSubProducts = async (productId: number): Promise<DBSubProduct[]> => {
@@ -390,7 +412,7 @@ export const deleteSubProduct = async (id: number): Promise<void> => {
 export const saveEstimation = async (estimation: DBEstimation): Promise<void> => {
     if (!db) await initDatabase();
     await db!.runAsync(
-        'INSERT INTO estimations (id, customerName, customerMobile, date, items, purchaseItems, chitItems, advanceItems, totalWeight, grandTotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
+        'INSERT INTO estimations (id, customerName, customerMobile, date, items, purchaseItems, chitItems, advanceItems, totalWeight, grandTotal, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
         [
             estimation.id,
             estimation.customerName,
@@ -401,7 +423,8 @@ export const saveEstimation = async (estimation: DBEstimation): Promise<void> =>
             estimation.chitItems || '[]',
             estimation.advanceItems || '[]',
             estimation.totalWeight,
-            estimation.grandTotal
+            estimation.grandTotal,
+            estimation.estimationNumber || null
         ]
     );
 };
@@ -561,6 +584,7 @@ export interface DBOrder {
     grossTotal: number;
     netPayable: number;
     status: string;
+    estimationNumber?: number;
 }
 
 export interface DBOrderItem {
@@ -579,8 +603,8 @@ export const saveOrder = async (
     try {
         await db!.withTransactionAsync(async () => {
             await db!.runAsync(
-                'INSERT INTO orders (orderId, customerName, customerMobile, employeeName, date, grossTotal, netPayable) VALUES (?, ?, ?, ?, ?, ?, ?);',
-                [order.orderId, order.customerName, order.customerMobile, order.employeeName, order.date, order.grossTotal, order.netPayable]
+                'INSERT INTO orders (orderId, customerName, customerMobile, employeeName, date, grossTotal, netPayable, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?);',
+                [order.orderId, order.customerName, order.customerMobile, order.employeeName, order.date, order.grossTotal, order.netPayable, order.estimationNumber || null]
             );
 
             for (const item of items) {
@@ -628,4 +652,31 @@ export const getNextOrderId = async (): Promise<string> => {
     const result = await db!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM orders;');
     const nextNum = (result?.count || 0) + 1;
     return `ORD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(nextNum).padStart(4, '0')}`;
+};
+
+export const getNextEstimationNumber = async (): Promise<number> => {
+    if (!db) await initDatabase();
+    // Get start of today in ISO format
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString();
+
+    const result = await db!.getFirstAsync<{ count: number }>(
+        'SELECT COUNT(*) as count FROM estimations WHERE date >= ?;',
+        [todayStr]
+    );
+    return (result?.count || 0) + 1;
+};
+
+export const getEstimationsForRecentDays = async (days: number = 2): Promise<DBEstimation[]> => {
+    if (!db) await initDatabase();
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() - days);
+    targetDate.setHours(0, 0, 0, 0);
+    const dateStr = targetDate.toISOString();
+
+    return await db!.getAllAsync<DBEstimation>(
+        'SELECT * FROM estimations WHERE date >= ? ORDER BY date DESC;',
+        [dateStr]
+    );
 };

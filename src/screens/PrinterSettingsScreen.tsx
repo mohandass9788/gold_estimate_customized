@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator, Platform, PermissionsAndroid, NativeModules } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator, Platform, PermissionsAndroid, NativeModules, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 // import * as IntentLauncher from 'expo-intent-launcher'; // Moved to dynamic require for safety
@@ -23,7 +23,7 @@ export default function PrinterSettingsScreen() {
     const {
         theme, t, printerType, setPrinterType, connectedPrinter, setConnectedPrinter,
         isPrinterConnected, setIsPrinterConnected, isBluetoothEnabled, setIsBluetoothEnabled,
-        requestPrint
+        requestPrint, receiptConfig, updateReceiptConfig
     } = useGeneralSettings();
 
     // Silence NativeEventEmitter warnings
@@ -153,7 +153,7 @@ export default function PrinterSettingsScreen() {
         requestPrint(async (empName) => {
             setIsPrinting(true);
             try {
-                await sendTestPrint(empName);
+                await sendTestPrint(empName, receiptConfig);
                 setIsPrinterConnected(true);
             } catch (e) {
                 setIsPrinterConnected(false);
@@ -181,7 +181,7 @@ export default function PrinterSettingsScreen() {
                         ]}
                         onPress={() => setPrinterType('system')}
                     >
-                        <Text style={[styles.toggleButtonText, { color: printerType === 'system' ? '#FFF' : activeColors.text }]}>SYSTEM</Text>
+                        <Text style={[styles.toggleButtonText, { color: printerType === 'system' ? '#FFF' : activeColors.text }]}>{t('system_printer')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[
@@ -190,7 +190,7 @@ export default function PrinterSettingsScreen() {
                         ]}
                         onPress={() => setPrinterType('thermal')}
                     >
-                        <Text style={[styles.toggleButtonText, { color: printerType === 'thermal' ? '#FFF' : activeColors.text }]}>THERMAL</Text>
+                        <Text style={[styles.toggleButtonText, { color: printerType === 'thermal' ? '#FFF' : activeColors.text }]}>{t('thermal_printer')}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -198,9 +198,9 @@ export default function PrinterSettingsScreen() {
                     <View style={[styles.infoCard, { backgroundColor: activeColors.primary + '10', borderColor: activeColors.primary + '20' }]}>
                         <Icon name="print-outline" size={32} color={activeColors.primary} />
                         <View style={styles.infoTextContainer}>
-                            <Text style={[styles.infoTitle, { color: activeColors.text }]}>System Printing Active</Text>
+                            <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('system_printing_active')}</Text>
                             <Text style={[styles.infoText, { color: activeColors.textLight }]}>
-                                Uses the built-in system dialog for WiFi and Cloud printers. Best for laser/inkjet printers.
+                                {t('system_printing_desc')}
                             </Text>
                         </View>
                     </View>
@@ -208,9 +208,9 @@ export default function PrinterSettingsScreen() {
                     <View style={[styles.infoCard, { backgroundColor: COLORS.success + '10', borderColor: COLORS.success + '20' }]}>
                         <Icon name="bluetooth-outline" size={32} color={COLORS.success} />
                         <View style={styles.infoTextContainer}>
-                            <Text style={[styles.infoTitle, { color: activeColors.text }]}>Thermal Printing Active</Text>
+                            <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('thermal_printing_active')}</Text>
                             <Text style={[styles.infoText, { color: activeColors.textLight }]}>
-                                Prints directly to ESC/POS Bluetooth printers. Faster for receipts.
+                                {t('thermal_printing_desc')}
                             </Text>
                         </View>
                     </View>
@@ -299,10 +299,10 @@ export default function PrinterSettingsScreen() {
                 )}
 
                 <View style={styles.section}>
-                    <Text style={[styles.sectionHeader, { color: activeColors.textLight }]}>Test Connection</Text>
+                    <Text style={[styles.sectionHeader, { color: activeColors.textLight }]}>{t('test_connection')}</Text>
                     <View style={styles.actionContainer}>
                         <PrimaryButton
-                            title={isPrinting ? "Printing..." : "Send Test Print"}
+                            title={isPrinting ? t('printing_progress') : t('send_test_print')}
                             onPress={handleTestPrint}
                             disabled={isPrinting || (printerType === 'thermal' && !connectedPrinter)}
                             isLoading={isPrinting}
@@ -310,12 +310,180 @@ export default function PrinterSettingsScreen() {
                     </View>
                 </View>
 
+                {/* Receipt Configuration Section */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={[styles.sectionHeader, { color: activeColors.textLight }]}>{t('receipt_configuration') || 'Receipt Configuration'}</Text>
+                        <Icon name="settings-outline" size={18} color={activeColors.textLight} />
+                    </View>
+
+                    <View style={[styles.configCard, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_header') || 'Show Header'}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('show_header_desc')}</Text>
+                            </View>
+                            <Switch
+                                value={receiptConfig.showHeader}
+                                onValueChange={(val) => updateReceiptConfig({ showHeader: val })}
+                                trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                thumbColor={receiptConfig.showHeader ? activeColors.primary : '#f4f3f4'}
+                            />
+                        </View>
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_footer') || 'Show Footer'}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('show_footer_desc')}</Text>
+                            </View>
+                            <Switch
+                                value={receiptConfig.showFooter}
+                                onValueChange={(val) => updateReceiptConfig({ showFooter: val })}
+                                trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                thumbColor={receiptConfig.showFooter ? activeColors.primary : '#f4f3f4'}
+                            />
+                        </View>
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_operator') || 'Show Operator'}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('show_operator_desc')}</Text>
+                            </View>
+                            <Switch
+                                value={receiptConfig.showOperator}
+                                onValueChange={(val) => updateReceiptConfig({ showOperator: val })}
+                                trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                thumbColor={receiptConfig.showOperator ? activeColors.primary : '#f4f3f4'}
+                            />
+                        </View>
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_customer') || 'Show Customer'}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('show_customer_desc')}</Text>
+                            </View>
+                            <Switch
+                                value={receiptConfig.showCustomer}
+                                onValueChange={(val) => updateReceiptConfig({ showCustomer: val })}
+                                trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                thumbColor={receiptConfig.showCustomer ? activeColors.primary : '#f4f3f4'}
+                            />
+                        </View>
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_gst') || 'Show GST (3%)'}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('show_gst_desc')}</Text>
+                            </View>
+                            <Switch
+                                value={receiptConfig.showGST}
+                                onValueChange={(val) => updateReceiptConfig({ showGST: val })}
+                                trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                thumbColor={receiptConfig.showGST ? activeColors.primary : '#f4f3f4'}
+                            />
+                        </View>
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_wastage') || 'Show VA (Wastage)'}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('show_wastage_desc')}</Text>
+                            </View>
+                            <Switch
+                                value={receiptConfig.showWastage}
+                                onValueChange={(val) => updateReceiptConfig({ showWastage: val })}
+                                trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                thumbColor={receiptConfig.showWastage ? activeColors.primary : '#f4f3f4'}
+                            />
+                        </View>
+
+                        {receiptConfig.showWastage && (
+                            <View style={styles.subConfigRow}>
+                                <TouchableOpacity
+                                    style={[styles.subConfigOption, receiptConfig.wastageDisplayType === 'percentage' && { backgroundColor: activeColors.primary + '20' }]}
+                                    onPress={() => updateReceiptConfig({ wastageDisplayType: 'percentage' })}
+                                >
+                                    <Text style={[styles.subConfigText, { color: receiptConfig.wastageDisplayType === 'percentage' ? activeColors.primary : activeColors.textLight }]}>{t('percentage_label')}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.subConfigOption, receiptConfig.wastageDisplayType === 'grams' && { backgroundColor: activeColors.primary + '20' }]}
+                                    onPress={() => updateReceiptConfig({ wastageDisplayType: 'grams' })}
+                                >
+                                    <Text style={[styles.subConfigText, { color: receiptConfig.wastageDisplayType === 'grams' ? activeColors.primary : activeColors.textLight }]}>{t('weight_gram_label')}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_making_charge') || 'Show Making Charges'}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('show_making_charge_desc')}</Text>
+                            </View>
+                            <Switch
+                                value={receiptConfig.showMakingCharge}
+                                onValueChange={(val) => updateReceiptConfig({ showMakingCharge: val })}
+                                trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                thumbColor={receiptConfig.showMakingCharge ? activeColors.primary : '#f4f3f4'}
+                            />
+                        </View>
+
+                        {receiptConfig.showMakingCharge && (
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subConfigRow}>
+                                <TouchableOpacity
+                                    style={[styles.subConfigOption, receiptConfig.makingChargeDisplayType === 'percentage' && { backgroundColor: activeColors.primary + '20' }]}
+                                    onPress={() => updateReceiptConfig({ makingChargeDisplayType: 'percentage' })}
+                                >
+                                    <Text style={[styles.subConfigText, { color: receiptConfig.makingChargeDisplayType === 'percentage' ? activeColors.primary : activeColors.textLight }]}>{t('percentage_label')}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.subConfigOption, receiptConfig.makingChargeDisplayType === 'grams' && { backgroundColor: activeColors.primary + '20' }]}
+                                    onPress={() => updateReceiptConfig({ makingChargeDisplayType: 'grams' })}
+                                >
+                                    <Text style={[styles.subConfigText, { color: receiptConfig.makingChargeDisplayType === 'grams' ? activeColors.primary : activeColors.textLight }]}>{t('per_gram_label')}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.subConfigOption, receiptConfig.makingChargeDisplayType === 'fixed' && { backgroundColor: activeColors.primary + '20' }]}
+                                    onPress={() => updateReceiptConfig({ makingChargeDisplayType: 'fixed' })}
+                                >
+                                    <Text style={[styles.subConfigText, { color: receiptConfig.makingChargeDisplayType === 'fixed' ? activeColors.primary : activeColors.textLight }]}>{t('fixed_amount_label')}</Text>
+                                </TouchableOpacity>
+                            </ScrollView>
+                        )}
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_device_name') || 'Show Device Info'}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('show_device_name_desc')}</Text>
+                            </View>
+                            <Switch
+                                value={receiptConfig.showDeviceName}
+                                onValueChange={(val) => updateReceiptConfig({ showDeviceName: val })}
+                                trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                thumbColor={receiptConfig.showDeviceName ? activeColors.primary : '#f4f3f4'}
+                            />
+                        </View>
+                    </View>
+                </View>
+
                 <View style={styles.helpSection}>
-                    <Text style={[styles.helpTitle, { color: activeColors.text }]}>Need Help?</Text>
+                    <Text style={[styles.helpTitle, { color: activeColors.text }]}>{t('need_help')}</Text>
                     <Text style={[styles.helpText, { color: activeColors.textLight }]}>
                         {printerType === 'system'
-                            ? "Ensure your printer is on the same WiFi network and supports mobile printing protocols."
-                            : "Ensure your Bluetooth printer is paired with your mobile device before scanning here."}
+                            ? t('system_help_text')
+                            : t('thermal_help_text')}
                     </Text>
                 </View>
             </ScrollView>
@@ -484,5 +652,53 @@ const styles = StyleSheet.create({
     row: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    configCard: {
+        borderRadius: BORDER_RADIUS.lg,
+        borderWidth: 1,
+        marginTop: SPACING.sm,
+        padding: SPACING.md,
+    },
+    configItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: SPACING.sm,
+    },
+    configTextLabel: {
+        flex: 1,
+        paddingRight: SPACING.md,
+    },
+    configLabel: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: '600',
+    },
+    configDesc: {
+        fontSize: FONT_SIZES.xs,
+        marginTop: 2,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: COLORS.border,
+        opacity: 0.1,
+        marginVertical: 4,
+    },
+    subConfigRow: {
+        flexDirection: 'row',
+        paddingLeft: SPACING.md,
+        paddingBottom: SPACING.sm,
+        marginTop: -4,
+    },
+    subConfigOption: {
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: COLORS.border + '30',
+    },
+    subConfigText: {
+        fontSize: 10,
+        fontWeight: 'bold',
     }
 });

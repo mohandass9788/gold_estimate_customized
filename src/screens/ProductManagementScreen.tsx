@@ -61,6 +61,7 @@ export default function ProductManagementScreen() {
 
     // Form States
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
     const [modalMode, setModalMode] = useState<'PRODUCT' | 'SUB_PRODUCT'>('PRODUCT');
 
     const [newProductName, setNewProductName] = useState('');
@@ -383,16 +384,14 @@ export default function ProductManagementScreen() {
     const silverProducts = filteredProducts.filter(p => p.metal === 'SILVER');
 
     const renderProductCard = (item: DBProduct) => {
-        const isSelected = selectedProduct?.id === item.id;
         const isSilver = item.metal === 'SILVER';
 
         return (
             <TouchableOpacity
                 key={item.id}
                 style={[
-                    styles.miniProductCard,
-                    isSilver ? styles.silverMiniCard : styles.goldMiniCard,
-                    isSelected && styles.selectedMiniCard
+                    styles.productGridCard,
+                    isSilver ? styles.silverCard : styles.goldCard
                 ]}
                 onPress={() => {
                     setSelectedProduct(item);
@@ -403,18 +402,31 @@ export default function ProductManagementScreen() {
                     setDefaultMakingCharge(item.defaultMakingCharge?.toString() || '0');
                     setDefaultMakingChargeType(item.defaultMakingChargeType || 'perGram');
                     setHsnCode(item.hsnCode || '');
+                    setShowEditModal(true);
                 }}
                 onLongPress={() => handleDeleteProduct(item.id)}
             >
-                <Text style={[
-                    styles.miniCardText,
-                    isSelected && styles.selectedMiniCardText
-                ]} numberOfLines={1}>
+                <View style={styles.cardTop}>
+                    <Icon
+                        name={isSilver ? "ellipse-outline" : "diamond-outline"}
+                        size={24}
+                        color={isSilver ? '#94a3b8' : '#f59e0b'}
+                    />
+                    <View style={styles.subCountBadge}>
+                        <Text style={styles.subCountText}>{item.subProductCount || 0}</Text>
+                    </View>
+                </View>
+
+                <Text style={styles.productCardName} numberOfLines={1}>
                     {item.name}
                 </Text>
-                {isSelected && (
-                    <View style={styles.selectedIndicator} />
-                )}
+
+                <View style={styles.cardFooter}>
+                    <Text style={styles.metalTag}>{item.metal}</Text>
+                    {item.hsnCode && (
+                        <Text style={styles.hsnTag}>#{item.hsnCode}</Text>
+                    )}
+                </View>
             </TouchableOpacity>
         );
     };
@@ -474,38 +486,71 @@ export default function ProductManagementScreen() {
                             </View>
                         )}
 
-                        <View style={styles.horizontalScrollWrapper}>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                style={styles.horizontalScroll}
-                                contentContainerStyle={styles.horizontalScrollContent}
-                            >
-                                {goldProducts.map(renderProductCard)}
-                                {silverProducts.map(renderProductCard)}
-                            </ScrollView>
-                        </View>
+                        <ScrollView
+                            style={styles.mainScroll}
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ paddingBottom: 120 }}
+                        >
+                            <View style={styles.gridContainer}>
+                                {filteredProducts.map(renderProductCard)}
 
-                        {products.length === 0 && (
-                            <View style={styles.emptyProducts}>
-                                <Icon name="cube-outline" size={48} color={COLORS.border} />
-                                <Text style={styles.emptyProductsText}>No categories added yet.</Text>
-                                <PrimaryButton
-                                    title={t('add_new')}
+                                {/* Add New Placeholder Card */}
+                                <TouchableOpacity
+                                    style={[styles.productGridCard, styles.dottedCard]}
                                     onPress={openAddProduct}
-                                    style={{ marginTop: SPACING.md, width: 200 }}
-                                />
+                                >
+                                    <View style={styles.centeredContent}>
+                                        <Icon name="add-circle-outline" size={32} color={COLORS.primary} />
+                                        <Text style={styles.addCardText}>{t('add_new')}</Text>
+                                    </View>
+                                </TouchableOpacity>
                             </View>
-                        )}
 
-                        {selectedProduct ? (
-                            <ScrollView style={styles.detailsContainer} showsVerticalScrollIndicator={false}>
-                                {/* Default Settings Card */}
-                                <View style={styles.richCard}>
-                                    <View style={styles.cardHeader}>
-                                        <Text style={styles.cardTitle}>{t('default_settings_for', { name: selectedProduct.name })}</Text>
-                                        <TouchableOpacity onPress={handleUpdateProduct}>
-                                            <Text style={styles.saveLink}>{t('save_defaults')}</Text>
+                            {products.length === 0 && (
+                                <View style={styles.emptyProducts}>
+                                    <Icon name="cube-outline" size={48} color={COLORS.border} />
+                                    <Text style={styles.emptyProductsText}>No categories added yet.</Text>
+                                </View>
+                            )}
+                        </ScrollView>
+                    </View>
+                </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+
+            {/* Edit Category Modal */}
+            <Modal
+                visible={showEditModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowEditModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                        <View style={[styles.modalContent, { maxHeight: '85%' }]}>
+                            <View style={styles.modalHeader}>
+                                <View>
+                                    <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
+                                    <View style={[styles.metalBadge, selectedProduct?.metal === 'SILVER' ? styles.silverBadge : styles.goldBadge]}>
+                                        <Text style={styles.metalBadgeText}>{selectedProduct?.metal}</Text>
+                                    </View>
+                                </View>
+                                <TouchableOpacity onPress={() => setShowEditModal(false)} style={styles.closeButton}>
+                                    <Icon name="close" size={24} color={COLORS.text} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                                {/* Default Settings */}
+                                <View style={styles.modalSection}>
+                                    <View style={styles.modalSectionHeader}>
+                                        <Text style={styles.modalSectionTitle}>{t('default_settings')}</Text>
+                                        <TouchableOpacity onPress={() => {
+                                            handleUpdateProduct().then(() => setShowEditModal(false));
+                                        }}>
+                                            <Text style={styles.saveLink}>{t('save')}</Text>
                                         </TouchableOpacity>
                                     </View>
 
@@ -513,11 +558,14 @@ export default function ProductManagementScreen() {
                                         <DropdownField
                                             label={t('purity')}
                                             value={defaultPurity}
-                                            options={[
+                                            options={selectedProduct?.metal === 'GOLD' ? [
                                                 { label: '24K', value: '24' },
                                                 { label: '22K', value: '22' },
                                                 { label: '20K', value: '20' },
                                                 { label: '18K', value: '18' },
+                                            ] : [
+                                                { label: 'Pure Silver', value: '100' },
+                                                { label: '92.5 Sterling', value: '92.5' },
                                             ]}
                                             onSelect={setDefaultPurity}
                                             style={{ flex: 1 }}
@@ -565,40 +613,48 @@ export default function ProductManagementScreen() {
                                         />
                                     </View>
 
-                                    <View style={styles.settingRow}>
-                                        <InputField
-                                            label={t('hsn_code')}
-                                            value={hsnCode}
-                                            onChangeText={setHsnCode}
-                                            style={{ flex: 1 }}
-                                            placeholder="Optional"
-                                        />
-                                    </View>
+                                    <InputField
+                                        label={t('hsn_code')}
+                                        value={hsnCode}
+                                        onChangeText={setHsnCode}
+                                        placeholder="Optional"
+                                    />
                                 </View>
 
-                                {/* Sub-products List */}
-                                <View style={[styles.richCard, { marginBottom: 100 }]}>
-                                    <View style={styles.cardHeader}>
-                                        <Text style={styles.cardTitle}>Sub-Products</Text>
-                                        <TouchableOpacity style={styles.miniAddButton} onPress={openAddSubProduct}>
-                                            <Icon name="add" size={20} color={COLORS.white} />
-                                            <Text style={styles.miniAddText}>{t('add_sub')}</Text>
+                                {/* Sub-products Management */}
+                                <View style={styles.modalSection}>
+                                    <View style={styles.modalSectionHeader}>
+                                        <Text style={styles.modalSectionTitle}>{t('sub_products')}</Text>
+                                        <TouchableOpacity
+                                            style={styles.miniAddButton}
+                                            onPress={() => {
+                                                setNewSubProductName('');
+                                                setModalMode('SUB_PRODUCT');
+                                                setShowAddModal(true);
+                                            }}
+                                        >
+                                            <Icon name="add" size={16} color={COLORS.white} />
+                                            <Text style={styles.miniAddText}>{t('add')}</Text>
                                         </TouchableOpacity>
                                     </View>
 
                                     {subProducts.length === 0 ? (
                                         <View style={styles.emptyState}>
-                                            <Icon name="list-outline" size={40} color={COLORS.border} />
-                                            <Text style={styles.emptyStateText}>{t('no_sub_categories') || 'No sub-products added yet'}</Text>
+                                            <Text style={styles.emptyStateText}>{t('no_sub_categories')}</Text>
                                         </View>
                                     ) : (
                                         subProducts.map((sub) => (
                                             <View key={sub.id} style={styles.subProductRow}>
                                                 <Text style={styles.subProductText}>{sub.name}</Text>
                                                 <TouchableOpacity onPress={() => {
-                                                    Alert.alert(t('remove'), t('delete_sub_confirm') || 'Delete this sub-product?', [
-                                                        { text: t('no') || 'No' },
-                                                        { text: t('yes') || 'Yes', onPress: () => deleteSubProduct(sub.id).then(() => loadSubProducts(selectedProduct.id)) }
+                                                    Alert.alert(t('remove'), t('delete_sub_confirm'), [
+                                                        { text: t('no') },
+                                                        {
+                                                            text: t('yes'), onPress: () => deleteSubProduct(sub.id).then(() => {
+                                                                if (selectedProduct) loadSubProducts(selectedProduct.id);
+                                                                loadProducts();
+                                                            })
+                                                        }
                                                     ])
                                                 }}>
                                                     <Icon name="trash-outline" size={18} color={COLORS.error} />
@@ -608,31 +664,42 @@ export default function ProductManagementScreen() {
                                     )}
                                 </View>
                             </ScrollView>
-                        ) : (
-                            <View style={styles.welcomeState}>
-                                <Icon name="settings-outline" size={80} color={COLORS.border} />
-                                <Text style={styles.welcomeText}>{t('product_category_manage_help')}</Text>
-                            </View>
-                        )}
-                    </View>
-                </TouchableWithoutFeedback>
-            </KeyboardAvoidingView>
 
-            {/* Add Modal */}
+                            <View style={styles.modalFooter}>
+                                <TouchableOpacity
+                                    style={styles.deleteButton}
+                                    onPress={() => {
+                                        if (selectedProduct) {
+                                            handleDeleteProduct(selectedProduct.id);
+                                            setShowEditModal(false);
+                                        }
+                                    }}
+                                >
+                                    <Icon name="trash-outline" size={18} color={COLORS.error} />
+                                    <Text style={styles.deleteButtonText}>{t('delete_category') || 'Delete Category'}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </TouchableWithoutFeedback>
+                </KeyboardAvoidingView>
+            </Modal>
             <Modal
                 visible={showAddModal}
                 transparent
-                animationType="slide"
+                animationType="fade"
                 onRequestClose={() => setShowAddModal(false)}
             >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={styles.modalOverlay}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                         <View style={styles.modalContent}>
                             <View style={styles.modalHeader}>
                                 <Text style={styles.modalTitle}>
                                     {modalMode === 'PRODUCT' ? t('add_new_product') : t('add_sub_product_for', { name: selectedProduct?.name || '' })}
                                 </Text>
-                                <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                                <TouchableOpacity onPress={() => setShowAddModal(false)} style={styles.closeButton}>
                                     <Icon name="close" size={24} color={COLORS.text} />
                                 </TouchableOpacity>
                             </View>
@@ -658,7 +725,7 @@ export default function ProductManagementScreen() {
                                                 else setDefaultPurity('22');
                                             }}
                                         />
-                                        <Text style={styles.modalSectionSub}>{t('set_initial_defaults')}</Text>
+                                        <Text style={styles.modalSectionTitle}>{t('set_initial_defaults')}</Text>
                                         <DropdownField
                                             label={t('purity')}
                                             value={defaultPurity}
@@ -673,7 +740,7 @@ export default function ProductManagementScreen() {
                                             ]}
                                             onSelect={setDefaultPurity}
                                         />
-                                        <View style={styles.row}>
+                                        <View style={styles.settingRow}>
                                             <InputField
                                                 label={t('wastage')}
                                                 value={defaultWastage}
@@ -715,8 +782,8 @@ export default function ProductManagementScreen() {
                                 />
                             </View>
                         </View>
-                    </View>
-                </TouchableWithoutFeedback>
+                    </TouchableWithoutFeedback>
+                </KeyboardAvoidingView>
             </Modal>
         </ScreenContainer>
     );
@@ -780,60 +847,74 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
+        paddingBottom: 120,
     },
-    productCard: {
-        width: (width - SPACING.md * 2 - SPACING.md) / 2, // 2 columns with gap
-        height: 100,
+    productGridCard: {
+        width: (width - SPACING.md * 3) / 2,
         backgroundColor: COLORS.white,
-        borderRadius: BORDER_RADIUS.md,
-        padding: SPACING.sm,
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.md,
         marginBottom: SPACING.md,
         elevation: 3,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
-        position: 'relative',
-        justifyContent: 'center',
-        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
     },
     goldCard: {
-        borderLeftWidth: 4,
-        borderLeftColor: '#f59e0b',
+        borderTopWidth: 4,
+        borderTopColor: '#f59e0b',
     },
     silverCard: {
-        borderLeftWidth: 4,
-        borderLeftColor: '#94a3b8',
+        borderTopWidth: 4,
+        borderTopColor: '#94a3b8',
     },
-    cardIndicator: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
+    cardTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: SPACING.md,
     },
-    selectedProductCard: {
-        backgroundColor: COLORS.primary,
-        borderLeftColor: 'transparent',
+    subCountBadge: {
+        backgroundColor: COLORS.background,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: COLORS.border,
     },
-    productCardText: {
-        fontSize: FONT_SIZES.sm,
-        color: COLORS.text,
-        textAlign: 'center',
+    subCountText: {
+        fontSize: 10,
         fontWeight: 'bold',
-        marginTop: 4,
+        color: COLORS.primary,
     },
-    productHsnTag: {
+    productCardName: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+        color: COLORS.text,
+        marginBottom: SPACING.sm,
+    },
+    cardFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: SPACING.xs,
+    },
+    metalTag: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: COLORS.textLight,
+        backgroundColor: COLORS.background,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    hsnTag: {
         fontSize: 10,
         color: COLORS.primary,
         fontWeight: 'bold',
-        marginTop: 2,
-    },
-    productMetalTag: {
-        fontSize: 10,
-        color: COLORS.textLight,
-        marginTop: 4,
-    },
-    selectedProductCardText: {
-        color: COLORS.white,
     },
     miniProductCard: {
         paddingHorizontal: SPACING.md,
@@ -1030,20 +1111,83 @@ const styles = StyleSheet.create({
     modalBody: {
         padding: SPACING.md,
     },
-    modalSectionSub: {
-        fontSize: FONT_SIZES.xs,
-        color: COLORS.textLight,
-        marginTop: SPACING.md,
-        marginBottom: SPACING.sm,
+    modalSection: {
+        marginBottom: SPACING.lg,
+        backgroundColor: COLORS.background,
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.md,
+    },
+    modalSectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.md,
+    },
+    modalSectionTitle: {
+        fontSize: FONT_SIZES.sm,
         fontWeight: 'bold',
+        color: COLORS.textLight,
         textTransform: 'uppercase',
     },
-    modalFooter: {
-        padding: SPACING.md,
+    metalBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginTop: 4,
+    },
+    goldBadge: {
+        backgroundColor: '#fef3c7',
+    },
+    silverBadge: {
+        backgroundColor: '#f1f5f9',
+    },
+    metalBadgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: COLORS.textLight,
+    },
+    deleteButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: SPACING.md,
         borderTopWidth: 1,
         borderTopColor: COLORS.background,
     },
-    row: {
-        flexDirection: 'row',
+    deleteButtonText: {
+        color: COLORS.error,
+        fontWeight: 'bold',
+        marginLeft: SPACING.xs,
+        fontSize: FONT_SIZES.sm,
+    },
+    modalFooter: {
+        padding: SPACING.md,
+    },
+    dottedCard: {
+        borderStyle: 'dashed',
+        borderWidth: 2,
+        borderColor: COLORS.primary,
+        backgroundColor: COLORS.background,
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 120,
+    },
+    centeredContent: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    addCardText: {
+        marginTop: 8,
+        color: COLORS.primary,
+        fontWeight: 'bold',
+        fontSize: FONT_SIZES.sm,
+    },
+    closeButton: {
+        padding: 4,
+    },
+    modalSaveBtn: {
+        paddingVertical: 4,
+        paddingHorizontal: 8,
     }
 });

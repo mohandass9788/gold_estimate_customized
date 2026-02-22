@@ -21,15 +21,8 @@ export default function GoldRateCard({ rate, onEdit }: GoldRateCardProps) {
     const { theme } = useGeneralSettings();
     const colors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
-    const MetalItem = ({ label, value, color }: { label: string; value: number; color: string }) => (
-        <View style={styles.metalItem}>
-            <Text style={styles.metalItemLabel}>{label}</Text>
-            <Text style={[styles.metalItemValue, { color }]}>₹{value.toLocaleString()}</Text>
-        </View>
-    );
-
     return (
-        <View style={[styles.card, { backgroundColor: theme === 'light' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 30, 30, 0.8)' }]}>
+        <View style={[styles.card, { backgroundColor: theme === 'light' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(30, 30, 30, 0.9)' }]}>
             <View style={styles.cardHeader}>
                 <View style={styles.titleInfo}>
                     <View style={styles.liveIndicator}>
@@ -45,36 +38,28 @@ export default function GoldRateCard({ rate, onEdit }: GoldRateCardProps) {
                 )}
             </View>
 
-            <View style={styles.divider} />
-
             <View style={styles.mainContent}>
-                {/* Gold Section */}
-                <View style={styles.sectionContainer}>
-                    <View style={styles.sectionHeader}>
-                        <View style={[styles.iconBox, { backgroundColor: '#FFD70015' }]}>
-                            <Icon name="medal-outline" size={18} color="#FFD700" />
+                <View style={styles.ratesContainer}>
+                    {/* Gold 22K Section */}
+                    <View style={styles.rateBox}>
+                        <View style={[styles.iconCircle, { backgroundColor: '#FFD70015' }]}>
+                            <Icon name="medal" size={18} color="#FFD700" />
                         </View>
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Gold Rates (per gram)</Text>
+                        <Text style={styles.rateLabel}>Gold 22K</Text>
+                        <Text style={[styles.rateValue, { color: colors.primary }]}>₹{rate.rate22k.toLocaleString()}</Text>
+                        <Text style={styles.unitText}>per gram</Text>
                     </View>
-                    <View style={styles.ratesRow}>
-                        <MetalItem label="24K (Fine)" value={rate.rate24k} color={colors.primary} />
-                        <View style={styles.verticalDivider} />
-                        <MetalItem label="22K (Jewel)" value={rate.rate22k} color={colors.primary} />
-                        <View style={styles.verticalDivider} />
-                        <MetalItem label="18K (Standard)" value={rate.rate18k} color={colors.primary} />
-                    </View>
-                </View>
 
-                {/* Silver Section */}
-                <View style={[styles.sectionContainer, { marginTop: SPACING.md }]}>
-                    <View style={styles.sectionHeader}>
-                        <View style={[styles.iconBox, { backgroundColor: '#C0C0C015' }]}>
-                            <Icon name="leaf-outline" size={18} color="#C0C0C0" />
+                    <View style={styles.verticalDivider} />
+
+                    {/* Silver Section */}
+                    <View style={styles.rateBox}>
+                        <View style={[styles.iconCircle, { backgroundColor: '#C0C0C020' }]}>
+                            <Icon name="leaf" size={18} color="#C0C0C0" />
                         </View>
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Silver Rates (per gram)</Text>
-                    </View>
-                    <View style={styles.ratesRow}>
-                        <MetalItem label="Pure Silver" value={rate.silver} color="#C0C0C0" />
+                        <Text style={styles.rateLabel}>Silver 99K</Text>
+                        <Text style={[styles.rateValue, { color: colors.text }]}>₹{rate.silver.toLocaleString()}</Text>
+                        <Text style={styles.unitText}>per gram</Text>
                     </View>
                 </View>
             </View>
@@ -84,22 +69,22 @@ export default function GoldRateCard({ rate, onEdit }: GoldRateCardProps) {
 
 const styles = StyleSheet.create({
     card: {
-        borderRadius: BORDER_RADIUS.lg,
+        borderRadius: 24,
         padding: SPACING.md,
         marginBottom: SPACING.lg,
         borderWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.2)',
+        borderColor: 'rgba(212, 175, 55, 0.3)',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-        elevation: 10,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
+        elevation: 8,
     },
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: SPACING.sm,
+        marginBottom: SPACING.md,
     },
     titleInfo: {
         flex: 1,
@@ -110,9 +95,9 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     dot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
         backgroundColor: '#4BB543',
         marginRight: 6,
         shadowColor: '#4BB543',
@@ -121,76 +106,65 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
     },
     liveText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '900',
         color: '#4BB543',
-        letterSpacing: 1,
+        letterSpacing: 1.2,
     },
     dateText: {
         fontSize: 12,
         fontWeight: '500',
+        opacity: 0.8,
     },
     editBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    mainContent: {
+        paddingVertical: SPACING.xs,
+    },
+    ratesContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+    },
+    rateBox: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: SPACING.xs,
+    },
+    iconCircle: {
         width: 36,
         height: 36,
         borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
+        marginBottom: 8,
     },
-    divider: {
-        height: 1,
-        backgroundColor: 'rgba(212, 175, 55, 0.1)',
-        marginVertical: SPACING.sm,
-    },
-    mainContent: {
-        paddingTop: SPACING.xs,
-    },
-    sectionContainer: {
-        width: '100%',
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: SPACING.sm,
-    },
-    iconBox: {
-        width: 32,
-        height: 32,
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 10,
-    },
-    sectionTitle: {
-        fontSize: 13,
-        fontWeight: '700',
-        letterSpacing: 0.3,
-    },
-    ratesRow: {
-        flexDirection: 'row',
-        backgroundColor: 'rgba(0,0,0,0.03)',
-        borderRadius: BORDER_RADIUS.md,
-        padding: SPACING.sm,
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    metalItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    metalItemLabel: {
-        fontSize: 10,
-        color: '#777',
+    rateLabel: {
+        fontSize: 12,
         fontWeight: '600',
-        marginBottom: 2,
+        color: '#888',
+        marginBottom: 4,
     },
-    metalItemValue: {
-        fontSize: 15,
+    rateValue: {
+        fontSize: 22,
         fontWeight: '900',
+        letterSpacing: -0.5,
+    },
+    unitText: {
+        fontSize: 10,
+        color: '#999',
+        fontWeight: '500',
+        marginTop: 2,
     },
     verticalDivider: {
         width: 1,
-        height: 20,
-        backgroundColor: 'rgba(0,0,0,0.05)',
+        height: '70%',
+        backgroundColor: 'rgba(0,0,0,0.06)',
+        marginHorizontal: SPACING.sm,
     },
 });
