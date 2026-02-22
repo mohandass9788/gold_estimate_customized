@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, TextInput as RNTextInput, TouchableOpacity as RNTouchableOpacity, StyleSheet, KeyboardAvoidingView as RNKeyboardAvoidingView, Platform } from 'react-native';
+import { View as RNView, Text as RNText, TextInput as RNTextInput, TouchableOpacity as RNTouchableOpacity, StyleSheet, KeyboardAvoidingView as RNKeyboardAvoidingView, Platform, Image as RNImage } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../store/AuthContext';
+import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -12,9 +13,11 @@ const TextInput = RNTextInput as any;
 const TouchableOpacity = RNTouchableOpacity as any;
 const KeyboardAvoidingView = RNKeyboardAvoidingView as any;
 const Icon = Ionicons as any;
+const Image = RNImage as any;
 
 export default function LoginScreen() {
     const { login, biometricLogin, isBiometricSupported, isAuthenticated } = useAuth();
+    const { shopDetails } = useGeneralSettings();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -55,7 +58,11 @@ export default function LoginScreen() {
         >
             <View style={styles.card}>
                 <View style={styles.header}>
-                    <Icon name="diamond-outline" size={60} color={COLORS.primary} />
+                    {shopDetails.appLogo ? (
+                        <Image source={{ uri: shopDetails.appLogo }} style={styles.logo} />
+                    ) : (
+                        <Icon name="diamond-outline" size={60} color={COLORS.primary} />
+                    )}
                     <Text style={styles.title}>Gold Estimation</Text>
                     <Text style={styles.subtitle}>Jewellery Management System</Text>
                 </View>
@@ -132,6 +139,12 @@ const styles = StyleSheet.create({
     header: {
         alignItems: 'center',
         marginBottom: SPACING.xl,
+    },
+    logo: {
+        width: 100,
+        height: 100,
+        borderRadius: BORDER_RADIUS.md,
+        resizeMode: 'contain',
     },
     title: {
         fontSize: FONT_SIZES.xxl,

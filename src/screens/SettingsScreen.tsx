@@ -150,7 +150,10 @@ export default function SettingsScreen() {
 
                 <TouchableOpacity
                     style={[styles.logoutBtn, { backgroundColor: activeColors.error + '10', borderColor: activeColors.error }]}
-                    onPress={logout}
+                    onPress={() => {
+                        logout();
+                        router.replace('/login');
+                    }}
                 >
                     <Icon name="log-out-outline" size={22} color={activeColors.error} />
                     <Text style={[styles.logoutText, { color: activeColors.error }]}>{t('logout')}</Text>

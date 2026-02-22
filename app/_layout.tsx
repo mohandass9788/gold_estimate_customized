@@ -18,13 +18,22 @@ import { EstimationProvider } from '../src/store/EstimationContext';
 import { GeneralSettingsProvider } from '../src/store/GeneralSettingsContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import React, { useState } from 'react';
+import CustomSplashScreen from '../src/components/CustomSplashScreen';
+
 export default function RootLayout() {
+    const [showSplash, setShowSplash] = useState(true);
+
     return (
         <SafeAreaProvider>
             <GeneralSettingsProvider>
                 <AuthProvider>
                     <EstimationProvider>
-                        <Stack screenOptions={{ headerShown: false }} />
+                        {showSplash ? (
+                            <CustomSplashScreen onFinish={() => setShowSplash(false)} />
+                        ) : (
+                            <Stack screenOptions={{ headerShown: false }} />
+                        )}
                     </EstimationProvider>
                 </AuthProvider>
             </GeneralSettingsProvider>

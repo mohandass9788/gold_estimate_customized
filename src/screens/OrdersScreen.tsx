@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, FlatList as RNFlatList, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator, Platform, Modal as RNModal } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, FlatList as RNFlatList, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator, Platform, Modal as RNModal, ScrollView as RNScrollView } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
@@ -21,6 +21,8 @@ const Icon = Ionicons as any;
 const FlatList = RNFlatList as any;
 const ActivityIndicator = RNActivityIndicator as any;
 const Modal = RNModal as any;
+const ScrollView = RNScrollView as any;
+const RNFlatListAny = RNFlatList as any;
 
 export default function OrdersScreen() {
     const router = useRouter();
@@ -221,65 +223,113 @@ export default function OrdersScreen() {
     const OrderDetailsModal = () => {
         if (!selectedOrder) return null;
 
+        const products = selectedOrderItems.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
+        const deductions = selectedOrderItems.filter(i => i.type !== 'PRODUCT');
+
         return (
             <Modal visible={showOrderDetails} transparent animationType="slide" onRequestClose={() => setShowOrderDetails(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={[styles.detailsModalContent, { backgroundColor: activeColors.cardBg }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: activeColors.primary }]}>Order Details</Text>
+                            <View>
+                                <Text style={[styles.modalTitle, { color: activeColors.primary }]}>{t('order_details') || 'Order Details'}</Text>
+                                <Text style={[styles.modalSubtitle, { color: activeColors.textLight }]}>{selectedOrder.orderId}</Text>
+                            </View>
                             <TouchableOpacity onPress={() => setShowOrderDetails(false)}>
                                 <Icon name="close" size={24} color={activeColors.text} />
                             </TouchableOpacity>
                         </View>
-                        <RNFlatList
-                            style={{ flex: 1 }}
-                            data={[
-                                { type: 'header', label: 'Order ID', value: selectedOrder.orderId },
-                                { type: 'header', label: 'Customer', value: selectedOrder.customerName || 'Walk-in' },
-                                { type: 'header', label: 'Operator', value: selectedOrder.employeeName },
-                                { type: 'header', label: 'Date', value: format(new Date(selectedOrder.date), 'dd MMM yyyy, hh:mm a') },
-                                { type: 'divider' },
-                                ...selectedOrderItems.map(item => {
-                                    const data = JSON.parse(item.itemData);
-                                    let label = '';
-                                    let value = '';
-                                    let color = activeColors.text;
 
-                                    if (item.type === 'PRODUCT') {
-                                        label = data.name;
-                                        value = `₹ ${data.totalValue.toLocaleString()}`;
-                                    } else if (item.type === 'PURCHASE') {
-                                        label = `Purchase: ${data.category}`;
-                                        value = `- ₹ ${data.amount.toLocaleString()}`;
-                                        color = activeColors.error;
-                                    } else if (item.type === 'CHIT') {
-                                        label = `Chit: ${data.chitId}`;
-                                        value = `- ₹ ${data.amount.toLocaleString()}`;
-                                        color = COLORS.primary;
-                                    } else if (item.type === 'ADVANCE') {
-                                        label = `Advance: ${data.advanceId}`;
-                                        value = `- ₹ ${data.amount.toLocaleString()}`;
-                                        color = COLORS.primary;
-                                    }
+                        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                            <View style={[styles.receiptBox, { borderColor: activeColors.border }]}>
+                                {/* Header Info */}
+                                <View style={styles.receiptHeader}>
+                                    <Text style={[styles.shopNameSmall, { color: activeColors.primary }]}>{shopDetails.name}</Text>
+                                    <Text style={[styles.receiptDate, { color: activeColors.textLight }]}>{format(new Date(selectedOrder.date), 'dd MMM yyyy, hh:mm a')}</Text>
+                                </View>
 
-                                    return { type: 'item', label, value, color };
-                                }),
-                                { type: 'divider' },
-                                { type: 'header', label: 'Total Payable', value: `₹ ${selectedOrder.netPayable.toLocaleString()}`, bold: true }
-                            ]}
-                            keyExtractor={(_, index) => index.toString()}
-                            renderItem={({ item: detailItem }: { item: any }) => {
-                                if (detailItem.type === 'divider') return <View style={[styles.divider, { backgroundColor: activeColors.border }]} />;
-                                return (
-                                    <View style={styles.detailRow}>
-                                        <Text style={[styles.detailLabel, { color: activeColors.textLight }]}>{detailItem.label}</Text>
-                                        <Text style={[styles.detailValue, { color: detailItem.color || activeColors.text, fontWeight: detailItem.bold ? 'bold' : 'normal' }]}>{detailItem.value}</Text>
+                                <View style={[styles.divider, { backgroundColor: activeColors.border }]} />
+
+                                {/* Customer Info */}
+                                <View style={styles.infoRow}>
+                                    <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>Customer:</Text>
+                                    <Text style={[styles.infoValue, { color: activeColors.text }]}>{selectedOrder.customerName || 'Walk-in'}</Text>
+                                </View>
+                                <View style={styles.infoRow}>
+                                    <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>Operator:</Text>
+                                    <Text style={[styles.infoValue, { color: activeColors.text }]}>{selectedOrder.employeeName}</Text>
+                                </View>
+
+                                <View style={[styles.divider, { backgroundColor: activeColors.border, marginVertical: SPACING.md }]} />
+
+                                {/* Items Table */}
+                                <View style={styles.tableHeader}>
+                                    <Text style={[styles.tableHead, { flex: 2, color: activeColors.textLight }]}>Item</Text>
+                                    <Text style={[styles.tableHead, { flex: 1, textAlign: 'right', color: activeColors.textLight }]}>Weight</Text>
+                                    <Text style={[styles.tableHead, { flex: 1, textAlign: 'right', color: activeColors.textLight }]}>Total</Text>
+                                </View>
+
+                                {products.map((product, idx) => (
+                                    <View key={`prod-${idx}`} style={styles.tableRow}>
+                                        <Text style={[styles.itemText, { flex: 2, color: activeColors.text }]}>{product.name}</Text>
+                                        <Text style={[styles.itemText, { flex: 1, textAlign: 'right', color: activeColors.text }]}>{product.totalWeight.toFixed(3)}g</Text>
+                                        <Text style={[styles.itemText, { flex: 1, textAlign: 'right', color: activeColors.text }]}>₹{Math.round(product.totalValue).toLocaleString()}</Text>
                                     </View>
-                                );
-                            }}
-                        />
+                                ))}
+
+                                {deductions.length > 0 && (
+                                    <>
+                                        <View style={[styles.divider, { backgroundColor: activeColors.border, marginVertical: SPACING.md, borderStyle: 'dashed', borderWidth: 0.5 }]} />
+                                        <Text style={[styles.deductionTitle, { color: activeColors.error }]}>Deductions</Text>
+                                        {deductions.map((item, idx) => {
+                                            const data = JSON.parse(item.itemData);
+                                            let label = '';
+                                            if (item.type === 'PURCHASE') label = `Old Gold (${data.category})`;
+                                            else if (item.type === 'CHIT') label = `Chit (${data.chitId})`;
+                                            else if (item.type === 'ADVANCE') label = `Advance (${data.advanceId})`;
+
+                                            return (
+                                                <View key={`ded-${idx}`} style={styles.tableRow}>
+                                                    <Text style={[styles.itemText, { flex: 3, color: activeColors.textLight }]}>{label}</Text>
+                                                    <Text style={[styles.itemText, { flex: 1, textAlign: 'right', color: activeColors.error }]}>-₹{Math.round(data.amount).toLocaleString()}</Text>
+                                                </View>
+                                            );
+                                        })}
+                                    </>
+                                )}
+
+                                <View style={[styles.divider, { backgroundColor: activeColors.border, marginVertical: SPACING.md }]} />
+
+                                {/* Totals */}
+                                <View style={styles.totalRow}>
+                                    <Text style={[styles.totalLabel, { color: activeColors.text }]}>Gross Total</Text>
+                                    <Text style={[styles.totalValue, { color: activeColors.text }]}>₹{Math.round(selectedOrder.grossTotal).toLocaleString()}</Text>
+                                </View>
+                                <View style={[styles.totalRow, styles.grandTotalRow]}>
+                                    <Text style={[styles.grandTotalLabel, { color: activeColors.primary }]}>NET PAYABLE</Text>
+                                    <Text style={[styles.grandTotalValue, { color: activeColors.primary }]}>₹{Math.round(selectedOrder.netPayable).toLocaleString()}</Text>
+                                </View>
+                            </View>
+                        </ScrollView>
+
                         <View style={styles.modalFooter}>
-                            <PrimaryButton title="Re-Print Receipt" onPress={() => { setShowOrderDetails(false); handlePrint(selectedOrder.orderId); }} />
+                            <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+                                <View style={{ flex: 1 }}>
+                                    <PrimaryButton
+                                        title="Print"
+                                        onPress={() => { setShowOrderDetails(false); handlePrint(selectedOrder.orderId); }}
+                                    />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <TouchableOpacity
+                                        style={[styles.reloadBtn, { borderColor: COLORS.success }]}
+                                        onPress={() => { setShowOrderDetails(false); handleReload(selectedOrder.orderId); }}
+                                    >
+                                        <Icon name="create-outline" size={20} color={COLORS.success} />
+                                        <Text style={[styles.reloadText, { color: COLORS.success }]}>Reload</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -447,5 +497,103 @@ const styles = StyleSheet.create({
     modalFooter: {
         marginTop: SPACING.md,
         paddingBottom: SPACING.lg,
+    },
+    receiptBox: {
+        padding: SPACING.md,
+        borderWidth: 1,
+        borderRadius: BORDER_RADIUS.md,
+        backgroundColor: '#fff', // Receipt look
+    },
+    receiptHeader: {
+        alignItems: 'center',
+        marginBottom: SPACING.sm,
+    },
+    shopNameSmall: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+    },
+    receiptDate: {
+        fontSize: 10,
+    },
+    infoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 2,
+    },
+    infoLabel: {
+        fontSize: 11,
+    },
+    infoValue: {
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    tableHeader: {
+        flexDirection: 'row',
+        paddingBottom: 4,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    tableHead: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    tableRow: {
+        flexDirection: 'row',
+        paddingVertical: 6,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#f9f9f9',
+    },
+    itemText: {
+        fontSize: 12,
+    },
+    deductionTitle: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        marginBottom: 4,
+    },
+    totalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 2,
+    },
+    totalLabel: {
+        fontSize: 12,
+    },
+    totalValue: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    grandTotalRow: {
+        marginTop: SPACING.sm,
+        paddingTop: SPACING.sm,
+        borderTopWidth: 2,
+        borderTopColor: '#333',
+    },
+    grandTotalLabel: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+    },
+    grandTotalValue: {
+        fontSize: FONT_SIZES.lg,
+        fontWeight: '800',
+    },
+    reloadBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.md,
+        borderWidth: 1.5,
+        height: 50, // Match PrimaryButton
+    },
+    reloadText: {
+        marginLeft: SPACING.sm,
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+    },
+    modalSubtitle: {
+        fontSize: 10,
     }
 });

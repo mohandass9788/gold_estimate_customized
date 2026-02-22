@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableWithoutFeedback as RNRTouchableWithoutFeedback, Keyboard, Platform } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableWithoutFeedback as RNRTouchableWithoutFeedback, Keyboard, Platform, Image as RNImage, TouchableOpacity as RNRTouchableOpacity } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
 import InputField from '../components/InputField';
@@ -13,6 +14,8 @@ const View = RNView as any;
 const Text = RNText as any;
 const ScrollView = RNScrollView as any;
 const TouchableWithoutFeedback = RNRTouchableWithoutFeedback as any;
+const Image = RNImage as any;
+const TouchableOpacity = RNRTouchableOpacity as any;
 
 export default function ShopInfoScreen() {
     const router = useRouter();
@@ -25,6 +28,27 @@ export default function ShopInfoScreen() {
     const [shopGst, setShopGst] = useState(shopDetails.gstNumber);
     const [footerMsg, setFooterMsg] = useState(shopDetails.footerMessage);
     const [localDeviceName, setLocalDeviceName] = useState(deviceName);
+    const [logoUri, setLogoUri] = useState(shopDetails.appLogo);
+    const [iconUri, setIconUri] = useState(shopDetails.appIcon);
+    const [splashUri, setSplashUri] = useState(shopDetails.splashImage);
+
+    const pickImage = async (type: 'logo' | 'icon' | 'splash') => {
+        let aspect: [number, number] = [1, 1];
+        if (type === 'splash') aspect = [9, 16];
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: 'images',
+            allowsEditing: true,
+            aspect,
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            if (type === 'logo') setLogoUri(result.assets[0].uri);
+            else if (type === 'icon') setIconUri(result.assets[0].uri);
+            else if (type === 'splash') setSplashUri(result.assets[0].uri);
+        }
+    };
 
     const handleSave = () => {
         if (!shopName.trim()) {
@@ -37,7 +61,10 @@ export default function ShopInfoScreen() {
             address: shopAddress,
             phone: shopPhone,
             gstNumber: shopGst,
-            footerMessage: footerMsg
+            footerMessage: footerMsg,
+            appLogo: logoUri,
+            appIcon: iconUri,
+            splashImage: splashUri
         });
         updateDeviceName(localDeviceName);
 
@@ -71,6 +98,48 @@ export default function ShopInfoScreen() {
                             onChangeText={setShopAddress}
                             multiline
                         />
+
+                        <View style={styles.logoSection}>
+                            <Text style={[styles.fieldLabel, { color: activeColors.text }]}>{t('business_logo') || 'Business Logo'}</Text>
+                            <TouchableOpacity onPress={() => pickImage('logo')} style={[styles.logoPicker, { borderColor: activeColors.border, backgroundColor: activeColors.background }]}>
+                                {logoUri ? (
+                                    <Image source={{ uri: logoUri }} style={styles.logoPreview} />
+                                ) : (
+                                    <View style={styles.logoPlaceholder}>
+                                        <Text style={{ color: activeColors.textLight }}>Select Logo</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                            <Text style={styles.helperText}>Used for Login & Dashboard Header</Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.md }}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.fieldLabel, { color: activeColors.text }]}>{t('app_icon') || 'App Icon'}</Text>
+                                <TouchableOpacity onPress={() => pickImage('icon')} style={[styles.logoPicker, { width: '100%', borderColor: activeColors.border, backgroundColor: activeColors.background }]}>
+                                    {iconUri ? (
+                                        <Image source={{ uri: iconUri }} style={styles.logoPreview} />
+                                    ) : (
+                                        <View style={styles.logoPlaceholder}>
+                                            <Text style={{ color: activeColors.textLight }}>512x512</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.fieldLabel, { color: activeColors.text }]}>{t('splash_image') || 'Splash Image'}</Text>
+                                <TouchableOpacity onPress={() => pickImage('splash')} style={[styles.logoPicker, { width: '100%', borderColor: activeColors.border, backgroundColor: activeColors.background }]}>
+                                    {splashUri ? (
+                                        <Image source={{ uri: splashUri }} style={styles.logoPreview} />
+                                    ) : (
+                                        <View style={styles.logoPlaceholder}>
+                                            <Text style={{ color: activeColors.textLight }}>1024x1024</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
                     </View>
 
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
@@ -147,4 +216,35 @@ const styles = StyleSheet.create({
         marginTop: SPACING.sm,
         marginBottom: SPACING.xl,
     },
+    logoSection: {
+        marginTop: SPACING.md,
+    },
+    fieldLabel: {
+        fontSize: FONT_SIZES.sm,
+        fontWeight: '600',
+        marginBottom: SPACING.xs,
+    },
+    logoPicker: {
+        width: 100,
+        height: 100,
+        borderRadius: BORDER_RADIUS.md,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+    },
+    logoPreview: {
+        width: '100%',
+        height: '100%',
+    },
+    logoPlaceholder: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    helperText: {
+        fontSize: 10,
+        color: COLORS.textLight,
+        marginTop: 4,
+    }
 });

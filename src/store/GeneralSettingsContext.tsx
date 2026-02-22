@@ -49,6 +49,9 @@ interface GeneralSettingsContextType {
         gstNumber: string;
         email: string;
         footerMessage: string;
+        appLogo?: string;
+        appIcon?: string;
+        splashImage?: string;
     };
     updateShopDetails: (details: Partial<{
         name: string;
@@ -57,6 +60,9 @@ interface GeneralSettingsContextType {
         gstNumber: string;
         email: string;
         footerMessage: string;
+        appLogo?: string;
+        appIcon?: string;
+        splashImage?: string;
     }>) => void;
     t: (key: string, params?: Record<string, string>) => string;
     adminPin: string;
@@ -90,6 +96,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         gstNumber: '',
         email: '',
         footerMessage: 'Thank You! Visit Again.',
+        appLogo: '',
+        appIcon: '',
+        splashImage: '',
     });
 
     const [connectedPrinter, setConnectedPrinter] = useState<ConnectedPrinter | null>(null);
@@ -139,7 +148,10 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                     getSetting('shop_phone'),
                     getSetting('shop_gst'),
                     getSetting('shop_email'),
-                    getSetting('shop_footer')
+                    getSetting('shop_footer'),
+                    getSetting('app_logo'),
+                    getSetting('app_icon'),
+                    getSetting('splash_image')
                 ]);
 
                 if (savedShopDetails[0]) setShopDetails(prev => ({ ...prev, name: savedShopDetails[0]! }));
@@ -148,6 +160,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 if (savedShopDetails[3]) setShopDetails(prev => ({ ...prev, gstNumber: savedShopDetails[3]! }));
                 if (savedShopDetails[4]) setShopDetails(prev => ({ ...prev, email: savedShopDetails[4]! }));
                 if (savedShopDetails[5]) setShopDetails(prev => ({ ...prev, footerMessage: savedShopDetails[5]! }));
+                if (savedShopDetails[6]) setShopDetails(prev => ({ ...prev, appLogo: savedShopDetails[6]! }));
+                if (savedShopDetails[7]) setShopDetails(prev => ({ ...prev, appIcon: savedShopDetails[7]! }));
+                if (savedShopDetails[8]) setShopDetails(prev => ({ ...prev, splashImage: savedShopDetails[8]! }));
 
                 const savedPin = await getSetting('admin_pin');
                 if (savedPin) setAdminPin(savedPin);
@@ -186,6 +201,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         if (details.gstNumber) await setSetting('shop_gst', details.gstNumber);
         if (details.email) await setSetting('shop_email', details.email);
         if (details.footerMessage) await setSetting('shop_footer', details.footerMessage);
+        if (details.appLogo !== undefined) await setSetting('app_logo', details.appLogo);
+        if (details.appIcon !== undefined) await setSetting('app_icon', details.appIcon);
+        if (details.splashImage !== undefined) await setSetting('splash_image', details.splashImage);
     };
 
     const updateAdminPin = async (newPin: string) => {

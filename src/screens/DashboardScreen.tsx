@@ -100,10 +100,26 @@ export default function DashboardScreen() {
                 marginBottom: SPACING.md
             }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Image
-                        source={require('../../assets/logo.png')}
-                        style={{ width: 50, height: 50, borderRadius: 25, marginRight: 10, borderWidth: 2, borderColor: COLORS.gold }}
-                    />
+                    {shopDetails.appLogo ? (
+                        <Image
+                            source={{ uri: shopDetails.appLogo }}
+                            style={{ width: 50, height: 50, borderRadius: 25, marginRight: 10, borderWidth: 2, borderColor: COLORS.gold }}
+                        />
+                    ) : (
+                        <View style={{
+                            width: 50,
+                            height: 50,
+                            borderRadius: 25,
+                            marginRight: 10,
+                            borderWidth: 2,
+                            borderColor: COLORS.gold,
+                            backgroundColor: activeColors.primary + '20',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                        }}>
+                            <Icon name="diamond" size={24} color={COLORS.gold} />
+                        </View>
+                    )}
                     <View>
                         <Text style={{ fontSize: FONT_SIZES.xs, color: activeColors.textLight }}>{getGreeting()}</Text>
                         <Text style={{ fontSize: FONT_SIZES.lg, fontWeight: 'bold', color: activeColors.text, fontFamily: 'serif' }}>
