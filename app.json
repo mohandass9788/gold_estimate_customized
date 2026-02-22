@@ -8,6 +8,9 @@
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
+    "experiments": {
+      "newArchitecture": false
+    },
     "splash": {
       "image": "./assets/logo.png",
       "resizeMode": "contain",
