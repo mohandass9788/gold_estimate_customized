@@ -4,13 +4,9 @@
     "slug": "gold-estimation",
     "version": "1.0.0",
     "scheme": "gold-estimation",
-    "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
-    "experiments": {
-      "newArchitecture": false
-    },
     "splash": {
       "image": "./assets/logo.png",
       "resizeMode": "contain",
@@ -40,9 +36,6 @@
         "ACCESS_FINE_LOCATION"
       ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
     "plugins": [
       "expo-secure-store",
       "expo-router",
@@ -52,21 +45,22 @@
           "android": {
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
-            "minSdkVersion": 24
+            "minSdkVersion": 24,
+            "newArchEnabled": true
           }
         }
       ]
     ],
-    "extra": {
-      "eas": {
-        "projectId": "9271dd18-5040-470b-b0da-4df9705bbc78"
-      }
-    },
     "updates": {
       "url": "https://u.expo.dev/9271dd18-5040-470b-b0da-4df9705bbc78"
     },
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9271dd18-5040-470b-b0da-4df9705bbc78"
+      }
     }
   }
 }
