@@ -463,6 +463,8 @@ export default function PrinterSettingsScreen() {
 
                         <View style={styles.divider} />
 
+                        <View style={styles.divider} />
+
                         <View style={styles.configItem}>
                             <View style={styles.configTextLabel}>
                                 <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_device_name') || 'Show Device Info'}</Text>
@@ -474,6 +476,35 @@ export default function PrinterSettingsScreen() {
                                 trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
                                 thumbColor={receiptConfig.showDeviceName ? activeColors.primary : '#f4f3f4'}
                             />
+                        </View>
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('paper_width') || 'Paper Width'}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('paper_width_desc') || 'Choose your printer paper size'}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.subConfigRow}>
+                            <TouchableOpacity
+                                style={[styles.subConfigOption, receiptConfig.paperWidth === '58mm' && { backgroundColor: activeColors.primary + '20' }]}
+                                onPress={() => updateReceiptConfig({ paperWidth: '58mm' })}
+                            >
+                                <Text style={[styles.subConfigText, { color: receiptConfig.paperWidth === '58mm' ? activeColors.primary : activeColors.textLight }]}>58MM</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.subConfigOption, receiptConfig.paperWidth === '80mm' && { backgroundColor: activeColors.primary + '20' }]}
+                                onPress={() => updateReceiptConfig({ paperWidth: '80mm' })}
+                            >
+                                <Text style={[styles.subConfigText, { color: receiptConfig.paperWidth === '80mm' ? activeColors.primary : activeColors.textLight }]}>80MM</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.subConfigOption, receiptConfig.paperWidth === '112mm' && { backgroundColor: activeColors.primary + '20' }]}
+                                onPress={() => updateReceiptConfig({ paperWidth: '112mm' })}
+                            >
+                                <Text style={[styles.subConfigText, { color: receiptConfig.paperWidth === '112mm' ? activeColors.primary : activeColors.textLight }]}>112MM</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>

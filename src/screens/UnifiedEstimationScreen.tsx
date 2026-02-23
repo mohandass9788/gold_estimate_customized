@@ -19,6 +19,7 @@ import { getPurchaseCategories, getPurchaseSubCategories, DBPurchaseCategory, DB
 import { EstimationItem, PurchaseItem, ChitItem, AdvanceItem, LessWeightType } from '../types';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { printEstimationItem, printPurchaseItem, printEstimationReceipt, printChitItem, printAdvanceItem } from '../services/printService';
+import ItemDetailModal from '../modals/ItemDetailModal';
 
 // Fix for React 19 type mismatch
 const View = RNView as any;
@@ -38,7 +39,8 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const { theme, t, shopDetails, deviceName, requestPrint, currentEmployeeName, receiptConfig } = useGeneralSettings();
     const [mode, setMode] = useState<Mode>((params.mode as Mode) || initialMode);
     const [editingItem, setEditingItem] = useState<EstimationItem | null>(null);
-    const [viewingItem, setViewingItem] = useState<EstimationItem | null>(null);
+    const [viewingItem, setViewingItem] = useState<any | null>(null);
+    const [viewingType, setViewingType] = useState<'estimation' | 'purchase' | 'chit' | 'advance'>('estimation');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [isPrinting, setIsPrinting] = useState(false);
     const [showPrintPreview, setShowPrintPreview] = useState(false);
@@ -122,7 +124,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
                 const itemToEdit: any = {
                     ...scannedProduct,
-                    id: Date.now().toString(), // Temp ID
+                    id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`, // Temp ID
                     rate: finalRate || scannedProduct.rate || 0,
                     // Ensure defaults if missing
                     makingChargeType: (scannedProduct.makingChargeType as any) || 'fixed',
@@ -452,7 +454,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
         const amount = purchaseNetWeight * rateValNum;
         const item: PurchaseItem = {
-            id: Date.now().toString(),
+            id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             category: categoryName,
             subCategory: subCategoryName,
             purity: parseFloat(purchasePurity),
@@ -477,7 +479,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             return;
         }
         addChitItem({
-            id: Date.now().toString(),
+            id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             chitId,
             amount: parseFloat(chitAmount),
         });
@@ -492,7 +494,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             return;
         }
         addAdvanceItem({
-            id: Date.now().toString(),
+            id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             advanceId,
             amount: parseFloat(advanceAmount),
         });
@@ -704,65 +706,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const showLeftArrow = scrollOffset > 10;
     const showRightArrow = contentWidth > containerWidth && scrollOffset < (contentWidth - containerWidth - 10);
 
-    const DetailViewModal = () => (
-        <Modal
-            visible={!!viewingItem}
-            animationType="slide"
-            transparent={true}
-            onRequestClose={() => setViewingItem(null)}
-        >
-            <View style={styles.modalOverlay}>
-                <View style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}>
-                    <View style={styles.modalHeader}>
-                        <Text style={[styles.modalTitle, { color: activeColors.text }]}>{viewingItem?.name}</Text>
-                        <TouchableOpacity onPress={() => setViewingItem(null)}>
-                            <Icon name="close" size={24} color={activeColors.text} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <ScrollView style={styles.modalBody}>
-                        {viewingItem && (
-                            <>
-                                <DetailRow label={t('tag_number')} value={viewingItem.tagNumber || 'Manual'} />
-                                <DetailRow label={t('customer_name')} value={viewingItem.customerName || '-'} />
-                                <DetailRow label={t('metal')} value={viewingItem.metal} />
-                                <DetailRow label={t('purity')} value={`${viewingItem.purity}K`} />
-                                <DetailRow label={t('net_weight')} value={`${viewingItem.netWeight.toFixed(3)} g`} />
-                                <DetailRow label={t('rate')} value={`₹ ${viewingItem.rate.toLocaleString()}`} />
-                                <View style={styles.modalDivider} />
-                                <DetailRow label={t('gold_value')} value={`₹ ${viewingItem.goldValue.toLocaleString()}`} />
-                                <DetailRow label={t('wastage')} value={`₹ ${viewingItem.wastageValue.toLocaleString()} (${viewingItem.wastage}${viewingItem.wastageType === 'percentage' ? '%' : 'g'})`} />
-                                <DetailRow label={t('making_charge')} value={`₹ ${viewingItem.makingChargeValue.toLocaleString()}`} />
-                                <DetailRow label={t('gst')} value={`₹ ${viewingItem.gstValue.toLocaleString()}`} />
-                                <View style={styles.modalTotalRow}>
-                                    <Text style={[styles.modalTotalLabel, { color: activeColors.text }]}>{t('total')}</Text>
-                                    <Text style={[styles.modalTotalValue, { color: activeColors.primary }]}>₹ {viewingItem.totalValue.toLocaleString()}</Text>
-                                </View>
-                            </>
-                        )}
-                    </ScrollView>
-
-                    <View style={styles.modalFooter}>
-                        <PrimaryButton
-                            title={t('print') || 'Print'}
-                            onPress={async () => {
-                                if (viewingItem) {
-                                    requestPrint(async (empName) => {
-                                        try {
-                                            await printEstimationItem(viewingItem, shopDetails, empName, receiptConfig);
-                                        } catch (e: any) {
-                                            Alert.alert('Error', e.message);
-                                        }
-                                    });
-                                }
-                            }}
-                            style={{ flex: 1 }}
-                        />
-                    </View>
-                </View>
-            </View>
-        </Modal>
-    );
+    // DetailViewModal local component removed in favor of imported ItemDetailModal
 
     const PrintPreviewModal = () => (
         <Modal
@@ -815,27 +759,27 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
                             {/* Totals Section */}
                             <View style={styles.previewRow}>
-                                <Text style={[styles.previewInfo, { fontSize: 10 }]}>Items Total:</Text>
+                                <Text style={[styles.previewInfo, { fontSize: 10 }]}>{t('items_total')}:</Text>
                                 <Text style={[styles.previewInfo, { fontWeight: 'bold', fontSize: 10 }]}>₹ {Math.round(itemsToPrint.reduce((s, i) => s + i.totalValue, 0)).toLocaleString()}</Text>
                             </View>
 
                             {purchaseItemsToPrint.length > 0 && (
                                 <View style={styles.previewRow}>
-                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>Old Gold Deduction:</Text>
+                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>{t('old_gold_deduction')}:</Text>
                                     <Text style={[styles.previewInfo, { color: activeColors.error, fontSize: 10 }]}>- ₹ {Math.round(purchaseItemsToPrint.reduce((s, i) => s + i.amount, 0)).toLocaleString()}</Text>
                                 </View>
                             )}
 
                             {chitItemsToPrint.length > 0 && (
                                 <View style={styles.previewRow}>
-                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>Chit Deduction:</Text>
+                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>{t('chit_deduction')}:</Text>
                                     <Text style={[styles.previewInfo, { color: activeColors.error, fontSize: 10 }]}>- ₹ {Math.round(chitItemsToPrint.reduce((s, i) => s + i.amount, 0)).toLocaleString()}</Text>
                                 </View>
                             )}
 
                             {advanceItemsToPrint.length > 0 && (
                                 <View style={styles.previewRow}>
-                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>Advance Deduction:</Text>
+                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>{t('advance_deduction')}:</Text>
                                     <Text style={[styles.previewInfo, { color: activeColors.error, fontSize: 10 }]}>- ₹ {Math.round(advanceItemsToPrint.reduce((s, i) => s + i.amount, 0)).toLocaleString()}</Text>
                                 </View>
                             )}
@@ -845,7 +789,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             <View style={[styles.previewDivider, { height: 2, backgroundColor: '#000', opacity: 0.8, marginVertical: 10 }]} />
 
                             <View style={styles.previewRow}>
-                                <Text style={{ fontSize: 13, fontWeight: 'bold' }}>Net Payable:</Text>
+                                <Text style={{ fontSize: 13, fontWeight: 'bold' }}>{t('net_payable')}:</Text>
                                 <Text style={{ fontSize: 16, fontWeight: 'bold', color: activeColors.success }}>₹ {Math.round(
                                     itemsToPrint.reduce((s, i) => s + i.totalValue, 0) -
                                     (purchaseItemsToPrint.reduce((s, i) => s + i.amount, 0) +
@@ -907,11 +851,11 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     onContentSizeChange={(w: any) => setContentWidth(w)}
                     scrollEventThrottle={16}
                 >
-                    <ModeButton label="SCAN TAG" active={mode === 'TAG'} onPress={() => setMode('TAG')} />
-                    <ModeButton label="MANUAL ENTRY" active={mode === 'MANUAL'} onPress={() => setMode('MANUAL')} />
-                    <ModeButton label="PURCHASE" active={mode === 'PURCHASE'} onPress={() => setMode('PURCHASE')} />
-                    <ModeButton label="CHIT" active={mode === 'CHIT'} onPress={() => setMode('CHIT')} />
-                    <ModeButton label="ADVANCE" active={mode === 'ADVANCE'} onPress={() => setMode('ADVANCE')} />
+                    <ModeButton label={t('scan_tag_btn')} active={mode === 'TAG'} onPress={() => setMode('TAG')} />
+                    <ModeButton label={t('manual_entry_btn')} active={mode === 'MANUAL'} onPress={() => setMode('MANUAL')} />
+                    <ModeButton label={t('purchase_btn')} active={mode === 'PURCHASE'} onPress={() => setMode('PURCHASE')} />
+                    <ModeButton label={t('chit_btn')} active={mode === 'CHIT'} onPress={() => setMode('CHIT')} />
+                    <ModeButton label={t('advance_btn')} active={mode === 'ADVANCE'} onPress={() => setMode('ADVANCE')} />
                 </ScrollView>
                 {showRightArrow && (
                     <TouchableOpacity style={styles.scrollArrow} onPress={() => handleTabScroll('right')}>
@@ -941,20 +885,20 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 ) : mode === 'CHIT' ? (
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                         <InputField
-                            label="Chit ID"
+                            label={t('chit_id')}
                             value={chitId}
                             onChangeText={setChitId}
-                            placeholder="Enter Chit ID"
+                            placeholder={t('enter_chit_id')}
                         />
                         <InputField
-                            label="Chit Amount"
+                            label={t('chit_amount')}
                             value={chitAmount}
                             onChangeText={setChitAmount}
                             keyboardType="numeric"
-                            placeholder="Enter Amount"
+                            placeholder={t('enter_amount')}
                         />
                         <PrimaryButton
-                            title="Add Chit"
+                            title={t('add_chit')}
                             onPress={handleAddChit}
                             style={{ marginTop: SPACING.md }}
                         />
@@ -962,20 +906,20 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 ) : mode === 'ADVANCE' ? (
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                         <InputField
-                            label="Advance ID"
+                            label={t('advance_id')}
                             value={advanceId}
                             onChangeText={setAdvanceId}
-                            placeholder="Enter ID"
+                            placeholder={t('enter_id')}
                         />
                         <InputField
-                            label="Advance Amount"
+                            label={t('advance_amount')}
                             value={advanceAmount}
                             onChangeText={setAdvanceAmount}
                             keyboardType="numeric"
-                            placeholder="Enter Amount"
+                            placeholder={t('enter_amount')}
                         />
                         <PrimaryButton
-                            title="Add Advance"
+                            title={t('add_advance')}
                             onPress={handleAddAdvance}
                             style={{ marginTop: SPACING.md }}
                         />
@@ -1126,12 +1070,14 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         onToggleSelection={() => handleToggleSelection(item.id)}
                         onRemove={() => handleRemoveItem(item.id, 'estimation')}
                         onEdit={() => handleEditItem(item)}
-                        onView={() => setViewingItem(item)}
+                        onView={() => {
+                            setViewingItem(item);
+                            setViewingType('estimation');
+                        }}
                     />
                 ))}
 
                 {state.purchaseItems.map((item) => (
-                    /* ... purchase item row ... */
                     <TouchableOpacity
                         key={item.id}
                         activeOpacity={0.7}
@@ -1158,7 +1104,13 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                     {item.metal} | {item.purity}{item.metal === 'SILVER' ? '' : 'K'} | {item.pcs} Pcs | Gross: {item.grossWeight.toFixed(3)}g | Less: {item.lessWeight}{item.lessWeightType === 'percentage' ? '%' : item.lessWeightType === 'amount' ? '₹' : 'g'} | Net: {item.netWeight.toFixed(3)}g
                                 </Text>
                             </View>
-                            <View style={{ flexDirection: 'row' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TouchableOpacity onPress={() => {
+                                    setViewingItem(item);
+                                    setViewingType('purchase');
+                                }} style={{ marginLeft: 8, padding: 4 }}>
+                                    <Icon name="eye-outline" size={20} color={activeColors.primary} />
+                                </TouchableOpacity>
                                 <TouchableOpacity onPress={() => handleEditPurchase(item)} style={{ marginLeft: 8, padding: 4 }}>
                                     <Icon name="pencil-outline" size={20} color={activeColors.primary} />
                                 </TouchableOpacity>
@@ -1197,7 +1149,13 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                     CHIT: {item.chitId}
                                 </Text>
                             </View>
-                            <View style={{ flexDirection: 'row' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TouchableOpacity onPress={() => {
+                                    setViewingItem(item);
+                                    setViewingType('chit');
+                                }} style={{ marginLeft: 8, padding: 4 }}>
+                                    <Icon name="eye-outline" size={20} color={activeColors.primary} />
+                                </TouchableOpacity>
                                 <TouchableOpacity onPress={() => handleEditChit(item)} style={{ marginLeft: 8, padding: 4 }}>
                                     <Icon name="pencil-outline" size={20} color={activeColors.primary} />
                                 </TouchableOpacity>
@@ -1236,7 +1194,13 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                     ADVANCE: {item.advanceId}
                                 </Text>
                             </View>
-                            <View style={{ flexDirection: 'row' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TouchableOpacity onPress={() => {
+                                    setViewingItem(item);
+                                    setViewingType('advance');
+                                }} style={{ marginLeft: 8, padding: 4 }}>
+                                    <Icon name="eye-outline" size={20} color={activeColors.primary} />
+                                </TouchableOpacity>
                                 <TouchableOpacity onPress={() => handleEditAdvance(item)} style={{ marginLeft: 8, padding: 4 }}>
                                     <Icon name="pencil-outline" size={20} color={activeColors.primary} />
                                 </TouchableOpacity>
@@ -1253,12 +1217,18 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
                 {state.items.length === 0 && state.purchaseItems.length === 0 && state.chitItems.length === 0 && state.advanceItems.length === 0 && (
                     <View style={styles.emptyContainer}>
-                        <Text style={[styles.emptyText, { color: activeColors.textLight }]}>No items added yet</Text>
+                        <Text style={[styles.emptyText, { color: activeColors.textLight }]}>{t('no_items_added')}</Text>
                     </View>
                 )}
+
             </ScrollView>
 
-            <DetailViewModal />
+            <ItemDetailModal
+                visible={!!viewingItem}
+                onClose={() => setViewingItem(null)}
+                item={viewingItem}
+                type={viewingType}
+            />
             <SummaryCard totals={state.totals} style={{ marginBottom: 10 }} />
         </ScreenContainer>
     );

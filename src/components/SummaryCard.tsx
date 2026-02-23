@@ -71,6 +71,7 @@ export default function SummaryCard({ totals, style }: SummaryCardProps) {
             <View style={styles.grandTotalContainer}>
                 <View style={styles.grandTotalRow}>
                     <View style={styles.grandTotalLeft}>
+                        <Text style={[styles.rateCardTitle, { color: colors.textLight }]}>{t('calc_rates_ref')}</Text>
                         <Text style={[styles.grandTotalLabel, { color: colors.text }]}>{t('net_payable')}</Text>
                         {!expanded && (
                             <View style={[styles.badge, { backgroundColor: colors.primary + '15' }]}>
@@ -81,7 +82,7 @@ export default function SummaryCard({ totals, style }: SummaryCardProps) {
                         )}
                     </View>
                     <View style={styles.priceRow}>
-                        <Text style={[styles.currencySymbol, { color: colors.success }]}>₹</Text>
+                        <Text style={[styles.currencySymbol, { color: colors.success }]}>{t('currency_symbol') || '₹'}</Text>
                         <Text style={[styles.grandTotalValue, { color: colors.success }]}>
                             {Math.round(totals?.grandTotal || 0).toLocaleString()}
                         </Text>

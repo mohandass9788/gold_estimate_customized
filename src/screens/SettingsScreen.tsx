@@ -26,7 +26,7 @@ const Modal = RNModal as any;
 export default function SettingsScreen() {
     const router = useRouter();
     const { logout } = useAuth();
-    const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName } = useGeneralSettings();
+    const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName, deviceId } = useGeneralSettings();
     const [showHelpModal, setShowHelpModal] = useState(false);
 
 
@@ -68,6 +68,7 @@ export default function SettingsScreen() {
                     <View>
                         <Text style={[styles.shopNameDisplay, { color: activeColors.text }]}>{shopDetails.name || 'Admin'}</Text>
                         <Text style={[styles.profileSub, { color: activeColors.textLight }]}>{deviceName ? `ID: ${deviceName}` : t('account_settings')}</Text>
+                        <Text style={[styles.profileSub, { color: activeColors.textLight, marginTop: 4, opacity: 0.8 }]}>{t('device_id')}: {deviceId || '...'}</Text>
                     </View>
                 </View>
 

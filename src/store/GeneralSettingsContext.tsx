@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { setSetting, getSetting } from '../services/dbService';
 import { Platform, NativeModules } from 'react-native';
+import * as Application from 'expo-application';
 import enTranslations from '../locales/en.json';
 import taTranslations from '../locales/ta.json';
 
@@ -25,6 +26,7 @@ export interface ReceiptConfig {
     showDeviceName: boolean;
     wastageDisplayType: 'percentage' | 'grams';
     makingChargeDisplayType: 'percentage' | 'grams' | 'fixed';
+    paperWidth: '58mm' | '80mm' | '112mm';
 }
 
 type PrinterType = 'system' | 'thermal';
@@ -77,6 +79,7 @@ interface GeneralSettingsContextType {
     requestPrint: (callback: (employeeName: string) => Promise<void>) => void;
     receiptConfig: ReceiptConfig;
     updateReceiptConfig: (config: Partial<ReceiptConfig>) => void;
+    deviceId: string;
 }
 
 const GeneralSettingsContext = createContext<GeneralSettingsContextType | undefined>(undefined);
@@ -89,6 +92,7 @@ const translations: Record<Language, Record<string, string>> = {
 export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [theme, setTheme] = useState<ThemeMode>('light');
     const [language, setLanguageState] = useState<Language>('en');
+    const [deviceId, setDeviceId] = useState<string>('');
     const [shopDetails, setShopDetails] = useState({
         name: 'GOLD ESTIMATION',
         address: '',
@@ -122,6 +126,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         showDeviceName: true,
         wastageDisplayType: 'percentage',
         makingChargeDisplayType: 'fixed',
+        paperWidth: '58mm',
     });
     const printCallbackRef = useRef<((employeeName: string) => Promise<void>) | null>(null);
 
@@ -140,6 +145,20 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     };
 
     useEffect(() => {
+        const fetchDeviceId = async () => {
+            try {
+                if (Platform.OS === 'android') {
+                    setDeviceId((Application as any).androidId || '');
+                } else if (Platform.OS === 'ios') {
+                    const id = await Application.getIosIdForVendorAsync();
+                    setDeviceId(id || '');
+                }
+            } catch (e) {
+                console.error('Error fetching device ID:', e);
+            }
+        };
+        fetchDeviceId();
+
         const loadSettings = async () => {
             try {
                 const savedShopDetails = await Promise.all([
@@ -279,7 +298,8 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             handleEmployeeConfirm,
             requestPrint,
             receiptConfig,
-            updateReceiptConfig
+            updateReceiptConfig,
+            deviceId
         }}>
             {children}
         </GeneralSettingsContext.Provider>

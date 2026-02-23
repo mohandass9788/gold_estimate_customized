@@ -109,11 +109,11 @@ export default function ManageGoldScreen() {
 
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
-            <HeaderBar title="Manage Gold & Silver" showBack />
+            <HeaderBar title={t('manage_gold_silver_title')} showBack />
 
             <View style={styles.content}>
                 <View style={styles.header}>
-                    <Text style={[styles.title, { color: activeColors.text }]}>Metal Types</Text>
+                    <Text style={[styles.title, { color: activeColors.text }]}>{t('metal_types')}</Text>
                     <TouchableOpacity
                         style={[styles.addButton, { backgroundColor: activeColors.primary }]}
                         onPress={() => {
@@ -122,7 +122,7 @@ export default function ManageGoldScreen() {
                         }}
                     >
                         <Icon name="add" size={24} color={COLORS.white} />
-                        <Text style={styles.addButtonText}>Add New</Text>
+                        <Text style={styles.addButtonText}>{t('add_new')}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -154,7 +154,7 @@ export default function ManageGoldScreen() {
                     ))}
                     {metalTypes.length === 0 && (
                         <View style={styles.emptyContainer}>
-                            <Text style={[styles.emptyText, { color: activeColors.textLight }]}>No custom metal types added.</Text>
+                            <Text style={[styles.emptyText, { color: activeColors.textLight }]}>{t('no_custom_metal_types')}</Text>
                         </View>
                     )}
                 </ScrollView>
@@ -185,7 +185,7 @@ export default function ManageGoldScreen() {
 
                                     <ScrollView showsVerticalScrollIndicator={false}>
                                         <DropdownField
-                                            label="Metal Category"
+                                            label={t('metal_category')}
                                             value={metal}
                                             onSelect={(val) => setMetal(val as any)}
                                             options={[
@@ -194,10 +194,10 @@ export default function ManageGoldScreen() {
                                             ]}
                                         />
                                         <InputField
-                                            label="Name (e.g. 22K KDM)"
+                                            label={t('name_label')}
                                             value={name}
                                             onChangeText={setName}
-                                            placeholder="Enter display name"
+                                            placeholder={t('enter_display_name')}
                                         />
                                         <InputField
                                             label={metal === 'GOLD' ? "Purity (Karat)" : "Purity (%)"}

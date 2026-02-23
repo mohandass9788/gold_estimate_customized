@@ -35,20 +35,61 @@ const thermalCommands = {
     right: `${ESC}a\x02`,
     boldOn: `${ESC}E\x01`,
     boldOff: `${ESC}E\x00`,
-    doubleOn: `${GS}!\x01`, // Double height only (less intrusive than \x11)
+    doubleOn: `${GS}!\x11`, // Double height and width
     doubleOff: `${GS}!\x00`,
-    divider: '--------------------------------\n',
+    divider: (width: number) => '-'.repeat(width) + '\n',
+    line: (width: number) => '='.repeat(width) + '\n',
 };
 
-const getCommonStyles = () => `
+export const getCharWidth = (paperWidth: string = '58mm') => {
+    if (paperWidth === '80mm') return 48;
+    if (paperWidth === '112mm') return 64;
+    return 32;
+};
+
+export const getColumnConfig = (paperWidth: string = '58mm') => {
+    switch (paperWidth) {
+        case '80mm':
+            return { name: 16, pcs: 4, wt: 8, wst: 6, mc: 6, amt: 8 };
+        case '112mm':
+            return { name: 24, pcs: 6, wt: 10, wst: 8, mc: 8, amt: 8 };
+        case '58mm':
+        default:
+            return { name: 8, pcs: 3, wt: 7, wst: 5, mc: 4, amt: 5 };
+    }
+};
+
+export const cleanThermalPayload = (payload: string) => {
+    return payload
+        .replace(/\x1b@/g, '') // Reset
+        .replace(/\x1ba\x01/g, '') // Center
+        .replace(/\x1ba\x00/g, '') // Left
+        .replace(/\x1ba\x02/g, '') // Right
+        .replace(/\x1bE\x01/g, '') // Bold On
+        .replace(/\x1bE\x00/g, '') // Bold Off
+        .replace(/\x1d!\x11/g, '') // Double On
+        .replace(/\x1d!\x00/g, '') // Double Off
+        .replace(/\x0a/g, '\n') // Newline
+        .replace(/\x00/g, ''); // Null
+};
+
+const padR = (s: string, w: number) => s.length >= w ? s.substring(0, w) : s + ' '.repeat(w - s.length);
+const padL = (s: string, w: number) => s.length >= w ? s.substring(0, w) : ' '.repeat(w - s.length) + s;
+
+const getCommonStyles = (paperWidth: string = '58mm') => {
+    let maxWidth = '380px';
+    if (paperWidth === '58mm') maxWidth = '220px';
+    if (paperWidth === '112mm') maxWidth = '450px';
+
+    return `
     <style>
         body {
             font-family: 'Courier New', 'Courier', monospace;
             padding: 4px;
             color: #000;
-            max-width: 380px;
+            max-width: ${maxWidth};
             margin: auto;
-            font-size: 12px;
+            font-size: 11px;
             line-height: 1.4;
         }
         .header {
@@ -157,6 +198,7 @@ const getCommonStyles = () => `
         }
     </style>
 `;
+};
 
 const getShopHeaderHTML = async (shopDetailsInput?: any, config?: ReceiptConfig) => {
     if (config && !config.showHeader) return '';
@@ -234,7 +276,7 @@ export const sendTestPrint = async (employeeName?: string, config?: ReceiptConfi
     const header = await getShopHeaderHTML(null, config);
     const html = `
         <html>
-            <head>${getCommonStyles()}</head>
+            <head>${getCommonStyles(config?.paperWidth)}</head>
             <body>
                 ${header}
                 <div class="receipt-title">TEST PRINT</div>
@@ -313,7 +355,7 @@ export const printEstimationItem = async (item: EstimationItem, shopDetails?: an
     const header = await getShopHeaderHTML(shopDetails, config);
     const html = `
         <html>
-            <head>${getCommonStyles()}</head>
+            <head>${getCommonStyles(config?.paperWidth)}</head>
             <body>
                 ${header}
                 <div class="receipt-title">ESTIMATION DETAILS</div>
@@ -396,7 +438,7 @@ export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, e
 
     const html = `
         <html>
-            <head>${getCommonStyles()}</head>
+            <head>${getCommonStyles(config?.paperWidth)}</head>
             <body>
                 ${header}
                 <div class="receipt-title">PURCHASE / OLD GOLD</div>
@@ -429,76 +471,93 @@ export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, e
     await Print.printAsync({ html });
 };
 
-export const printEstimationReceipt = async (
+export const getEstimationReceiptThermalPayload = async (
     items: EstimationItem[],
     purchaseItems: PurchaseItem[],
     chitItems: ChitItem[] = [],
     advanceItems: AdvanceItem[] = [],
-    shopDetailsInput: any,
+    shopDetails: any,
     customerName?: string,
     employeeName?: string,
     config?: ReceiptConfig,
     estimationNumber?: number
-): Promise<void> => {
-    const { type, printer } = await getPrinterConfig();
-    const shopDetails = shopDetailsInput || {
-        name: 'Gold Management System',
-        address: 'Your Shop Address',
-        phone: '1234567890',
-        footerMessage: 'Thank you for your visit!'
-    };
+): Promise<string> => {
+    const paperWidth = config?.paperWidth || '58mm';
+    const charWidth = getCharWidth(paperWidth);
+    const col = getColumnConfig(paperWidth);
 
-    if (type === 'thermal' && printer?.address) {
-        const connected = await ensureThermalConnection(printer.address);
-        if (connected) {
-            const shopName = shopDetails?.name || await getSetting('shop_name') || 'GOLD ESTIMATION';
-            const deviceName = await getSetting('device_name') || '';
-            const thermGoldRate22k = await getSetting('rate_22k') || '0';
-            const thermGoldRate18k = await getSetting('rate_18k') || '0';
-            const thermSilverRate = await getSetting('rate_silver') || '0';
-            const thermDateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const shopName = shopDetails?.name || await getSetting('shop_name') || 'GOLD ESTIMATION';
+    const deviceName = shopDetails?.deviceName || await getSetting('device_name') || '';
+    const rate22k = await getSetting('rate_22k') || '0';
+    const rate18k = await getSetting('rate_18k') || '0';
+    const silverRate = await getSetting('rate_silver') || '0';
+    const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-            // Helper: pad string to fixed width for 32-char thermal printer
-            const padR = (s: string, w: number) => s.length >= w ? s.substring(0, w) : s + ' '.repeat(w - s.length);
-            const padL = (s: string, w: number) => s.length >= w ? s.substring(0, w) : ' '.repeat(w - s.length) + s;
-            const LINE = '================================\x0a';
-            const DASH = '--------------------------------\x0a';
+    const LINE = thermalCommands.line(charWidth);
+    const DASH = thermalCommands.divider(charWidth);
 
-            let payload = `${thermalCommands.reset}${thermalCommands.center}`;
+    let payload = `${thermalCommands.reset}${thermalCommands.center}`;
 
-            if (!config || config.showHeader) {
-                payload += `${thermalCommands.boldOn}${thermalCommands.doubleOn}${shopName}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
-                if (config?.showDeviceName !== false && deviceName) payload += `Device: ${deviceName}\x0a`;
-            }
+    const hasItems = items.length > 0;
+    const hasPurchase = purchaseItems.length > 0;
+    const hasChit = chitItems.length > 0;
+    const hasAdvance = advanceItems.length > 0;
 
-            payload += `${thermalCommands.boldOn}ESTIMATION SLIP${thermalCommands.boldOff}\x0a`;
-            if (estimationNumber) {
-                payload += `Est #: ${estimationNumber}\x0a`;
-            }
-            payload += `${thermalCommands.left}`;
-            payload += `Rate:22K:${parseFloat(thermGoldRate22k).toFixed(2)}  Date:${thermDateStr}\x0a`;
-            payload += `Rate:18K:${parseFloat(thermGoldRate18k).toFixed(2)}  Silver:${parseFloat(thermSilverRate).toFixed(2)}\x0a`;
-            payload += LINE;
+    if (!config || config.showHeader) {
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}${thermalCommands.doubleOn}${shopName}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
+        if (config?.showDeviceName !== false && deviceName) payload += `Device: ${deviceName}\x0a`;
+        payload += `${thermalCommands.left}`;
+    }
 
-            if (config?.showCustomer !== false && customerName) {
-                payload += `Customer: ${customerName.toUpperCase()}\x0a`;
-            }
-            if (config?.showOperator !== false && employeeName) {
-                payload += `Operator: ${employeeName}\x0a`;
-            }
-            if ((config?.showCustomer !== false && customerName) || (config?.showOperator !== false && employeeName)) {
-                payload += LINE;
-            }
+    // Header logic for Standalone vs Full Estimation
+    if (hasItems) {
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}ESTIMATION SLIP${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+    } else if (hasPurchase && !hasChit && !hasAdvance) {
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}PURCHASE VOUCHER${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+    } else if (hasChit && !hasPurchase && !hasAdvance) {
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}CHIT RECEIPT${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+    } else if (hasAdvance && !hasPurchase && !hasChit) {
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}ADVANCE RECEIPT${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+    } else {
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}RECEIPT${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+    }
 
-            // Items header: 32 chars total
-            // NAME(8) PCS(3) WT(7) WST(5) MC(4) AMT(5) = 32
-            payload += `${thermalCommands.boldOn}${padR('ITEMS', 8)}${padR('Pcs', 3)}${padR('WT', 7)}${padR('WST', 5)}${padR('MC', 4)}${padL('AMT', 5)}${thermalCommands.boldOff}\x0a`;
+    if (estimationNumber) {
+        payload += `Est #: ${estimationNumber}\x0a`;
+    }
+
+    // Rates section (hide if only deductions are present)
+    if (hasItems) {
+        payload += `Rate:22K:${parseFloat(rate22k).toLocaleString()}  Dt:${dateStr}\x0a`;
+        payload += `Rate:18K:${parseFloat(rate18k).toLocaleString()}  Silver:${parseFloat(silverRate).toLocaleString()}\x0a`;
+        payload += LINE;
+    } else {
+        payload += `Date: ${dateStr}\x0a`;
+        payload += LINE;
+    }
+
+    if (config?.showCustomer !== false && customerName) {
+        payload += `Customer: ${customerName.toUpperCase()}\x0a`;
+    }
+    if (config?.showOperator !== false && employeeName) {
+        payload += `Operator: ${employeeName}\x0a`;
+    }
+    if ((config?.showCustomer !== false && customerName) || (config?.showOperator !== false && employeeName)) {
+        payload += LINE;
+    }
+
+    let totalTaxableValue = 0;
+    let totalGrossWeight = 0;
+    let totalNetWeight = 0;
+    let totalPurchaseAmount = 0;
+
+    if (hasItems) {
+        const isTableLayout = paperWidth === '80mm' || paperWidth === '112mm';
+
+        if (isTableLayout) {
+            // Table Header: ITEM | PCS | WEIGHT | VA | MC | TOTAL
+            payload += `${thermalCommands.boldOn}${padR('ITEM', col.name)}${padL('PCS', col.pcs)}${padL('WEIGHT', col.wt)}${padL('VA', col.wst)}${padL('MC', col.mc)}${padL('TOTAL', col.amt)}${thermalCommands.boldOff}\x0a`;
             payload += DASH;
-
-            let totalTaxableValue = 0;
-            let totalGrossWeight = 0;
-            let totalNetWeight = 0;
-            let totalPurchaseAmount = 0;
 
             items.forEach(item => {
                 const itemTaxable = item.goldValue + item.wastageValue + item.makingChargeValue;
@@ -506,81 +565,175 @@ export const printEstimationReceipt = async (
                 totalGrossWeight += item.grossWeight;
                 totalNetWeight += item.netWeight;
 
-                // Item name on its own line
-                payload += `${item.name.substring(0, 20).toUpperCase()}\x0a`;
-                if (item.tagNumber) payload += `(${item.tagNumber})\x0a`;
-                // Data row: aligned columns
-                const pcsStr = item.pcs.toString();
-                const wtStr = item.grossWeight.toFixed(3);
-                const wstStr = Math.round(item.wastageValue).toString();
-                const mcStr = Math.round(item.makingChargeValue).toString();
-                const amtStr = Math.round(itemTaxable).toFixed(2);
-                payload += `${padR('', 8)}${padR(pcsStr, 3)}${padR(wtStr, 7)}${padR(wstStr, 5)}${padR(mcStr, 4)}${padL(amtStr, 5)}\x0a`;
+                const name = item.name.toUpperCase();
+                const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
+                const mcVal = Math.round(item.makingChargeValue);
+                const wstVal = Math.round(item.wastageValue);
+
+                payload += `${padR(name, col.name)}${padL(item.pcs.toString(), col.pcs)}${padL(item.netWeight.toFixed(3), col.wt)}${padL(Math.round(wstVal).toString(), col.wst)}${padL(Math.round(mcVal).toString(), col.mc)}${padL(Math.round(itemTaxable).toString(), col.amt)}\x0a`;
+                if (item.tagNumber) payload += `  Tag: ${item.tagNumber}\x0a`;
             });
-
-            payload += DASH;
-            payload += `${thermalCommands.boldOn}${padR('TOTAL', 8)}${padR('', 3)}${padR(totalGrossWeight.toFixed(3), 7)}${padR('', 5)}${padR('', 4)}${padL(Math.round(totalTaxableValue).toFixed(2), 5)}${thermalCommands.boldOff}\x0a`;
-            payload += DASH;
-            payload += `${padR('NETWT', 8)}${padR('', 3)}${padR(totalNetWeight.toFixed(3), 7)}\x0a`;
+        } else {
+            // Multi-line layout for 58mm
+            payload += `${thermalCommands.boldOn}${padR('ITEMS & DETAILS', charWidth - 12)}${padL('AMOUNT', 12)}${thermalCommands.boldOff}\x0a`;
             payload += DASH;
 
-            // GST
-            const splitGST = (totalTaxableValue * 0.03) / 2;
-            const totalGST = totalTaxableValue * 0.03;
-            const estimationAmt = totalTaxableValue + totalGST;
+            items.forEach(item => {
+                const itemTaxable = item.goldValue + item.wastageValue + item.makingChargeValue;
+                totalTaxableValue += itemTaxable;
+                totalGrossWeight += item.grossWeight;
+                totalNetWeight += item.netWeight;
 
-            if (!config || config.showGST) {
-                payload += `     CGST 1.50%  ${padL(Math.round(splitGST).toFixed(2), 10)}\x0a`;
-                payload += `     SGST 1.50%  ${padL(Math.round(splitGST).toFixed(2), 10)}\x0a`;
-            }
-            payload += `${thermalCommands.boldOn}Est.Amount:-  ${padL(Math.round(estimationAmt).toFixed(2), 12)}${thermalCommands.boldOff}\x0a`;
+                payload += `${item.name.toUpperCase()} | ${item.pcs} Pcs\x0a`;
+                if (item.tagNumber) payload += `  Tag: ${item.tagNumber}\x0a`;
 
-            // Purchase section
-            if (purchaseItems.length > 0) {
-                payload += LINE;
-                payload += `${thermalCommands.center}${thermalCommands.boldOn}* Purchase Quotation *${thermalCommands.boldOff}\x0a`;
-                payload += `${thermalCommands.left}Date : ${thermDateStr}\x0a`;
-                payload += `${padR('ITEMS', 14)}${padR('WT', 8)}${padL('Amount', 10)}\x0a`;
-                let totalPurWeight = 0;
-                purchaseItems.forEach(item => {
-                    totalPurchaseAmount += item.amount;
-                    totalPurWeight += item.netWeight;
-                    payload += `${padR(item.category.toUpperCase().substring(0, 14), 14)}${padR(item.netWeight.toFixed(3), 8)}${padL(Math.round(item.amount).toFixed(2), 10)}\x0a`;
-                });
-                payload += DASH;
-                payload += `${thermalCommands.boldOn}${padR('PurTot', 14)}${padR(totalPurWeight.toFixed(3), 8)}${padL(Math.round(totalPurchaseAmount).toFixed(2), 10)}${thermalCommands.boldOff}\x0a`;
-            }
+                // Detail 1: Weights and Basic Info
+                payload += `  Gross: ${item.grossWeight.toFixed(3)}g\x0a`;
+                if (item.stoneWeight > 0) {
+                    payload += `  Stone: ${item.stoneWeight.toFixed(3)}g\x0a`;
+                }
+                payload += `  Net  : ${item.netWeight.toFixed(3)}g | @Rs.${item.rate}\x0a`;
 
-            // Chit section
-            let totalChit = 0;
-            if (chitItems.length > 0) {
-                payload += DASH;
-                chitItems.forEach(item => {
-                    totalChit += item.amount;
-                    payload += `${padR('Chit (' + item.chitId + ')', 20)}${padL('-' + Math.round(item.amount).toFixed(2), 12)}\x0a`;
-                });
-            }
+                // Detail 2: Wastage formula
+                if (!config || config.showWastage) {
+                    const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
+                    const wLabel = item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`;
+                    payload += `  VA: ${wLabel} (${vWeight.toFixed(3)}g) -> Rs.${Math.round(item.wastageValue).toLocaleString()}\x0a`;
+                }
 
-            // Advance section
-            let totalAdvance = 0;
-            if (advanceItems.length > 0) {
-                payload += DASH;
-                advanceItems.forEach(item => {
-                    totalAdvance += item.amount;
-                    payload += `${padR('Advance (' + item.advanceId + ')', 20)}${padL('-' + Math.round(item.amount).toFixed(2), 12)}\x0a`;
-                });
-            }
+                // Detail 3: Making charge formula
+                if (!config || config.showMakingCharge) {
+                    const mcLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge} Fixed`);
+                    payload += `  MC: ${mcLabel} -> Rs.${Math.round(item.makingChargeValue).toLocaleString()}\x0a`;
+                }
 
-            const netPayable = estimationAmt - totalPurchaseAmount - totalChit - totalAdvance;
+                // Total for this item
+                payload += `${padL('Rs. ' + Math.round(itemTaxable).toLocaleString(), charWidth)}\x0a`;
+            });
+        }
 
-            payload += LINE;
-            payload += `${thermalCommands.center}${thermalCommands.boldOn}${thermalCommands.doubleOn}Net Amt Rs.${Math.round(netPayable).toLocaleString('en-IN')}.00${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
-            payload += LINE;
+        payload += DASH;
+        payload += `${thermalCommands.boldOn}${padR('TOTAL', col.name)}${padR('', col.pcs)}${padR(totalGrossWeight.toFixed(3), col.wt)}${padR('', col.wst)}${padR('', col.mc)}${padL(Math.round(totalTaxableValue).toString(), col.amt)}${thermalCommands.boldOff}\x0a`;
+        payload += DASH;
+        payload += `${padR('NETWT', col.name)}${padR('', col.pcs)}${padR(totalNetWeight.toFixed(3), col.wt)}\x0a`;
+        payload += DASH;
 
-            // if (config?.showOperator !== false && employeeName) payload += `${employeeName}\x0a`;
-            if (!config || config.showFooter) payload += `THANK YOU VISIT AGAIN\x0a`;
-            payload += `\x0a\x0a\x0a\x00`;
+        const totalGST = totalTaxableValue * 0.03;
+        const splitGST = totalGST / 2;
+        const estimationAmt = totalTaxableValue + totalGST;
 
+        if (!config || config.showGST) {
+            payload += `${padL('CGST 1.5% Rs.' + Math.round(splitGST).toLocaleString(), charWidth)}\x0a`;
+            payload += `${padL('SGST 1.5% Rs.' + Math.round(splitGST).toLocaleString(), charWidth)}\x0a`;
+        }
+        payload += `${thermalCommands.boldOn}${padL('Est.Amt: Rs.' + Math.round(estimationAmt).toLocaleString(), charWidth)}${thermalCommands.boldOff}\x0a`;
+    }
+
+    if (hasPurchase) {
+        payload += LINE;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}* Purchase Quotation *${thermalCommands.boldOff}\x0a`;
+
+        const isTableLayout = paperWidth === '80mm' || paperWidth === '112mm';
+
+        if (isTableLayout) {
+            // Purchase Table Header: ITEMS | WT | LESS | RATE | AMOUNT
+            // Re-using col config or defining specific for purchase
+            const pCol = paperWidth === '80mm' ?
+                { name: 12, wt: 8, less: 12, rate: 8, amt: 8 } :
+                { name: 20, wt: 10, less: 16, rate: 10, amt: 8 };
+
+            payload += `${thermalCommands.boldOn}${padR('ITEMS', pCol.name)}${padL('WT', pCol.wt)}${padL('LESS', pCol.less)}${padL('RATE', pCol.rate)}${padL('AMOUNT', pCol.amt)}${thermalCommands.boldOff}\x0a`;
+            payload += DASH;
+
+            let totalPurWeight = 0;
+            purchaseItems.forEach(item => {
+                totalPurchaseAmount += item.amount;
+                totalPurWeight += item.netWeight;
+
+                const lessWeightValue = item.lessWeightType === 'percentage' ? (item.grossWeight * item.lessWeight / 100) : (item.lessWeightType === 'amount' ? 0 : item.lessWeight);
+                const lessStr = item.lessWeightType === 'percentage' ? `${item.lessWeight}%` : (item.lessWeightType === 'amount' ? `Rs.${item.lessWeight}` : `${item.lessWeight}g`);
+
+                payload += `${padR(item.category.toUpperCase(), pCol.name)}${padL(item.netWeight.toFixed(3), pCol.wt)}${padL(lessStr, pCol.less)}${padL(item.rate.toString(), pCol.rate)}${padL(Math.round(item.amount).toString(), pCol.amt)}\x0a`;
+            });
+            payload += DASH;
+            payload += `${thermalCommands.boldOn}${padR('PurTot', pCol.name)}${padL(totalPurWeight.toFixed(3), pCol.wt)}${padR('', pCol.less)}${padR('', pCol.rate)}${padL(Math.round(totalPurchaseAmount).toString(), pCol.amt)}${thermalCommands.boldOff}\x0a`;
+        } else {
+            payload += `${thermalCommands.left}${padR('ITEMS', charWidth - 12)}${padL('AMOUNT', 12)}\x0a`;
+            payload += DASH;
+            let totalPurWeight = 0;
+            purchaseItems.forEach(item => {
+                totalPurchaseAmount += item.amount;
+                totalPurWeight += item.netWeight;
+                payload += `${item.category.toUpperCase()}\x0a`;
+                const lessWeightValue = item.lessWeightType === 'percentage' ? (item.grossWeight * item.lessWeight / 100) : (item.lessWeightType === 'amount' ? 0 : item.lessWeight);
+                const lessStr = item.lessWeightType === 'percentage' ? `${item.lessWeight}% (${lessWeightValue.toFixed(3)}g)` : (item.lessWeightType === 'amount' ? `Rs. ${item.lessWeight}` : `${item.lessWeight}g`);
+                payload += ` Gross: ${item.grossWeight.toFixed(3)}g  \n Less:${lessStr} \n`;
+                payload += ` Net: ${item.netWeight.toFixed(3)}g | @Rs.${item.rate}\x0a`;
+                payload += `${padL('Rs. ' + Math.round(item.amount).toLocaleString(), charWidth)}\x0a`;
+            });
+            payload += DASH;
+            payload += `${thermalCommands.boldOn}${padR('PurTot', charWidth - 18)}${padR(totalPurWeight.toFixed(3), 8)}${padL(Math.round(totalPurchaseAmount).toString(), 10)}${thermalCommands.boldOff}\x0a`;
+        }
+    }
+
+    let totalChit = 0;
+    if (hasChit) {
+        payload += LINE;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}* Chit / Scheme *${thermalCommands.boldOff}\x0a`;
+        payload += `${thermalCommands.left}`;
+        chitItems.forEach(item => {
+            totalChit += item.amount;
+            payload += `${padR('Chit (' + item.chitId + ')', charWidth - 15)}${padL('Rs. ' + Math.round(item.amount).toLocaleString(), 15)}\x0a`;
+        });
+    }
+
+    let totalAdvance = 0;
+    if (hasAdvance) {
+        payload += LINE;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}* Advance Adjustment *${thermalCommands.boldOff}\x0a`;
+        payload += `${thermalCommands.left}`;
+        advanceItems.forEach(item => {
+            totalAdvance += item.amount;
+            payload += `${padR('Advance (' + item.advanceId + ')', charWidth - 15)}${padL('Rs. ' + Math.round(item.amount).toLocaleString(), 15)}\x0a`;
+        });
+    }
+
+    const totalDeductions = totalPurchaseAmount + totalChit + totalAdvance;
+    const estimationAmt = totalTaxableValue + (totalTaxableValue * 0.03); // Recalculate if needed
+    const netPayable = (hasItems ? estimationAmt : 0) - totalDeductions;
+
+    payload += LINE;
+    if (hasItems && totalDeductions > 0) {
+        payload += `${padL('Deductions: Rs.' + Math.round(totalDeductions).toLocaleString(), charWidth)}\x0a`;
+    }
+    payload += `${thermalCommands.center}${thermalCommands.boldOn}}Net Amt: Rs.${Math.round(Math.abs(netPayable)).toLocaleString()}${netPayable < 0 ? ' (CR)' : ''}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
+    payload += LINE;
+
+    if (!config || config.showFooter) payload += `${thermalCommands.center}THANK YOU VISIT AGAIN\x0a`;
+    payload += `\x0a\x0a\x0a\x0a`;
+
+    return payload;
+};
+
+export const printEstimationReceipt = async (
+    items: EstimationItem[],
+    purchaseItems: PurchaseItem[],
+    chitItems: ChitItem[] = [],
+    advanceItems: AdvanceItem[] = [],
+    shopDetails: any,
+    customerName?: string,
+    employeeName?: string,
+    config?: ReceiptConfig,
+    estimationNumber?: number
+): Promise<void> => {
+    const { type, printer } = await getPrinterConfig();
+
+    if (type === 'thermal' && printer?.address) {
+        const connected = await ensureThermalConnection(printer.address);
+        if (connected) {
+            const payload = await getEstimationReceiptThermalPayload(
+                items, purchaseItems, chitItems, advanceItems, shopDetails, customerName, employeeName, config, estimationNumber
+            );
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
             BLEPrinter.printText(payload);
             return;
@@ -615,135 +768,167 @@ export const printEstimationReceipt = async (
     const DASH = '--------------------------------------';
     const DOUBLE_DASH = '======================================';
 
+    const hasItems = items.length > 0;
+    const hasPurchase = purchaseItems.length > 0;
+    const hasChit = chitItems.length > 0;
+    const hasAdvance = advanceItems.length > 0;
+
+    let receiptTitle = 'RECEIPT';
+    if (hasItems) receiptTitle = 'ESTIMATION SLIP';
+    else if (hasPurchase && !hasChit && !hasAdvance) receiptTitle = 'PURCHASE VOUCHER';
+    else if (hasChit && !hasPurchase && !hasAdvance) receiptTitle = 'CHIT RECEIPT';
+    else if (hasAdvance && !hasPurchase && !hasChit) receiptTitle = 'ADVANCE RECEIPT';
+
     // --- Estimation Items Section ---
-    const itemsHTML = items.length > 0 ? `
+    const itemsHTML = hasItems ? `
         <div class="dash-line">${DASH}</div>
-        <table>
-            <thead>
-                <tr>
-                    <th>ITEMS</th>
-                    <th class="text-right">Pcs</th>
-                    <th class="text-right">WT</th>
-                    <th class="text-right">WST</th>
-                    <th class="text-right">MC</th>
-                    <th class="text-right">AMOUNT</th>
-                </tr>
-            </thead>
-        </table>
+        <div class="row-bold">
+            <span>ITEMS & DETAILS</span>
+            <span style="text-align: right;">AMOUNT</span>
+        </div>
         <div class="dash-line">${DASH}</div>
         ${items.map(item => {
         const itemTotal = item.goldValue + item.wastageValue + item.makingChargeValue;
+        const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
+        const wLabel = item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`;
+        const mcLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge} Fix`);
+
         return `
-                <table>
-                    <tr>
-                        <td colspan="6" style="font-weight:bold;padding-bottom:0;">${item.name.toUpperCase()}</td>
-                    </tr>
-                    ${item.tagNumber ? `<tr><td colspan="6" style="font-size:10px;padding-top:0;">(${item.tagNumber})</td></tr>` : ''}
-                    ${item.subProductName ? `<tr><td colspan="6" style="font-size:10px;padding-top:0;">${item.subProductName}</td></tr>` : ''}
-                    <tr>
-                        <td></td>
-                        <td class="text-right">${item.pcs}</td>
-                        <td class="text-right">${item.grossWeight.toFixed(3)}</td>
-                        <td class="text-right">${Math.round(item.wastageValue)}</td>
-                        <td class="text-right">${Math.round(item.makingChargeValue)}</td>
-                        <td class="text-right">${Math.round(itemTotal).toFixed(2)}</td>
-                    </tr>
-                </table>
+                <div style="margin-bottom: 6px;">
+                    <div style="font-weight:bold;">${item.name.toUpperCase()} | ${item.pcs} Pcs </div>
+                    ${item.tagNumber ? `<div style="font-size:10px;">Tag: ${item.tagNumber}</div>` : ''}
+                    <div class="row">
+                        <span>Gross: ${item.grossWeight.toFixed(3)}g</span>
+                    </div>
+                    ${item.stoneWeight > 0 ? `
+                    <div class="row">
+                        <span>Stone: ${item.stoneWeight.toFixed(3)}g</span>
+                    </div>` : ''}
+                    <div class="row">
+                        <span>Net  : ${item.netWeight.toFixed(3)}g  | @Rs.${item.rate}</span>
+                    </div>
+                    ${(!config || config.showWastage) ? `
+                    <div class="row" style="font-size:10px; color: #333;">
+                        <span>VA: ${wLabel} (${vWeight.toFixed(3)}g)</span>
+                        <span>Rs.${Math.round(item.wastageValue).toLocaleString()}</span>
+                    </div>` : ''}
+                    ${(!config || config.showMakingCharge) ? `
+                    <div class="row" style="font-size:10px; color: #333;">
+                        <span>MC: ${mcLabel}</span>
+                        <span>Rs.${Math.round(item.makingChargeValue).toLocaleString()}</span>
+                    </div>` : ''}
+                    <div class="row-bold" style="border-top: 0.5px dashed #ccc; padding-top: 1px;">
+                        <span></span>
+                        <span>Rs. ${Math.round(itemTotal).toLocaleString()}</span>
+                    </div>
+                </div>
             `;
     }).join('')}
         <div class="dash-line">${DASH}</div>
         <div class="row-bold">
             <span>TOTAL</span>
-            <span style="margin-left:auto;margin-right:40px;">${totalGrossWeight.toFixed(3)}</span>
-            <span>${Math.round(totalItemAmount).toFixed(2)}</span>
+            <span style="margin-left:auto;margin-right:20px;">G.Wt: ${totalGrossWeight.toFixed(3)}</span>
+            <span>Rs.${Math.round(totalItemAmount).toLocaleString()}</span>
         </div>
         <div class="dash-line">${DASH}</div>
         <div class="row">
             <span>NETWT</span>
-            <span>${totalWeight.toFixed(3)}</span>
+            <span>${totalWeight.toFixed(3)}g</span>
         </div>
         <div class="dash-line">${DASH}</div>
     ` : '';
 
     // --- GST Section ---
-    const gstHTML = (!config || config.showGST) ? `
-        <div class="row"><span style="margin-left:40%;">CGST 1.50%</span><span>${Math.round(totalGST / 2).toFixed(2)}</span></div>
-        <div class="row"><span style="margin-left:40%;">SGST 1.50%</span><span>${Math.round(totalGST / 2).toFixed(2)}</span></div>
-        <div class="row-bold"><span style="margin-left:40%;">Est.Amount :-</span><span>${Math.round(estimationAmount).toFixed(2)}</span></div>
-    ` : `
-        <div class="row-bold"><span>Est.Amount :-</span><span>${Math.round(estimationAmount).toFixed(2)}</span></div>
-    `;
+    const gstHTML = (hasItems && (!config || config.showGST)) ? `
+        <div class="row"><span>CGST 1.50%</span><span>Rs.${Math.round(totalGST / 2).toLocaleString()}</span></div>
+        <div class="row"><span>SGST 1.50%</span><span>Rs.${Math.round(totalGST / 2).toLocaleString()}</span></div>
+        <div class="row-bold"><span>Taxable Total</span><span>Rs.${Math.round(estimationAmount).toLocaleString()}</span></div>
+    ` : hasItems ? `
+        <div class="row-bold"><span>Total Amount</span><span>Rs.${Math.round(estimationAmount).toLocaleString()}</span></div>
+    ` : '';
 
     // --- Purchase Quotation Section ---
     const purchaseHTML = purchaseItems.length > 0 ? `
         <div class="double-line">${DOUBLE_DASH}</div>
         <div class="section-title">* Purchase Quotation *</div>
-        <div class="rate-line">Date : ${dateStr}</div>
         <table>
             <thead>
                 <tr>
-                    <th>ITEMS</th>
-                    <th class="text-right">WT</th>
-                    <th class="text-right">Amount</th>
+                    <th style="text-align: left;">ITEMS</th>
+                    <th style="text-align: right;">Amount</th>
                 </tr>
             </thead>
             <tbody>
-                ${purchaseItems.map(p => `
-                    <tr>
-                        <td>${p.category.toUpperCase()}</td>
-                        <td class="text-right">${p.netWeight.toFixed(3)}</td>
-                        <td class="text-right">${Math.round(p.amount).toFixed(2)}</td>
-                    </tr>
-                `).join('')}
+                ${purchaseItems.map(p => {
+        const lessStr = p.lessWeightType === 'percentage' ? `${p.lessWeight}%` : `${p.lessWeight}g`;
+        return `
+                                <tr>
+                                    <td style="font-weight:bold;">${p.category.toUpperCase()}</td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr style="font-size:10px; color: #333;">
+                                    <td>${p.netWeight.toFixed(3)}g <br>
+                                    Less:${p.lessWeightType === 'percentage' ? `${p.lessWeight}% (${(p.grossWeight - p.netWeight).toFixed(3)}g)` : p.lessWeightType === 'amount' ? `Rs.${p.lessWeight}` : `${p.lessWeight}g`} | @Rs.${p.rate}</td>
+                                    <td class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2" class="text-right" style="border-top: 0.5px dashed #ccc;">Rs. ${Math.round(p.amount).toLocaleString()}</td>
+                                </tr>
+                            `;
+    }).join('')}
             </tbody>
         </table>
         <div class="dash-line">${DASH}</div>
         <div class="row-bold">
-            <span>PurTot</span>
-            <span>${totalPurchaseWeight.toFixed(3)}</span>
-            <span>${Math.round(totalPurchaseAmount).toFixed(2)}</span>
+            <span>Pur.Total</span>
+            <span>Rs.${Math.round(totalPurchaseAmount).toLocaleString()}</span>
         </div>
     ` : '';
 
     // --- Chit/Advance Deduction rows ---
     const chitHTML = chitItems.length > 0 ? `
-        <div class="dash-line">${DASH}</div>
+        <div class="double-line">${DOUBLE_DASH}</div>
+        <div class="section-title">* Chit / Scheme *</div>
         ${chitItems.map(item => `
             <div class="row">
                 <span>Chit (${item.chitId})</span>
-                <span>-${Math.round(item.amount).toFixed(2)}</span>
+                <span>Rs. ${Math.round(item.amount).toLocaleString()}</span>
             </div>
         `).join('')}
     ` : '';
 
     const advanceHTML = advanceItems.length > 0 ? `
-        <div class="dash-line">${DASH}</div>
+        <div class="double-line">${DOUBLE_DASH}</div>
+        <div class="section-title">* Advance Adjustment *</div>
         ${advanceItems.map(item => `
             <div class="row">
                 <span>Advance (${item.advanceId})</span>
-                <span>-${Math.round(item.amount).toFixed(2)}</span>
+                <span>Rs. ${Math.round(item.amount).toLocaleString()}</span>
             </div>
         `).join('')}
     ` : '';
 
     // --- Rate info lines ---
-    const rateInfoHTML = `
-        <div class="rate-line">Rate : Gold 91.6 : ${parseFloat(goldRate22k).toFixed(2)} &nbsp; Date :- ${dateStr}</div>
-        <div class="rate-line">Rate : 18 KT : ${parseFloat(goldRate18k).toFixed(2)} &nbsp; Silver : ${parseFloat(silverRate).toFixed(2)}</div>
-    `;
+    const rateInfoHTML = hasItems ? `
+        <div class="rate-line">Rate : 22K: ${parseFloat(goldRate22k).toLocaleString()} &nbsp; Date: ${dateStr}</div>
+        <div class="rate-line">Rate : 18K: ${parseFloat(goldRate18k).toLocaleString()} &nbsp; Silv: ${parseFloat(silverRate).toLocaleString()}</div>
+    ` : `<div class="rate-line">Date: ${dateStr}</div>`;
+
+    const totalDeductions = totalPurchaseAmount + totalChitAmount + totalAdvanceAmount;
+    const finalNetPayable = (hasItems ? estimationAmount : 0) - totalDeductions;
 
     const html = `
         <html>
-            <head>${getCommonStyles()}</head>
+            <head>${getCommonStyles(config?.paperWidth)}</head>
             <body>
                 ${header}
-                <div class="receipt-title">ESTIMATION SLIP</div>
+                <div class="receipt-title">${receiptTitle}</div>
                 ${estimationNumber ? `<div class="row-bold" style="justify-content: center; margin-bottom: 5px;">Est #: ${estimationNumber}</div>` : ''}
                 ${rateInfoHTML}
                 <div class="double-line">${DOUBLE_DASH}</div>
                 ${(config?.showCustomer !== false && customerName) ? `
                     <div class="customer-block">
-                        Customer Name : ${customerName.toUpperCase()}
+                        Customer: ${customerName.toUpperCase()}
                     </div>
                 ` : ''}
                 <div class="double-line">${DOUBLE_DASH}</div>
@@ -752,19 +937,17 @@ export const printEstimationReceipt = async (
 
                 ${gstHTML}
 
-                <div class="double-line">${DOUBLE_DASH}</div>
-
                 ${purchaseHTML}
 
                 ${chitHTML}
 
                 ${advanceHTML}
 
-                <div class="double-line">${DOUBLE_DASH}</div>
-                <div class="net-amt">Net Amt &nbsp; Rs.${Math.round(netPayable).toLocaleString('en-IN')}.00</div>
+                <div class="double-line" style="margin-top: 10px;">${DOUBLE_DASH}</div>
+                <div class="net-amt">Net Amt &nbsp; Rs.${Math.round(Math.abs(finalNetPayable)).toLocaleString()}${finalNetPayable < 0 ? ' (CR)' : ''}</div>
                 <div class="double-line">${DOUBLE_DASH}</div>
 
-                ${(config?.showOperator !== false && employeeName) ? `<div class="footer">${employeeName}</div>` : ''}
+                ${(config?.showOperator !== false && employeeName) ? `<div class="footer">Operator: ${employeeName}</div>` : ''}
                 ${(!config || config.showFooter) ? `<div class="footer">${shopDetails?.footerMessage || 'THANK YOU VISIT AGAIN'}</div>` : ''}
             </body>
         </html>
@@ -777,7 +960,7 @@ export const printChitItem = async (item: ChitItem, shopDetails: any, employeeNa
     const header = await getShopHeaderHTML(shopDetails, config);
     const html = `
         <html>
-            <head>${getCommonStyles()}</head>
+            <head>${getCommonStyles(config?.paperWidth)}</head>
             <body>
                 ${header}
                 <div class="receipt-title">CHIT RECEIPT</div>
@@ -831,7 +1014,7 @@ export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, empl
     const header = await getShopHeaderHTML(shopDetails, config);
     const html = `
         <html>
-            <head>${getCommonStyles()}</head>
+            <head>${getCommonStyles(config?.paperWidth)}</head>
             <body>
                 ${header}
                 <div class="receipt-title">ADVANCE RECEIPT</div>

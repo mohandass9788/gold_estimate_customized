@@ -17,7 +17,7 @@ const Image = RNImage as any;
 
 export default function LoginScreen() {
     const { login, biometricLogin, isBiometricSupported, isAuthenticated } = useAuth();
-    const { shopDetails } = useGeneralSettings();
+    const { t, theme, shopDetails } = useGeneralSettings();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -56,6 +56,8 @@ export default function LoginScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
         >
+            {/* Assuming HeaderBar is a custom component and needs to be added here */}
+            {/* <HeaderBar title={t('manual_entry_title')} showBack /> */}
             <View style={styles.card}>
                 <View style={styles.header}>
                     {shopDetails.appLogo ? (
@@ -63,31 +65,31 @@ export default function LoginScreen() {
                     ) : (
                         <Icon name="diamond-outline" size={60} color={COLORS.primary} />
                     )}
-                    <Text style={styles.title}>Gold Estimation</Text>
-                    <Text style={styles.subtitle}>Jewellery Management System</Text>
+                    <Text style={styles.title}>{t('app_name')}</Text>
+                    <Text style={styles.subtitle}>{t('app_subtitle')}</Text>
                 </View>
 
                 {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
                 <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Username</Text>
+                    <Text style={styles.label}>{t('username_label')}</Text>
                     <TextInput
                         style={styles.input}
                         value={username}
                         onChangeText={setUsername}
-                        placeholder="Enter username"
+                        placeholder={t('enter_username_placeholder') || t('enter_name')}
                         autoCapitalize="none"
                     />
                 </View>
 
                 <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Password</Text>
+                    <Text style={styles.label}>{t('password_label')}</Text>
                     <View style={styles.passwordWrapper}>
                         <TextInput
                             style={[styles.input, styles.passwordInput]}
                             value={password}
                             onChangeText={setPassword}
-                            placeholder="Enter password"
+                            placeholder={t('enter_password_placeholder') || t('password')}
                             secureTextEntry={!showPassword}
                         />
                         <TouchableOpacity
@@ -105,13 +107,13 @@ export default function LoginScreen() {
                 </View>
 
                 <TouchableOpacity style={styles.loginButton} onPress={() => handleLogin()}>
-                    <Text style={styles.loginButtonText}>Login</Text>
+                    <Text style={styles.loginButtonText}>{t('login_btn')}</Text>
                 </TouchableOpacity>
 
                 {isBiometricSupported && (
                     <TouchableOpacity style={styles.biometricButton} onPress={() => biometricLogin()}>
                         <Icon name="finger-print" size={32} color={COLORS.primary} />
-                        <Text style={styles.biometricText}>Use Biometrics</Text>
+                        <Text style={styles.biometricText}>{t('use_biometrics')}</Text>
                     </TouchableOpacity>
                 )}
             </View>

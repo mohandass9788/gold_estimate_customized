@@ -509,7 +509,7 @@ export default function ProductManagementScreen() {
                             {products.length === 0 && (
                                 <View style={styles.emptyProducts}>
                                     <Icon name="cube-outline" size={48} color={COLORS.border} />
-                                    <Text style={styles.emptyProductsText}>No categories added yet.</Text>
+                                    <Text style={styles.emptyProductsText}>{t('no_categories_added')}</Text>
                                 </View>
                             )}
                         </ScrollView>
@@ -617,7 +617,7 @@ export default function ProductManagementScreen() {
                                         label={t('hsn_code')}
                                         value={hsnCode}
                                         onChangeText={setHsnCode}
-                                        placeholder="Optional"
+                                        placeholder={t('optional')}
                                     />
                                 </View>
 

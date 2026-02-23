@@ -252,11 +252,11 @@ export default function OrdersScreen() {
 
                                 {/* Customer Info */}
                                 <View style={styles.infoRow}>
-                                    <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>Customer:</Text>
+                                    <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>{t('customer_label')}</Text>
                                     <Text style={[styles.infoValue, { color: activeColors.text }]}>{selectedOrder.customerName || 'Walk-in'}</Text>
                                 </View>
                                 <View style={styles.infoRow}>
-                                    <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>Operator:</Text>
+                                    <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>{t('operator_label')}</Text>
                                     <Text style={[styles.infoValue, { color: activeColors.text }]}>{selectedOrder.employeeName}</Text>
                                 </View>
 
@@ -264,15 +264,15 @@ export default function OrdersScreen() {
 
                                 {/* Items Table */}
                                 <View style={styles.tableHeader}>
-                                    <Text style={[styles.tableHead, { flex: 2, color: activeColors.textLight }]}>Item</Text>
-                                    <Text style={[styles.tableHead, { flex: 1, textAlign: 'right', color: activeColors.textLight }]}>Weight</Text>
-                                    <Text style={[styles.tableHead, { flex: 1, textAlign: 'right', color: activeColors.textLight }]}>Total</Text>
+                                    <Text style={[styles.tableHead, { flex: 2, color: activeColors.textLight }]}>{t('item_header')}</Text>
+                                    <Text style={[styles.tableHead, { flex: 1, textAlign: 'right', color: activeColors.textLight }]}>{t('weight_header')}</Text>
+                                    <Text style={[styles.tableHead, { flex: 1, textAlign: 'right', color: activeColors.textLight }]}>{t('total_header')}</Text>
                                 </View>
 
                                 {products.map((product, idx) => (
                                     <View key={`prod-${idx}`} style={styles.tableRow}>
                                         <Text style={[styles.itemText, { flex: 2, color: activeColors.text }]}>{product.name}</Text>
-                                        <Text style={[styles.itemText, { flex: 1, textAlign: 'right', color: activeColors.text }]}>{product.totalWeight.toFixed(3)}g</Text>
+                                        <Text style={[styles.itemText, { flex: 1, textAlign: 'right', color: activeColors.text }]}>{product.grossWeight.toFixed(3)}g</Text>
                                         <Text style={[styles.itemText, { flex: 1, textAlign: 'right', color: activeColors.text }]}>₹{Math.round(product.totalValue).toLocaleString()}</Text>
                                     </View>
                                 ))}
@@ -280,7 +280,7 @@ export default function OrdersScreen() {
                                 {deductions.length > 0 && (
                                     <>
                                         <View style={[styles.divider, { backgroundColor: activeColors.border, marginVertical: SPACING.md, borderStyle: 'dashed', borderWidth: 0.5 }]} />
-                                        <Text style={[styles.deductionTitle, { color: activeColors.error }]}>Deductions</Text>
+                                        <Text style={[styles.deductionTitle, { color: activeColors.error }]}>{t('deductions_title')}</Text>
                                         {deductions.map((item, idx) => {
                                             const data = JSON.parse(item.itemData);
                                             let label = '';
@@ -302,11 +302,11 @@ export default function OrdersScreen() {
 
                                 {/* Totals */}
                                 <View style={styles.totalRow}>
-                                    <Text style={[styles.totalLabel, { color: activeColors.text }]}>Gross Total</Text>
+                                    <Text style={[styles.totalLabel, { color: activeColors.text }]}>{t('gross_total_label')}</Text>
                                     <Text style={[styles.totalValue, { color: activeColors.text }]}>₹{Math.round(selectedOrder.grossTotal).toLocaleString()}</Text>
                                 </View>
                                 <View style={[styles.totalRow, styles.grandTotalRow]}>
-                                    <Text style={[styles.grandTotalLabel, { color: activeColors.primary }]}>NET PAYABLE</Text>
+                                    <Text style={[styles.grandTotalLabel, { color: activeColors.primary }]}>{t('net_payable_label')}</Text>
                                     <Text style={[styles.grandTotalValue, { color: activeColors.primary }]}>₹{Math.round(selectedOrder.netPayable).toLocaleString()}</Text>
                                 </View>
                             </View>
@@ -326,7 +326,7 @@ export default function OrdersScreen() {
                                         onPress={() => { setShowOrderDetails(false); handleReload(selectedOrder.orderId); }}
                                     >
                                         <Icon name="create-outline" size={20} color={COLORS.success} />
-                                        <Text style={[styles.reloadText, { color: COLORS.success }]}>Reload</Text>
+                                        <Text style={[styles.reloadText, { color: COLORS.success }]}>{t('reload_btn')}</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -339,7 +339,7 @@ export default function OrdersScreen() {
 
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
-            <HeaderBar title="Orders History" />
+            <HeaderBar title={t('orders_history')} />
 
             <View style={styles.filterScrollWrapper}>
                 <RNFlatList
@@ -377,7 +377,7 @@ export default function OrdersScreen() {
             ) : orders.length === 0 ? (
                 <View style={styles.center}>
                     <Icon name="receipt-outline" size={48} color={activeColors.border} />
-                    <Text style={{ color: activeColors.textLight, marginTop: 8 }}>No history found</Text>
+                    <Text style={{ color: activeColors.textLight, marginTop: 8 }}>{t('no_history_found')}</Text>
                 </View>
             ) : (
                 <FlatList

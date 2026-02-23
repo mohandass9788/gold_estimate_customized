@@ -123,9 +123,9 @@ export default function RateUpdateModal({ visible, currentRate, onClose, onUpdat
 
                                 {(rate24k !== '' || rate18k !== '') && (
                                     <View style={styles.rateCard}>
-                                        <Text style={styles.rateCardTitle}>Calculated Rates (Ref)</Text>
+                                        <Text style={styles.rateCardTitle}>{t('calc_rates_ref')}</Text>
                                         <View style={styles.rateRow}>
-                                            <Text style={styles.rateLabel}>24K (Pure):</Text>
+                                            <Text style={styles.rateLabel}>{t('gold_24k_pure')}</Text>
                                             <Text style={styles.rateValue}>₹ {rate24k}</Text>
                                         </View>
                                         <View style={styles.rateRow}>

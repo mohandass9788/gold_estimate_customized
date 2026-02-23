@@ -106,11 +106,11 @@ export default function ShopInfoScreen() {
                                     <Image source={{ uri: logoUri }} style={styles.logoPreview} />
                                 ) : (
                                     <View style={styles.logoPlaceholder}>
-                                        <Text style={{ color: activeColors.textLight }}>Select Logo</Text>
+                                        <Text style={{ color: activeColors.textLight }}>{t('select_logo')}</Text>
                                     </View>
                                 )}
                             </TouchableOpacity>
-                            <Text style={styles.helperText}>Used for Login & Dashboard Header</Text>
+                            <Text style={styles.helperText}>{t('logo_helper_text')}</Text>
                         </View>
 
                         <View style={{ flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.md }}>
@@ -121,7 +121,7 @@ export default function ShopInfoScreen() {
                                         <Image source={{ uri: iconUri }} style={styles.logoPreview} />
                                     ) : (
                                         <View style={styles.logoPlaceholder}>
-                                            <Text style={{ color: activeColors.textLight }}>512x512</Text>
+                                            <Text style={{ color: activeColors.textLight }}>{t('logo_size_hint')}</Text>
                                         </View>
                                     )}
                                 </TouchableOpacity>
@@ -134,7 +134,7 @@ export default function ShopInfoScreen() {
                                         <Image source={{ uri: splashUri }} style={styles.logoPreview} />
                                     ) : (
                                         <View style={styles.logoPlaceholder}>
-                                            <Text style={{ color: activeColors.textLight }}>1024x1024</Text>
+                                            <Text style={{ color: activeColors.textLight }}>{t('splash_size_hint')}</Text>
                                         </View>
                                     )}
                                 </TouchableOpacity>
@@ -146,14 +146,14 @@ export default function ShopInfoScreen() {
                         <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('contact_tax') || 'Contact & Tax'}</Text>
                         <InputField
                             label={t('phone_number')}
-                            placeholder="Enter Phone Number"
+                            placeholder={t('enter_phone')}
                             value={shopPhone}
                             onChangeText={setShopPhone}
                             keyboardType="phone-pad"
                         />
                         <InputField
-                            label="GST Number"
-                            placeholder="Enter GST Number"
+                            label={t('gst_number')}
+                            placeholder={t('enter_gst')}
                             value={shopGst}
                             onChangeText={setShopGst}
                         />
@@ -162,8 +162,8 @@ export default function ShopInfoScreen() {
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                         <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('receipt_settings') || 'Receipt Settings'}</Text>
                         <InputField
-                            label="Footer Message"
-                            placeholder="Thank You message"
+                            label={t('footer_message')}
+                            placeholder={t('thank_you_msg')}
                             value={footerMsg}
                             onChangeText={setFooterMsg}
                         />

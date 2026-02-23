@@ -40,7 +40,7 @@ export default function ProfileScreen() {
         }
     };
 
-    const { adminPin, updateAdminPin } = useGeneralSettings();
+    const { t, theme, adminPin, updateAdminPin } = useGeneralSettings();
     const [newAdminPin, setNewAdminPin] = useState('');
     const [isPinLoading, setIsPinLoading] = useState(false);
 
@@ -106,34 +106,34 @@ export default function ProfileScreen() {
 
     return (
         <ScreenContainer>
-            <HeaderBar title="Profile Settings" showBack />
+            <HeaderBar title={t('profile_settings')} showBack />
             <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
 
                 <View style={styles.card}>
-                    <Text style={styles.sectionTitle}>Account Information</Text>
+                    <Text style={styles.sectionTitle}>{t('account_info')}</Text>
 
                     <InputField
-                        label="Username"
+                        label={t('username_label')}
                         value={newUsername}
                         onChangeText={setNewUsername}
-                        placeholder="Enter Username"
+                        placeholder={t('enter_name')}
                     />
 
-                    <Text style={styles.helperText}>Leave password fields empty to keep current password.</Text>
+                    <Text style={styles.helperText}>{t('password_helper_text')}</Text>
 
                     <InputField
-                        label="New Password"
+                        label={t('new_password') || 'New Password'}
                         value={newPassword}
                         onChangeText={setNewPassword}
-                        placeholder="Enter New Password"
+                        placeholder={t('enter_new_password')}
                         secureTextEntry
                     />
 
                     <InputField
-                        label="Confirm Password"
+                        label={t('confirm_password') || 'Confirm Password'}
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}
-                        placeholder="Confirm New Password"
+                        placeholder={t('confirm_new_password')}
                         secureTextEntry
                     />
 
@@ -145,15 +145,15 @@ export default function ProfileScreen() {
                 </View>
 
                 <View style={[styles.card, { marginTop: SPACING.lg }]}>
-                    <Text style={styles.sectionTitle}>Security Settings</Text>
+                    <Text style={styles.sectionTitle}>{t('security_settings')}</Text>
 
-                    <Text style={styles.helperText}>Change the Admin PIN (Default: 1234)</Text>
+                    <Text style={styles.helperText}>{t('admin_pin_helper')}</Text>
 
                     <InputField
-                        label="New Admin PIN"
+                        label={t('new_admin_pin')}
                         value={newAdminPin}
                         onChangeText={setNewAdminPin}
-                        placeholder="Enter New PIN"
+                        placeholder={t('enter_new_pin')}
                         keyboardType="numeric"
                         maxLength={6}
                         secureTextEntry

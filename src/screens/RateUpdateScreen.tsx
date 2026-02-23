@@ -100,21 +100,21 @@ export default function RateUpdateScreen() {
                         <View style={styles.displayItem}>
                             <View style={styles.displayInfo}>
                                 <Icon name="flash" size={16} color={COLORS.gold} />
-                                <Text style={styles.displayLabel}>24K Gold</Text>
+                                <Text style={styles.displayLabel}>{t('gold_24k')}</Text>
                             </View>
                             <Text style={[styles.displayValue, { color: COLORS.gold }]}>₹ {rates.rate24k}</Text>
                         </View>
                         <View style={styles.displayItem}>
                             <View style={styles.displayInfo}>
                                 <Icon name="flash-outline" size={16} color={activeColors.text} />
-                                <Text style={styles.displayLabel}>22K Gold</Text>
+                                <Text style={styles.displayLabel}>{t('gold_22k')}</Text>
                             </View>
                             <Text style={[styles.displayValue, { color: activeColors.text }]}>₹ {rates.rate22k}</Text>
                         </View>
                         <View style={styles.displayItem}>
                             <View style={styles.displayInfo}>
                                 <Icon name="leaf" size={16} color="#94a3b8" />
-                                <Text style={styles.displayLabel}>Silver (1g)</Text>
+                                <Text style={styles.displayLabel}>{t('silver_1g')}</Text>
                             </View>
                             <Text style={[styles.displayValue, { color: '#94a3b8' }]}>₹ {rates.silver}</Text>
                         </View>
@@ -169,23 +169,23 @@ export default function RateUpdateScreen() {
                                         <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('gold_rates')}</Text>
                                     </View>
 
-                                    <RateInput label="Gold 22K (91.6%)" value={rates.rate22k} keyName="rate22k" icon="flash-outline" iconColor={COLORS.gold} />
+                                    <RateInput label={t('gold_22k_label')} value={rates.rate22k} keyName="rate22k" icon="flash-outline" iconColor={COLORS.gold} />
 
                                     <View style={[styles.calculatedBox, { backgroundColor: activeColors.background }]}>
                                         <Text style={[styles.subTitle, { color: activeColors.textLight }]}>{t('calculated_suggested')}</Text>
 
                                         <View style={styles.rateRow}>
-                                            <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>24K (99.9%)</Text>
+                                            <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>{t('purity_24k')}</Text>
                                             <View style={styles.rateHighlight}>
                                                 <Text style={[styles.rateValue, { color: activeColors.primary }]}>₹ {rates.rate24k}</Text>
                                             </View>
                                         </View>
                                         <View style={styles.rateRow}>
-                                            <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>20K (83.3%)</Text>
+                                            <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>{t('purity_20k')}</Text>
                                             <Text style={[styles.rateValue, { color: activeColors.text }]}>₹ {rates.rate20k}</Text>
                                         </View>
                                         <View style={styles.rateRow}>
-                                            <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>18K (75.0%)</Text>
+                                            <Text style={[styles.rateLabel, { color: activeColors.textLight }]}>{t('purity_18k')}</Text>
                                             <Text style={[styles.rateValue, { color: activeColors.text }]}>₹ {rates.rate18k}</Text>
                                         </View>
                                     </View>
@@ -196,7 +196,7 @@ export default function RateUpdateScreen() {
                                         <Icon name="leaf" size={18} color="#94a3b8" />
                                         <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('silver_rates')}</Text>
                                     </View>
-                                    <RateInput label="Common Silver (1g)" value={rates.silver} keyName="silver" icon="leaf-outline" iconColor="#94a3b8" />
+                                    <RateInput label={t('common_silver_1g')} value={rates.silver} keyName="silver" icon="leaf-outline" iconColor="#94a3b8" />
                                 </View>
                             </ScrollView>
 

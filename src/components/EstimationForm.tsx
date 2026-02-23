@@ -237,7 +237,7 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
         );
 
         const item: EstimationItem = {
-            id: Date.now().toString(),
+            id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             name: productName,
             subProductName,
             pcs: parseInt(pcs),
