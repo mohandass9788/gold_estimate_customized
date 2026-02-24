@@ -1,4 +1,4 @@
-import { View as RNView, Text as RNText, StyleSheet, TouchableOpacity as RNRTouchableOpacity, ScrollView as RNScrollView, TextInput as RNTextInput, Modal as RNModal, Linking } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, TouchableOpacity as RNRTouchableOpacity, ScrollView as RNScrollView, TextInput as RNTextInput, Modal as RNModal, Linking, Image as RNImage } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,7 @@ const TouchableOpacity = RNRTouchableOpacity as any;
 const Icon = Ionicons as any;
 const TextInput = RNTextInput as any;
 const Modal = RNModal as any;
+const Image = RNImage as any;
 
 export default function SettingsScreen() {
     const router = useRouter();
@@ -62,8 +63,12 @@ export default function SettingsScreen() {
             <HeaderBar title={t('settings')} />
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 <View style={styles.profileSummary}>
-                    <View style={[styles.profileAvatar, { backgroundColor: activeColors.primary + '20' }]}>
-                        <Icon name="person" size={40} color={activeColors.primary} />
+                    <View style={[styles.profileAvatar, { backgroundColor: activeColors.primary + '20', overflow: 'hidden' }]}>
+                        {shopDetails.appLogo || shopDetails.appIcon ? (
+                            <Image source={{ uri: shopDetails.appLogo || shopDetails.appIcon }} style={{ width: '100%', height: '100%' }} />
+                        ) : (
+                            <Icon name="person" size={40} color={activeColors.primary} />
+                        )}
                     </View>
                     <View>
                         <Text style={[styles.shopNameDisplay, { color: activeColors.text }]}>{shopDetails.name || 'Admin'}</Text>

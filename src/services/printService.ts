@@ -6,6 +6,8 @@ import { getSetting } from './dbService';
 import { ReceiptConfig } from '../store/GeneralSettingsContext';
 import { NativeModules, Alert } from 'react-native';
 
+type TFunction = (key: string, params?: Record<string, string>) => string;
+
 const { RNBLEPrinter, RNUSBPrinter, RNNetPrinter } = NativeModules;
 
 const patchModule = (module: any) => {
@@ -234,14 +236,46 @@ const getPrinterConfig = async () => {
     return { type, printer };
 };
 
+export interface PrinterData {
+    id: string;
+    name: string;
+    address: string;
+    type: 'bluetooth' | 'usb' | 'net';
+}
+
+/**
+ * Attempts to auto-connect to the saved printer.
+ */
+export const initAutoConnect = async (): Promise<PrinterData | null> => {
+    try {
+        const savedPrinter = await getSetting('connected_printer');
+        const printerType = await getSetting('printer_type');
+
+        if (printerType === 'thermal' && savedPrinter) {
+            const printer = JSON.parse(savedPrinter);
+            if (printer && printer.address) {
+                console.log('Attempting auto-connect to:', printer.address);
+                const connected = await ensureThermalConnection(printer.address);
+                if (connected) {
+                    return printer;
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Auto-connect failed:', e);
+    }
+    return null;
+};
+
 const ensureThermalConnection = async (macAddress: string) => {
     try {
         const { BLEPrinter } = require('react-native-thermal-receipt-printer');
         await BLEPrinter.init();
         await BLEPrinter.connectPrinter(macAddress);
+        console.log('Successfully connected to thermal printer');
         return true;
-    } catch (e) {
-        console.error('Failed to connect to thermal printer:', e);
+    } catch (e: any) {
+        console.error('Printer connection failed:', e);
         return false;
     }
 };
@@ -402,7 +436,8 @@ export const printEstimationItem = async (item: EstimationItem, shopDetails?: an
     await Print.printAsync({ html });
 };
 
-export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, employeeName?: string, config?: ReceiptConfig): Promise<void> => {
+export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, employeeName?: string, config?: ReceiptConfig, t?: TFunction): Promise<void> => {
+    const _t = t || ((key: string) => key);
     const { type, printer } = await getPrinterConfig();
 
     if (type === 'thermal' && printer?.address) {
@@ -414,17 +449,17 @@ export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, e
 
             if (!config || config.showHeader) {
                 payload += `${thermalCommands.boldOn}${shopName}${thermalCommands.boldOff}\x0a`;
-                if (config?.showDeviceName !== false && deviceName) payload += `Device: ${deviceName}\x0a`;
+                if (config?.showDeviceName !== false && deviceName) payload += `${_t('device_label')}: ${deviceName}\x0a`;
             }
 
-            payload += `${thermalCommands.divider}${thermalCommands.boldOn}PURCHASE RECEIPT${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.divider}${thermalCommands.boldOn}${_t('purchase_receipt')}${thermalCommands.boldOff}\x0a`;
             payload += `${thermalCommands.left}${item.category.toUpperCase()}\x0a`;
             payload += `${thermalCommands.divider}`;
-            payload += `Gross Wt: ${item.grossWeight.toFixed(3)}g\x0a`;
-            payload += `Net Wt:   ${item.netWeight.toFixed(3)}g\x0a`;
-            payload += `Rate/g:   Rs. ${item.rate}\x0a`;
+            payload += `${_t('gross_wt_label')}: ${item.grossWeight.toFixed(3)}g\x0a`;
+            payload += `${_t('net_wt_label')}:   ${item.netWeight.toFixed(3)}g\x0a`;
+            payload += `${_t('rate_per_g')}:   Rs. ${item.rate}\x0a`;
             payload += `${thermalCommands.divider}`;
-            payload += `${thermalCommands.boldOn}${thermalCommands.doubleOn}VALUE: Rs. ${item.amount.toLocaleString()}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.boldOn}${thermalCommands.doubleOn}${_t('value_label')}: Rs. ${item.amount.toLocaleString()}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
             payload += `\x0a\x0a\x0a\x0a`;
 
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
@@ -441,29 +476,29 @@ export const printPurchaseItem = async (item: PurchaseItem, shopDetails?: any, e
             <head>${getCommonStyles(config?.paperWidth)}</head>
             <body>
                 ${header}
-                <div class="receipt-title">PURCHASE / OLD GOLD</div>
-                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
+                <div class="receipt-title">${_t('purchase_old_gold')}</div>
+                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>${_t('operator')}:</span><span>${employeeName}</span></div>` : ''}
                 <div class="item-name">${item.category.toUpperCase()}</div>
                 ${item.subCategory ? `<div class="shop-info">${item.subCategory}</div>` : ''}
                 
                 <div class="divider"></div>
                 
-                <div class="row"><span>Purity:</span><span>${item.purity}</span></div>
-                <div class="row"><span>Gross Weight:</span><span>${item.grossWeight.toFixed(3)} g</span></div>
+                <div class="row"><span>${_t('purity')}:</span><span>${item.purity}</span></div>
+                <div class="row"><span>${_t('gross_weight')}:</span><span>${item.grossWeight.toFixed(3)} g</span></div>
                 <div class="row">
-                    <span>Less (${lessLabel}):</span>
+                    <span>${_t('less_label')} (${lessLabel}):</span>
                     <span>-${item.lessWeightType === 'amount' ? '' : ' '}${item.lessWeightType === 'amount' ? item.lessWeight : (item.grossWeight - item.netWeight).toFixed(3)}</span>
                 </div>
-                <div class="row" style="font-weight: bold;"><span>Net Weight:</span><span>${item.netWeight.toFixed(3)} g</span></div>
-                <div class="row"><span>Rate/g:</span><span>Rs. ${item.rate.toLocaleString()}</span></div>
+                <div class="row" style="font-weight: bold;"><span>${_t('net_weight')}:</span><span>${item.netWeight.toFixed(3)} g</span></div>
+                <div class="row"><span>${_t('rate_per_g')}:</span><span>Rs. ${item.rate.toLocaleString()}</span></div>
                 
                 <div class="total-section">
                     <div class="total-row">
-                        <span>PURCHASE VALUE:</span>
+                        <span>${_t('purchase_value_label')}:</span>
                         <span>Rs. ${item.amount.toLocaleString()}</span>
                     </div>
                 </div>
-                ${(!config || config.showFooter) ? `<div class="footer">${shopDetails?.footerMessage || 'Thank You! Visit Again.'}</div>` : ''}
+                ${(!config || config.showFooter) ? `<div class="footer">${shopDetails?.footerMessage || _t('thank_you_visit_again')}</div>` : ''}
             </body>
         </html>
     `;
@@ -480,8 +515,10 @@ export const getEstimationReceiptThermalPayload = async (
     customerName?: string,
     employeeName?: string,
     config?: ReceiptConfig,
-    estimationNumber?: number
+    estimationNumber?: number,
+    t?: TFunction
 ): Promise<string> => {
+    const _t = t || ((key: string) => key);
     const paperWidth = config?.paperWidth || '58mm';
     const charWidth = getCharWidth(paperWidth);
     const col = getColumnConfig(paperWidth);
@@ -511,36 +548,36 @@ export const getEstimationReceiptThermalPayload = async (
 
     // Header logic for Standalone vs Full Estimation
     if (hasItems) {
-        payload += `${thermalCommands.center}${thermalCommands.boldOn}ESTIMATION SLIP${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}${_t('estimation_slip')}${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
     } else if (hasPurchase && !hasChit && !hasAdvance) {
-        payload += `${thermalCommands.center}${thermalCommands.boldOn}PURCHASE VOUCHER${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}${_t('purchase_voucher')}${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
     } else if (hasChit && !hasPurchase && !hasAdvance) {
-        payload += `${thermalCommands.center}${thermalCommands.boldOn}CHIT RECEIPT${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}${_t('chit_receipt_title')}${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
     } else if (hasAdvance && !hasPurchase && !hasChit) {
-        payload += `${thermalCommands.center}${thermalCommands.boldOn}ADVANCE RECEIPT${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}${_t('advance_receipt_title')}${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
     } else {
-        payload += `${thermalCommands.center}${thermalCommands.boldOn}RECEIPT${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}${_t('receipt_title')}${thermalCommands.boldOff}${thermalCommands.left}\x0a`;
     }
 
     if (estimationNumber) {
-        payload += `Est #: ${estimationNumber}\x0a`;
+        payload += `${_t('est_hash')}: ${estimationNumber}\x0a`;
     }
 
     // Rates section (hide if only deductions are present)
     if (hasItems) {
-        payload += `Rate:22K:${parseFloat(rate22k).toLocaleString()}  Dt:${dateStr}\x0a`;
-        payload += `Rate:18K:${parseFloat(rate18k).toLocaleString()}  Silver:${parseFloat(silverRate).toLocaleString()}\x0a`;
+        payload += `${_t('rate')}:22K:${parseFloat(rate22k).toLocaleString()}  ${_t('date')}:${dateStr}\x0a`;
+        payload += `${_t('rate')}:18K:${parseFloat(rate18k).toLocaleString()}  ${_t('silver_label')}:${parseFloat(silverRate).toLocaleString()}\x0a`;
         payload += LINE;
     } else {
-        payload += `Date: ${dateStr}\x0a`;
+        payload += `${_t('date')}: ${dateStr}\x0a`;
         payload += LINE;
     }
 
     if (config?.showCustomer !== false && customerName) {
-        payload += `Customer: ${customerName.toUpperCase()}\x0a`;
+        payload += `${_t('customer')}: ${customerName.toUpperCase()}\x0a`;
     }
     if (config?.showOperator !== false && employeeName) {
-        payload += `Operator: ${employeeName}\x0a`;
+        payload += `${_t('operator')}: ${employeeName}\x0a`;
     }
     if ((config?.showCustomer !== false && customerName) || (config?.showOperator !== false && employeeName)) {
         payload += LINE;
@@ -556,7 +593,7 @@ export const getEstimationReceiptThermalPayload = async (
 
         if (isTableLayout) {
             // Table Header: ITEM | PCS | WEIGHT | VA | MC | TOTAL
-            payload += `${thermalCommands.boldOn}${padR('ITEM', col.name)}${padL('PCS', col.pcs)}${padL('WEIGHT', col.wt)}${padL('VA', col.wst)}${padL('MC', col.mc)}${padL('TOTAL', col.amt)}${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.boldOn}${padR(_t('item'), col.name)}${padL(_t('pcs'), col.pcs)}${padL(_t('weight_g'), col.wt)}${padL(_t('va_label'), col.wst)}${padL(_t('mc_label'), col.mc)}${padL(_t('total'), col.amt)}${thermalCommands.boldOff}\x0a`;
             payload += DASH;
 
             items.forEach(item => {
@@ -575,7 +612,7 @@ export const getEstimationReceiptThermalPayload = async (
             });
         } else {
             // Multi-line layout for 58mm
-            payload += `${thermalCommands.boldOn}${padR('ITEMS & DETAILS', charWidth - 12)}${padL('AMOUNT', 12)}${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.boldOn}${padR(_t('items_and_details'), charWidth - 12)}${padL(_t('amount_header'), 12)}${thermalCommands.boldOff}\x0a`;
             payload += DASH;
 
             items.forEach(item => {
@@ -584,27 +621,27 @@ export const getEstimationReceiptThermalPayload = async (
                 totalGrossWeight += item.grossWeight;
                 totalNetWeight += item.netWeight;
 
-                payload += `${item.name.toUpperCase()} | ${item.pcs} Pcs\x0a`;
+                payload += `${item.name.toUpperCase()} | ${item.pcs} ${_t('pcs')}\x0a`;
                 if (item.tagNumber) payload += `  Tag: ${item.tagNumber}\x0a`;
 
                 // Detail 1: Weights and Basic Info
-                payload += `  Gross: ${item.grossWeight.toFixed(3)}g\x0a`;
+                payload += `  ${_t('gross_wt_label')}: ${item.grossWeight.toFixed(3)}g\x0a`;
                 if (item.stoneWeight > 0) {
-                    payload += `  Stone: ${item.stoneWeight.toFixed(3)}g\x0a`;
+                    payload += `  ${_t('stone_weight')}: ${item.stoneWeight.toFixed(3)}g\x0a`;
                 }
-                payload += `  Net  : ${item.netWeight.toFixed(3)}g | @Rs.${item.rate}\x0a`;
+                payload += `  ${_t('net_wt_label')}  : ${item.netWeight.toFixed(3)}g | @Rs.${item.rate}\x0a`;
 
                 // Detail 2: Wastage formula
                 if (!config || config.showWastage) {
                     const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
                     const wLabel = item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`;
-                    payload += `  VA: ${wLabel} (${vWeight.toFixed(3)}g) -> Rs.${Math.round(item.wastageValue).toLocaleString()}\x0a`;
+                    payload += `  ${_t('va_label')}: ${wLabel} (${vWeight.toFixed(3)}g) -> Rs.${Math.round(item.wastageValue).toLocaleString()}\x0a`;
                 }
 
                 // Detail 3: Making charge formula
                 if (!config || config.showMakingCharge) {
                     const mcLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge} Fixed`);
-                    payload += `  MC: ${mcLabel} -> Rs.${Math.round(item.makingChargeValue).toLocaleString()}\x0a`;
+                    payload += `  ${_t('mc_label')}: ${mcLabel} -> Rs.${Math.round(item.makingChargeValue).toLocaleString()}\x0a`;
                 }
 
                 // Total for this item
@@ -613,9 +650,9 @@ export const getEstimationReceiptThermalPayload = async (
         }
 
         payload += DASH;
-        payload += `${thermalCommands.boldOn}${padR('TOTAL', col.name)}${padR('', col.pcs)}${padR(totalGrossWeight.toFixed(3), col.wt)}${padR('', col.wst)}${padR('', col.mc)}${padL(Math.round(totalTaxableValue).toString(), col.amt)}${thermalCommands.boldOff}\x0a`;
+        payload += `${thermalCommands.boldOn}${padR(_t('total'), col.name)}${padR('', col.pcs)}${padR(totalGrossWeight.toFixed(3), col.wt)}${padR('', col.wst)}${padR('', col.mc)}${padL(Math.round(totalTaxableValue).toString(), col.amt)}${thermalCommands.boldOff}\x0a`;
         payload += DASH;
-        payload += `${padR('NETWT', col.name)}${padR('', col.pcs)}${padR(totalNetWeight.toFixed(3), col.wt)}\x0a`;
+        payload += `${padR(_t('net_wt_label'), col.name)}${padR('', col.pcs)}${padR(totalNetWeight.toFixed(3), col.wt)}\x0a`;
         payload += DASH;
 
         const totalGST = totalTaxableValue * 0.03;
@@ -623,15 +660,15 @@ export const getEstimationReceiptThermalPayload = async (
         const estimationAmt = totalTaxableValue + totalGST;
 
         if (!config || config.showGST) {
-            payload += `${padL('CGST 1.5% Rs.' + Math.round(splitGST).toLocaleString(), charWidth)}\x0a`;
-            payload += `${padL('SGST 1.5% Rs.' + Math.round(splitGST).toLocaleString(), charWidth)}\x0a`;
+            payload += `${padL(_t('cgst_label') + ' Rs.' + Math.round(splitGST).toLocaleString(), charWidth)}\x0a`;
+            payload += `${padL(_t('sgst_label') + ' Rs.' + Math.round(splitGST).toLocaleString(), charWidth)}\x0a`;
         }
-        payload += `${thermalCommands.boldOn}${padL('Est.Amt: Rs.' + Math.round(estimationAmt).toLocaleString(), charWidth)}${thermalCommands.boldOff}\x0a`;
+        payload += `${thermalCommands.boldOn}${padL(_t('est_hash') + ': Rs.' + Math.round(estimationAmt).toLocaleString(), charWidth)}${thermalCommands.boldOff}\x0a`;
     }
 
     if (hasPurchase) {
         payload += LINE;
-        payload += `${thermalCommands.center}${thermalCommands.boldOn}* Purchase Quotation *${thermalCommands.boldOff}\x0a`;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}${_t('pur_quotation_title')}${thermalCommands.boldOff}\x0a`;
 
         const isTableLayout = paperWidth === '80mm' || paperWidth === '112mm';
 
@@ -642,7 +679,7 @@ export const getEstimationReceiptThermalPayload = async (
                 { name: 12, wt: 8, less: 12, rate: 8, amt: 8 } :
                 { name: 20, wt: 10, less: 16, rate: 10, amt: 8 };
 
-            payload += `${thermalCommands.boldOn}${padR('ITEMS', pCol.name)}${padL('WT', pCol.wt)}${padL('LESS', pCol.less)}${padL('RATE', pCol.rate)}${padL('AMOUNT', pCol.amt)}${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.boldOn}${padR(_t('item'), pCol.name)}${padL(_t('weight_g'), pCol.wt)}${padL(_t('less_label'), pCol.less)}${padL(_t('rate'), pCol.rate)}${padL(_t('amount_header'), pCol.amt)}${thermalCommands.boldOff}\x0a`;
             payload += DASH;
 
             let totalPurWeight = 0;
@@ -656,9 +693,9 @@ export const getEstimationReceiptThermalPayload = async (
                 payload += `${padR(item.category.toUpperCase(), pCol.name)}${padL(item.netWeight.toFixed(3), pCol.wt)}${padL(lessStr, pCol.less)}${padL(item.rate.toString(), pCol.rate)}${padL(Math.round(item.amount).toString(), pCol.amt)}\x0a`;
             });
             payload += DASH;
-            payload += `${thermalCommands.boldOn}${padR('PurTot', pCol.name)}${padL(totalPurWeight.toFixed(3), pCol.wt)}${padR('', pCol.less)}${padR('', pCol.rate)}${padL(Math.round(totalPurchaseAmount).toString(), pCol.amt)}${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.boldOn}${padR(_t('purchase_total'), pCol.name)}${padL(totalPurWeight.toFixed(3), pCol.wt)}${padR('', pCol.less)}${padR('', pCol.rate)}${padL(Math.round(totalPurchaseAmount).toString(), pCol.amt)}${thermalCommands.boldOff}\x0a`;
         } else {
-            payload += `${thermalCommands.left}${padR('ITEMS', charWidth - 12)}${padL('AMOUNT', 12)}\x0a`;
+            payload += `${thermalCommands.left}${padR(_t('item'), charWidth - 12)}${padL(_t('amount_header'), 12)}\x0a`;
             payload += DASH;
             let totalPurWeight = 0;
             purchaseItems.forEach(item => {
@@ -667,34 +704,34 @@ export const getEstimationReceiptThermalPayload = async (
                 payload += `${item.category.toUpperCase()}\x0a`;
                 const lessWeightValue = item.lessWeightType === 'percentage' ? (item.grossWeight * item.lessWeight / 100) : (item.lessWeightType === 'amount' ? 0 : item.lessWeight);
                 const lessStr = item.lessWeightType === 'percentage' ? `${item.lessWeight}% (${lessWeightValue.toFixed(3)}g)` : (item.lessWeightType === 'amount' ? `Rs. ${item.lessWeight}` : `${item.lessWeight}g`);
-                payload += ` Gross: ${item.grossWeight.toFixed(3)}g  \n Less:${lessStr} \n`;
-                payload += ` Net: ${item.netWeight.toFixed(3)}g | @Rs.${item.rate}\x0a`;
+                payload += ` ${_t('gross_wt_label')}: ${item.grossWeight.toFixed(3)}g  \n ${_t('less_label')}:${lessStr} \n`;
+                payload += ` ${_t('net_wt_label')}: ${item.netWeight.toFixed(3)}g | @Rs.${item.rate}\x0a`;
                 payload += `${padL('Rs. ' + Math.round(item.amount).toLocaleString(), charWidth)}\x0a`;
             });
             payload += DASH;
-            payload += `${thermalCommands.boldOn}${padR('PurTot', charWidth - 18)}${padR(totalPurWeight.toFixed(3), 8)}${padL(Math.round(totalPurchaseAmount).toString(), 10)}${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.boldOn}${padR(_t('purchase_total'), charWidth - 18)}${padR(totalPurWeight.toFixed(3), 8)}${padL(Math.round(totalPurchaseAmount).toString(), 10)}${thermalCommands.boldOff}\x0a`;
         }
     }
 
     let totalChit = 0;
     if (hasChit) {
         payload += LINE;
-        payload += `${thermalCommands.center}${thermalCommands.boldOn}* Chit / Scheme *${thermalCommands.boldOff}\x0a`;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}${_t('chit_scheme_title')}${thermalCommands.boldOff}\x0a`;
         payload += `${thermalCommands.left}`;
         chitItems.forEach(item => {
             totalChit += item.amount;
-            payload += `${padR('Chit (' + item.chitId + ')', charWidth - 15)}${padL('Rs. ' + Math.round(item.amount).toLocaleString(), 15)}\x0a`;
+            payload += `${padR(_t('chit') + ' (' + item.chitId + ')', charWidth - 15)}${padL('Rs. ' + Math.round(item.amount).toLocaleString(), 15)}\x0a`;
         });
     }
 
     let totalAdvance = 0;
     if (hasAdvance) {
         payload += LINE;
-        payload += `${thermalCommands.center}${thermalCommands.boldOn}* Advance Adjustment *${thermalCommands.boldOff}\x0a`;
+        payload += `${thermalCommands.center}${thermalCommands.boldOn}${_t('advance_adjustment_title')}${thermalCommands.boldOff}\x0a`;
         payload += `${thermalCommands.left}`;
         advanceItems.forEach(item => {
             totalAdvance += item.amount;
-            payload += `${padR('Advance (' + item.advanceId + ')', charWidth - 15)}${padL('Rs. ' + Math.round(item.amount).toLocaleString(), 15)}\x0a`;
+            payload += `${padR(_t('advance') + ' (' + item.advanceId + ')', charWidth - 15)}${padL('Rs. ' + Math.round(item.amount).toLocaleString(), 15)}\x0a`;
         });
     }
 
@@ -704,12 +741,12 @@ export const getEstimationReceiptThermalPayload = async (
 
     payload += LINE;
     if (hasItems && totalDeductions > 0) {
-        payload += `${padL('Deductions: Rs.' + Math.round(totalDeductions).toLocaleString(), charWidth)}\x0a`;
+        payload += `${padL(_t('deductions_capital') + ': Rs.' + Math.round(totalDeductions).toLocaleString(), charWidth)}\x0a`;
     }
-    payload += `${thermalCommands.center}${thermalCommands.boldOn}}Net Amt: Rs.${Math.round(Math.abs(netPayable)).toLocaleString()}${netPayable < 0 ? ' (CR)' : ''}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
+    payload += `${thermalCommands.center}${thermalCommands.boldOn}${_t('net_amt_label')}: Rs.${Math.round(Math.abs(netPayable)).toLocaleString()}${netPayable < 0 ? ' (CR)' : ''}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
     payload += LINE;
 
-    if (!config || config.showFooter) payload += `${thermalCommands.center}THANK YOU VISIT AGAIN\x0a`;
+    if (!config || config.showFooter) payload += `${thermalCommands.center}${_t('thank_you_visit_again')}\x0a`;
     payload += `\x0a\x0a\x0a\x0a`;
 
     return payload;
@@ -724,15 +761,17 @@ export const printEstimationReceipt = async (
     customerName?: string,
     employeeName?: string,
     config?: ReceiptConfig,
-    estimationNumber?: number
+    estimationNumber?: number,
+    t?: TFunction
 ): Promise<void> => {
+    const _t = t || ((key: string) => key);
     const { type, printer } = await getPrinterConfig();
 
     if (type === 'thermal' && printer?.address) {
         const connected = await ensureThermalConnection(printer.address);
         if (connected) {
             const payload = await getEstimationReceiptThermalPayload(
-                items, purchaseItems, chitItems, advanceItems, shopDetails, customerName, employeeName, config, estimationNumber
+                items, purchaseItems, chitItems, advanceItems, shopDetails, customerName, employeeName, config, estimationNumber, t
             );
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
             BLEPrinter.printText(payload);
@@ -773,18 +812,18 @@ export const printEstimationReceipt = async (
     const hasChit = chitItems.length > 0;
     const hasAdvance = advanceItems.length > 0;
 
-    let receiptTitle = 'RECEIPT';
-    if (hasItems) receiptTitle = 'ESTIMATION SLIP';
-    else if (hasPurchase && !hasChit && !hasAdvance) receiptTitle = 'PURCHASE VOUCHER';
-    else if (hasChit && !hasPurchase && !hasAdvance) receiptTitle = 'CHIT RECEIPT';
-    else if (hasAdvance && !hasPurchase && !hasChit) receiptTitle = 'ADVANCE RECEIPT';
+    let receiptTitle = _t('receipt_title');
+    if (hasItems) receiptTitle = _t('estimation_slip');
+    else if (hasPurchase && !hasChit && !hasAdvance) receiptTitle = _t('purchase_voucher');
+    else if (hasChit && !hasPurchase && !hasAdvance) receiptTitle = _t('chit_receipt_title');
+    else if (hasAdvance && !hasPurchase && !hasChit) receiptTitle = _t('advance_receipt_title');
 
     // --- Estimation Items Section ---
     const itemsHTML = hasItems ? `
         <div class="dash-line">${DASH}</div>
         <div class="row-bold">
-            <span>ITEMS & DETAILS</span>
-            <span style="text-align: right;">AMOUNT</span>
+            <span>${_t('items_and_details')}</span>
+            <span style="text-align: right;">${_t('amount_header')}</span>
         </div>
         <div class="dash-line">${DASH}</div>
         ${items.map(item => {
@@ -798,14 +837,14 @@ export const printEstimationReceipt = async (
                     <div style="font-weight:bold;">${item.name.toUpperCase()} | ${item.pcs} Pcs </div>
                     ${item.tagNumber ? `<div style="font-size:10px;">Tag: ${item.tagNumber}</div>` : ''}
                     <div class="row">
-                        <span>Gross: ${item.grossWeight.toFixed(3)}g</span>
+                        <span>${_t('gross_wt_label')}: ${item.grossWeight.toFixed(3)}g</span>
                     </div>
                     ${item.stoneWeight > 0 ? `
                     <div class="row">
                         <span>Stone: ${item.stoneWeight.toFixed(3)}g</span>
                     </div>` : ''}
                     <div class="row">
-                        <span>Net  : ${item.netWeight.toFixed(3)}g  | @Rs.${item.rate}</span>
+                        <span>${_t('net_wt_label')}  : ${item.netWeight.toFixed(3)}g  | @Rs.${item.rate}</span>
                     </div>
                     ${(!config || config.showWastage) ? `
                     <div class="row" style="font-size:10px; color: #333;">
@@ -826,7 +865,7 @@ export const printEstimationReceipt = async (
     }).join('')}
         <div class="dash-line">${DASH}</div>
         <div class="row-bold">
-            <span>TOTAL</span>
+            <span>${_t('total')}</span>
             <span style="margin-left:auto;margin-right:20px;">G.Wt: ${totalGrossWeight.toFixed(3)}</span>
             <span>Rs.${Math.round(totalItemAmount).toLocaleString()}</span>
         </div>
@@ -840,9 +879,9 @@ export const printEstimationReceipt = async (
 
     // --- GST Section ---
     const gstHTML = (hasItems && (!config || config.showGST)) ? `
-        <div class="row"><span>CGST 1.50%</span><span>Rs.${Math.round(totalGST / 2).toLocaleString()}</span></div>
-        <div class="row"><span>SGST 1.50%</span><span>Rs.${Math.round(totalGST / 2).toLocaleString()}</span></div>
-        <div class="row-bold"><span>Taxable Total</span><span>Rs.${Math.round(estimationAmount).toLocaleString()}</span></div>
+        <div class="row"><span>${_t('cgst_label')}</span><span>Rs.${Math.round(totalGST / 2).toLocaleString()}</span></div>
+        <div class="row"><span>${_t('sgst_label')}</span><span>Rs.${Math.round(totalGST / 2).toLocaleString()}</span></div>
+        <div class="row-bold"><span>${_t('taxable_total')}</span><span>Rs.${Math.round(estimationAmount).toLocaleString()}</span></div>
     ` : hasItems ? `
         <div class="row-bold"><span>Total Amount</span><span>Rs.${Math.round(estimationAmount).toLocaleString()}</span></div>
     ` : '';
@@ -850,7 +889,7 @@ export const printEstimationReceipt = async (
     // --- Purchase Quotation Section ---
     const purchaseHTML = purchaseItems.length > 0 ? `
         <div class="double-line">${DOUBLE_DASH}</div>
-        <div class="section-title">* Purchase Quotation *</div>
+        <div class="section-title">${_t('pur_quotation_title')}</div>
         <table>
             <thead>
                 <tr>
@@ -880,7 +919,7 @@ export const printEstimationReceipt = async (
         </table>
         <div class="dash-line">${DASH}</div>
         <div class="row-bold">
-            <span>Pur.Total</span>
+            <span>${_t('purchase_total')}</span>
             <span>Rs.${Math.round(totalPurchaseAmount).toLocaleString()}</span>
         </div>
     ` : '';
@@ -888,7 +927,7 @@ export const printEstimationReceipt = async (
     // --- Chit/Advance Deduction rows ---
     const chitHTML = chitItems.length > 0 ? `
         <div class="double-line">${DOUBLE_DASH}</div>
-        <div class="section-title">* Chit / Scheme *</div>
+        <div class="section-title">${_t('chit_scheme_title')}</div>
         ${chitItems.map(item => `
             <div class="row">
                 <span>Chit (${item.chitId})</span>
@@ -899,7 +938,7 @@ export const printEstimationReceipt = async (
 
     const advanceHTML = advanceItems.length > 0 ? `
         <div class="double-line">${DOUBLE_DASH}</div>
-        <div class="section-title">* Advance Adjustment *</div>
+        <div class="section-title">${_t('advance_adjustment_title')}</div>
         ${advanceItems.map(item => `
             <div class="row">
                 <span>Advance (${item.advanceId})</span>
@@ -944,7 +983,7 @@ export const printEstimationReceipt = async (
                 ${advanceHTML}
 
                 <div class="double-line" style="margin-top: 10px;">${DOUBLE_DASH}</div>
-                <div class="net-amt">Net Amt &nbsp; Rs.${Math.round(Math.abs(finalNetPayable)).toLocaleString()}${finalNetPayable < 0 ? ' (CR)' : ''}</div>
+                <div class="net-amt">${_t('net_amt_label')} &nbsp; Rs.${Math.round(Math.abs(finalNetPayable)).toLocaleString()}${finalNetPayable < 0 ? ' (CR)' : ''}</div>
                 <div class="double-line">${DOUBLE_DASH}</div>
 
                 ${(config?.showOperator !== false && employeeName) ? `<div class="footer">Operator: ${employeeName}</div>` : ''}
@@ -956,24 +995,25 @@ export const printEstimationReceipt = async (
     await Print.printAsync({ html });
 };
 
-export const printChitItem = async (item: ChitItem, shopDetails: any, employeeName?: string, config?: ReceiptConfig) => {
+export const printChitItem = async (item: ChitItem, shopDetails: any, employeeName?: string, config?: ReceiptConfig, t?: TFunction) => {
+    const _t = t || ((key: string) => key);
     const header = await getShopHeaderHTML(shopDetails, config);
     const html = `
         <html>
             <head>${getCommonStyles(config?.paperWidth)}</head>
             <body>
                 ${header}
-                <div class="receipt-title">CHIT RECEIPT</div>
-                <div class="row"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
-                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
+                <div class="receipt-title">${_t('chit_receipt_title')}</div>
+                <div class="row"><span>${_t('date')}:</span><span>${new Date().toLocaleString()}</span></div>
+                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>${_t('operator')}:</span><span>${employeeName}</span></div>` : ''}
                 <div class="divider"></div>
                 <div class="row" style="font-size: 16px; margin-top: 10px;">
-                    <span>CHIT ID:</span>
+                    <span>${_t('chit_id')}:</span>
                     <span style="font-weight: bold;">${item.chitId}</span>
                 </div>
                 <div class="total-section" style="margin-top: 20px;">
                     <div class="total-row">
-                        <span>NET PAID:</span>
+                        <span>${_t('net_paid_label')}:</span>
                         <span>Rs. ${item.amount.toLocaleString()}</span>
                     </div>
                 </div>
@@ -989,15 +1029,15 @@ export const printChitItem = async (item: ChitItem, shopDetails: any, employeeNa
             await ensureThermalConnection(macAddress);
             const deviceName = await getSetting('device_name') || '';
             const text = `
-${(!config || config.showHeader) ? shopDetails?.name || 'RECEIPT' : ''}
-${(config?.showDeviceName !== false && deviceName) ? `Device: ${deviceName}\n` : ''}${(!config || config.showOperator) && employeeName ? `Operator: ${employeeName}\n` : ''}CHIT RECEIPT
+${(!config || config.showHeader) ? shopDetails?.name || _t('receipt_title') : ''}
+${(config?.showDeviceName !== false && deviceName) ? `${_t('device_label')}: ${deviceName}\n` : ''}${(!config || config.showOperator) && employeeName ? `${_t('operator')}: ${employeeName}\n` : ''}${_t('chit_receipt_title')}
 --------------------------------
-Date: ${new Date().toLocaleString()}
-CHIT ID: ${item.chitId}
+${_t('date')}: ${new Date().toLocaleString()}
+${_t('chit_id')}: ${item.chitId}
 --------------------------------
-NET PAID: Rs. ${item.amount.toLocaleString()}
+${_t('net_paid_label')}: Rs. ${item.amount.toLocaleString()}
 --------------------------------
-${(!config || config.showFooter) ? shopDetails?.footerMessage || '' : ''}
+${(!config || config.showFooter) ? shopDetails?.footerMessage || _t('thank_you_visit_again') : ''}
 
 \n\n\n`;
             await BLEPrinter.printText(text);
@@ -1010,24 +1050,25 @@ ${(!config || config.showFooter) ? shopDetails?.footerMessage || '' : ''}
     await Print.printAsync({ html });
 };
 
-export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, employeeName?: string, config?: ReceiptConfig) => {
+export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, employeeName?: string, config?: ReceiptConfig, t?: TFunction) => {
+    const _t = t || ((key: string) => key);
     const header = await getShopHeaderHTML(shopDetails, config);
     const html = `
         <html>
             <head>${getCommonStyles(config?.paperWidth)}</head>
             <body>
                 ${header}
-                <div class="receipt-title">ADVANCE RECEIPT</div>
-                <div class="row"><span>Date:</span><span>${new Date().toLocaleString()}</span></div>
-                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>Operator:</span><span>${employeeName}</span></div>` : ''}
+                <div class="receipt-title">${_t('advance_receipt_title')}</div>
+                <div class="row"><span>${_t('date')}:</span><span>${new Date().toLocaleString()}</span></div>
+                ${(config?.showOperator !== false && employeeName) ? `<div class="row"><span>${_t('operator')}:</span><span>${employeeName}</span></div>` : ''}
                 <div class="divider"></div>
                 <div class="row" style="font-size: 16px; margin-top: 10px;">
-                    <span>ADVANCE ID:</span>
+                    <span>${_t('advance_id')}:</span>
                     <span style="font-weight: bold;">${item.advanceId}</span>
                 </div>
                 <div class="total-section" style="margin-top: 20px;">
                     <div class="total-row">
-                        <span>ADVANCE PAID:</span>
+                        <span>${_t('advance_paid_label')}:</span>
                         <span>Rs. ${item.amount.toLocaleString()}</span>
                     </div>
                 </div>
@@ -1043,15 +1084,15 @@ export const printAdvanceItem = async (item: AdvanceItem, shopDetails: any, empl
             await ensureThermalConnection(macAddress);
             const deviceName = await getSetting('device_name') || '';
             const text = `
-${(!config || config.showHeader) ? shopDetails?.name || 'RECEIPT' : ''}
-${(config?.showDeviceName !== false && deviceName) ? `Device: ${deviceName}\n` : ''}${(!config || config.showOperator) && employeeName ? `Operator: ${employeeName}\n` : ''}ADVANCE RECEIPT
+${(!config || config.showHeader) ? shopDetails?.name || _t('receipt_title') : ''}
+${(config?.showDeviceName !== false && deviceName) ? `${_t('device_label')}: ${deviceName}\n` : ''}${(!config || config.showOperator) && employeeName ? `${_t('operator')}: ${employeeName}\n` : ''}${_t('advance_receipt_title')}
 --------------------------------
-Date: ${new Date().toLocaleString()}
-ADVANCE ID: ${item.advanceId}
+${_t('date')}: ${new Date().toLocaleString()}
+${_t('advance_id')}: ${item.advanceId}
 --------------------------------
-ADVANCE PAID: Rs. ${item.amount.toLocaleString()}
+${_t('advance_paid_label')}: Rs. ${item.amount.toLocaleString()}
 --------------------------------
-${(!config || config.showFooter) ? shopDetails?.footerMessage || '' : ''}
+${(!config || config.showFooter) ? shopDetails?.footerMessage || _t('thank_you_visit_again') : ''}
 
 \n\n\n`;
             await BLEPrinter.printText(text);

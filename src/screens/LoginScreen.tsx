@@ -32,7 +32,7 @@ export default function LoginScreen() {
 
     const handleLogin = async () => {
         if (!username || !password) {
-            setError('Please enter both username and password.');
+            setError(t('login_error_empty'));
             return;
         }
 
@@ -40,7 +40,7 @@ export default function LoginScreen() {
         if (success) {
             // Navigation handled by useEffect
         } else {
-            setError('Invalid credentials. Default is admin/admin');
+            setError(t('login_error_invalid'));
         }
     };
 
@@ -60,8 +60,8 @@ export default function LoginScreen() {
             {/* <HeaderBar title={t('manual_entry_title')} showBack /> */}
             <View style={styles.card}>
                 <View style={styles.header}>
-                    {shopDetails.appLogo ? (
-                        <Image source={{ uri: shopDetails.appLogo }} style={styles.logo} />
+                    {shopDetails.appLogo || shopDetails.appIcon ? (
+                        <Image source={{ uri: shopDetails.appLogo || shopDetails.appIcon }} style={styles.logo} />
                     ) : (
                         <Icon name="diamond-outline" size={60} color={COLORS.primary} />
                     )}

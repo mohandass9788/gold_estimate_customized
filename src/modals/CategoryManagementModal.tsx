@@ -51,6 +51,8 @@ export default function CategoryManagementModal({ visible, onClose }: CategoryMa
     const [selectedCategory, setSelectedCategory] = useState<DBPurchaseCategory | null>(null);
     const [subCategories, setSubCategories] = useState<DBPurchaseSubCategory[]>([]);
     const [newCategoryName, setNewCategoryName] = useState('');
+    const [newCategoryMetal, setNewCategoryMetal] = useState<'GOLD' | 'SILVER'>('GOLD');
+    const [filterMetal, setFilterMetal] = useState<'GOLD' | 'SILVER' | 'ALL'>('ALL');
     const [newSubCategoryName, setNewSubCategoryName] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -71,7 +73,7 @@ export default function CategoryManagementModal({ visible, onClose }: CategoryMa
     const loadCategories = async () => {
         setLoading(true);
         try {
-            const cats = await getPurchaseCategories();
+            const cats = await getPurchaseCategories(filterMetal === 'ALL' ? undefined : filterMetal);
             setCategories(cats);
             if (cats.length > 0 && !selectedCategory) {
                 setSelectedCategory(cats[0]);
@@ -95,7 +97,7 @@ export default function CategoryManagementModal({ visible, onClose }: CategoryMa
     const handleAddCategory = async () => {
         if (!newCategoryName.trim()) return;
         try {
-            await addPurchaseCategory(newCategoryName.trim());
+            await addPurchaseCategory(newCategoryName.trim(), newCategoryMetal);
             setNewCategoryName('');
             loadCategories();
         } catch (error) {
@@ -176,9 +178,31 @@ export default function CategoryManagementModal({ visible, onClose }: CategoryMa
                                     value={newCategoryName}
                                     onChangeText={setNewCategoryName}
                                 />
+                                <TouchableOpacity
+                                    style={[styles.metalToggle, { backgroundColor: newCategoryMetal === 'GOLD' ? '#FFD700' : '#C0C0C0', marginRight: SPACING.sm }]}
+                                    onPress={() => setNewCategoryMetal(prev => prev === 'GOLD' ? 'SILVER' : 'GOLD')}
+                                >
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#000' }}>{newCategoryMetal}</Text>
+                                </TouchableOpacity>
                                 <TouchableOpacity style={[styles.addButton, { backgroundColor: COLORS.primary }]} onPress={handleAddCategory}>
                                     <Icon name="add" size={24} color={COLORS.white} />
                                 </TouchableOpacity>
+                            </View>
+
+                            <View style={[styles.inputRow, { marginBottom: SPACING.sm }]}>
+                                <Text style={[styles.filterLabel, { color: activeColors.textLight }]}>{t('filter_by_metal') || 'Filter:'}</Text>
+                                {(['ALL', 'GOLD', 'SILVER'] as const).map((m) => (
+                                    <TouchableOpacity
+                                        key={m}
+                                        onPress={() => setFilterMetal(m)}
+                                        style={[
+                                            styles.filterChip,
+                                            { backgroundColor: filterMetal === m ? COLORS.primary : 'transparent', borderColor: activeColors.border }
+                                        ]}
+                                    >
+                                        <Text style={[styles.filterChipText, { color: filterMetal === m ? COLORS.white : activeColors.text }]}>{m}</Text>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
 
                             <FlatList
@@ -359,5 +383,28 @@ const styles = StyleSheet.create({
     },
     doneButton: {
         marginTop: SPACING.md,
+    },
+    metalToggle: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+        justifyContent: 'center',
+        alignItems: 'center',
+        minWidth: 50,
+    },
+    filterLabel: {
+        fontSize: 12,
+        marginRight: 8,
+    },
+    filterChip: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginRight: 8,
+    },
+    filterChipText: {
+        fontSize: 10,
+        fontWeight: 'bold',
     },
 });

@@ -85,11 +85,11 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     useEffect(() => {
         const loadCategories = async () => {
-            const cats = await getPurchaseCategories();
+            const cats = await getPurchaseCategories(purchaseMetal);
             setCategories(cats);
         };
         loadCategories();
-    }, []);
+    }, [purchaseMetal]);
 
     // Handle Scanned Data from TagScanScreen
     useEffect(() => {
@@ -231,8 +231,8 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             return;
         }
 
-        // Fetch the next estimation number for today
-        const nextNum = await getNextEstimationNumber();
+        // Fetch the next estimation number for today if we don't already have one
+        const nextNum = state.currentEstimationNumber || await getNextEstimationNumber();
         setEstimationNum(nextNum);
 
         requestPrint(async (empName) => {
@@ -286,7 +286,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setShowPrintPreview(false);
         try {
             if (previewType === 'merged') {
-                await printEstimationReceipt(itemsToPrint, purchaseItemsToPrint, chitItemsToPrint, advanceItemsToPrint, { ...shopDetails, deviceName }, customerName, currentEmployeeName, receiptConfig, estimationNum || undefined);
+                await printEstimationReceipt(itemsToPrint, purchaseItemsToPrint, chitItemsToPrint, advanceItemsToPrint, { ...shopDetails, deviceName }, customerName, currentEmployeeName, receiptConfig, estimationNum || undefined, t);
 
                 // Save Order to History
                 try {
@@ -297,12 +297,13 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     const netPayable = totalGross - (purchaseTotal + chitTotal + advanceTotal);
 
                     const { saveOrder, getNextOrderId } = require('../services/dbService');
-                    const orderId = await getNextOrderId();
+                    // Use existing orderId if we are editing an order, otherwise generate new
+                    const orderId = state.currentOrderId || await getNextOrderId();
 
                     const orderData = {
                         orderId,
                         customerName,
-                        customerMobile: '', // We should probably add this to state
+                        customerMobile: state.customer?.mobile || '',
                         employeeName: currentEmployeeName,
                         date: new Date().toISOString(),
                         grossTotal: totalGross,
@@ -343,13 +344,14 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         customerName,
                         currentEmployeeName,
                         receiptConfig,
-                        estimationNum || undefined
+                        estimationNum || undefined,
+                        t
                     );
                 }
 
                 // Print each Chit and Advance item as a completely separate receipt
-                for (const item of chitItemsToPrint) await printChitItem(item, shopDetails, currentEmployeeName, receiptConfig);
-                for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails, currentEmployeeName, receiptConfig);
+                for (const item of chitItemsToPrint) await printChitItem(item, shopDetails, currentEmployeeName, receiptConfig, t);
+                for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails, currentEmployeeName, receiptConfig, t);
             }
             Alert.alert(t('success'), t('printing_completed') || 'Printing completed');
             setSelectedItems(new Set());
@@ -369,6 +371,11 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const handleEditPurchase = async (item: PurchaseItem) => {
         isInitialLoadPurchase.current = true;
         setPurchaseMetal(item.metal);
+
+        // Fetch categories for this metal to ensure they are available for find
+        const cats = await getPurchaseCategories(item.metal);
+        setCategories(cats);
+
         setPurchasePcs(item.pcs.toString());
         setPurchaseGross(item.grossWeight.toString());
         setPurchaseLess(item.lessWeight.toString());
@@ -377,7 +384,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setPurchasePurity(item.purity.toString());
 
         // Find category ID
-        const cat = categories.find(c => c.name === item.category);
+        const cat = cats.find(c => c.name === item.category);
         if (cat) {
             setPurchaseCategoryId(cat.id.toString());
             // Fetch and set subcategory
@@ -395,7 +402,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             isInitialLoadPurchase.current = false;
         }, 150);
 
-        Alert.alert(t('editing') || 'Editing', t('purchase_loaded') || 'Purchase item loaded into form.');
+        Alert.alert(t('editing'), t('purchase_loaded'));
     };
 
     const handleEditChit = (item: ChitItem) => {
@@ -403,7 +410,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setChitAmount(item.amount.toString());
         setMode('CHIT');
         removeItem(item.id, 'chit');
-        Alert.alert(t('editing') || 'Editing', t('chit_loaded') || 'Chit details loaded into form.');
+        Alert.alert(t('editing'), t('chit_loaded'));
     };
 
     const handleEditAdvance = (item: AdvanceItem) => {
@@ -411,13 +418,13 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setAdvanceAmount(item.amount.toString());
         setMode('ADVANCE');
         removeItem(item.id, 'advance');
-        Alert.alert(t('editing') || 'Editing', t('advance_loaded') || 'Advance details loaded into form.');
+        Alert.alert(t('editing'), t('advance_loaded'));
     };
 
     const handleRemoveItem = (id: string, type: 'estimation' | 'purchase' | 'chit' | 'advance' = 'estimation') => {
         Alert.alert(
-            t('confirm_remove') || 'Remove Item',
-            t('confirm_remove_msg') || 'Are you sure you want to remove this item?',
+            t('confirm_remove'),
+            t('confirm_remove_msg'),
             [
                 { text: t('cancel'), style: 'cancel' },
                 { text: t('remove'), onPress: () => removeItem(id, type), style: 'destructive' }
@@ -445,7 +452,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         }
 
         if (!purchaseCategoryId || isNaN(gWeightNum) || gWeightNum <= 0 || isNaN(rateValNum) || rateValNum <= 0) {
-            Alert.alert(t('error') || 'Error', t('field_required') || 'Please fill mandatory fields: Category, Weight and Rate');
+            Alert.alert(t('error'), t('field_required'));
             return;
         }
 
@@ -470,7 +477,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
         addPurchaseItem(item);
         clearPurchaseForm();
-        Alert.alert(t('success') || 'Success', t('item_added') || 'Purchase item added');
+        Alert.alert(t('success'), t('item_added'));
     };
 
     const handleAddChit = () => {
@@ -485,7 +492,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         });
         setChitId('');
         setChitAmount('');
-        Alert.alert('Success', 'Chit item added');
+        Alert.alert(t('success'), t('item_added'));
     };
 
     const handleAddAdvance = () => {
@@ -500,7 +507,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         });
         setAdvanceId('');
         setAdvanceAmount('');
-        Alert.alert('Success', 'Advance item added');
+        Alert.alert(t('success'), t('item_added'));
     };
 
 
@@ -583,58 +590,58 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     </div>
 
                     <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 11px;">
-                        <div>Date: ${new Date().toLocaleString()}</div>
-                        ${estimationNum ? `<div>Est #: <b>${estimationNum}</b></div>` : ''}
-                        ${customerName ? `<div>Customer: <b>${customerName}</b></div>` : ''}
+                        <div>{t('date')}: ${new Date().toLocaleString()}</div>
+                        ${estimationNum ? `<div>${t('est_hash')} <b>${estimationNum}</b></div>` : ''}
+                        ${customerName ? `<div>${t('customer')}: <b>${customerName}</b></div>` : ''}
                     </div>
 
                     <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
                         <thead>
                             <tr style="background: #f8f9fa;">
-                                <th style="text-align: left; padding: 8px 4px;">Item</th>
-                                <th style="text-align: right; padding: 8px 4px;">Wt</th>
-                                <th style="text-align: right; padding: 8px 4px;">MC+VA</th>
-                                <th style="text-align: right; padding: 8px 4px;">Total</th>
+                                <th style="text-align: left; padding: 8px 4px;">${t('item')}</th>
+                                <th style="text-align: right; padding: 8px 4px;">${t('weight_g')}</th>
+                                <th style="text-align: right; padding: 8px 4px;">${t('va_mc_label')}</th>
+                                <th style="text-align: right; padding: 8px 4px;">${t('total')}</th>
                             </tr>
                         </thead>
                         <tbody>${rows}</tbody>
                     </table>
 
                     ${purchaseRows ? `
-                        <div style="font-weight: bold; background: #fff5f5; padding: 5px; margin-top: 15px;">DEDUCTIONS: OLD GOLD</div>
+                        <div style="font-weight: bold; background: #fff5f5; padding: 5px; margin-top: 15px;">${t('deductions_capital')}</div>
                         <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
                             <thead><tr style="color: #666;">
-                                <th style="text-align: left;">Cat</th>
-                                <th style="text-align: right;">Wt</th>
-                                <th style="text-align: right;">Rate</th>
-                                <th style="text-align: right;">Value</th>
+                                <th style="text-align: left;">${t('cat')}</th>
+                                <th style="text-align: right;">${t('weight_g')}</th>
+                                <th style="text-align: right;">${t('rate')}</th>
+                                <th style="text-align: right;">${t('value_label')}</th>
                             </tr></thead>
                             <tbody>${purchaseRows}</tbody>
                         </table>
                     ` : ''}
 
-                    ${chitRows ? `<div style="font-weight: bold; background: #f0fff4; padding: 5px; margin-top: 10px;">CHIT ADJUSTMENTS</div>${chitRows}` : ''}
-                    ${advanceRows ? `<div style="font-weight: bold; background: #fffaf0; padding: 5px; margin-top: 10px;">ADVANCE ADJUSTMENTS</div>${advanceRows}` : ''}
+                    ${chitRows ? `<div style="font-weight: bold; background: #f0fff4; padding: 5px; margin-top: 10px;">${t('chit_adjustments')}</div>${chitRows}` : ''}
+                    ${advanceRows ? `<div style="font-weight: bold; background: #fffaf0; padding: 5px; margin-top: 10px;">${t('advance_adjustments')}</div>${advanceRows}` : ''}
 
                     <div style="margin-top: 20px; border-top: 2px solid #333; padding-top: 10px;">
                         <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                            <span>Taxable Value:</span>
+                            <span>${t('taxable_value')}:</span>
                             <span>₹${Math.round(taxableValue).toLocaleString()}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                            <span>SGST (1.5%):</span>
+                            <span>${t('sgst_label')}:</span>
                             <span>₹${Math.round(splitGst).toLocaleString()}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                            <span>CGST (1.5%):</span>
+                            <span>${t('cgst_label')}:</span>
                             <span>₹${Math.round(splitGst).toLocaleString()}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; padding: 10px 0; font-weight: bold; font-size: 16px; border-top: 1px solid #eee;">
-                            <span>GROSS TOTAL:</span>
+                            <span>${t('gross_total_capital')}:</span>
                             <span>₹${Math.round(taxableValue + gstTotal).toLocaleString()}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; padding: 10px 0; font-weight: bold; font-size: 20px; color: #000; border-top: 2px solid #333;">
-                            <span>NET PAYABLE:</span>
+                            <span>${t('net_payable_capital')}:</span>
                             <span>₹${Math.round(state.totals.grandTotal).toLocaleString()}</span>
                         </div>
                     </div>
@@ -735,12 +742,12 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             <View style={styles.previewDivider} />
                             <View style={styles.previewSubHeader}>
                                 <View style={{ width: '45%' }}>
-                                    <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>Date: {new Date().toLocaleDateString()}</Text>
+                                    <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>{t('date')}: {new Date().toLocaleDateString()}</Text>
                                     <Text style={[styles.previewInfo, { color: activeColors.textLight, fontWeight: 'bold' }]}>{t('estimation_number') || 'Est #'}: {estimationNum || '...'}</Text>
                                 </View>
                                 <View style={{ width: '45%', alignItems: 'flex-end' }}>
-                                    {customerName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>Cust: {customerName}</Text> : null}
-                                    {currentEmployeeName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>By: {currentEmployeeName}</Text> : null}
+                                    {customerName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>{t('cust_label')}: {customerName}</Text> : null}
+                                    {currentEmployeeName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>{t('by_label')}: {currentEmployeeName}</Text> : null}
                                 </View>
                             </View>
                             <View style={styles.previewDivider} />

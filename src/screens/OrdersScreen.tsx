@@ -27,7 +27,7 @@ const RNFlatListAny = RNFlatList as any;
 export default function OrdersScreen() {
     const router = useRouter();
     const { theme, t, shopDetails, requestPrint, currentEmployeeName } = useGeneralSettings();
-    const { clearEstimation, addTagItem, addPurchaseItem, addChitItem, addAdvanceItem } = useEstimation();
+    const { clearEstimation, loadEstimationIntoContext } = useEstimation();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [orders, setOrders] = useState<DBOrder[]>([]);
@@ -112,7 +112,7 @@ export default function OrdersScreen() {
                 const chits = items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData));
                 const advances = items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData));
 
-                await printEstimationReceipt(products, purchases, chits, advances, shopDetails, order.customerName, empName);
+                await printEstimationReceipt(products, purchases, chits, advances, shopDetails, order.customerName, empName, undefined, undefined, t);
             } catch (error: any) {
                 Alert.alert('Print Error', error.message || 'Failed to print');
             } finally {
@@ -131,17 +131,39 @@ export default function OrdersScreen() {
                     text: 'Reload',
                     onPress: async () => {
                         try {
-                            const { items } = await getOrderDetails(orderId);
-                            clearEstimation();
-                            for (const item of items) {
-                                const data = JSON.parse(item.itemData);
-                                if (item.type === 'PRODUCT') addTagItem(data);
-                                else if (item.type === 'PURCHASE') addPurchaseItem(data);
-                                else if (item.type === 'CHIT') addChitItem(data);
-                                else if (item.type === 'ADVANCE') addAdvanceItem(data);
+                            const { order, items } = await getOrderDetails(orderId);
+
+                            // Map order products back to EstimationItem format if needed
+                            // Actually, loadEstimationIntoContext expects a DBEstimation.
+                            // We can construct a mock DBEstimation from order details or fetch from estimations table.
+                            // Let's fetch the original estimation if possible, or construct it.
+
+                            const { getFilteredEstimations } = require('../services/dbService');
+                            const ests = await getFilteredEstimations();
+                            const originalEst = ests.find((e: any) => e.estimationNumber === order.estimationNumber);
+
+                            if (originalEst) {
+                                loadEstimationIntoContext(originalEst, order.orderId);
+                            } else {
+                                // Fallback: construct from order if original estimation not found
+                                const mockEst: any = {
+                                    id: order.orderId, // Use orderId as ID if original missing
+                                    customerName: order.customerName,
+                                    customerMobile: order.customerMobile,
+                                    date: order.date,
+                                    items: JSON.stringify(items.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData))),
+                                    purchaseItems: JSON.stringify(items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData))),
+                                    chitItems: JSON.stringify(items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData))),
+                                    advanceItems: JSON.stringify(items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData))),
+                                    totalWeight: 0, // Calculations will handle this
+                                    grandTotal: order.netPayable,
+                                    estimationNumber: order.estimationNumber
+                                };
+                                loadEstimationIntoContext(mockEst as any, order.orderId);
                             }
                             router.push('/estimation');
                         } catch (error) {
+                            console.error('Reload Error:', error);
                             Alert.alert('Error', 'Failed to reload order');
                         }
                     }
@@ -188,7 +210,7 @@ export default function OrdersScreen() {
             <View style={styles.cardHeader}>
                 <View>
                     <Text style={[styles.customerName, { color: activeColors.text }]}>
-                        {item.customerName || 'Walk-in'}
+                        {item.customerName && item.customerName !== 'Walk-in' ? item.customerName : (t('estimation_number') || 'Estimation #') + item.estimationNumber}
                     </Text>
                     <Text style={[styles.dateText, { color: activeColors.textLight }]}>
                         {format(new Date(item.date), 'hh:mm a')} • {item.orderId}
@@ -253,7 +275,7 @@ export default function OrdersScreen() {
                                 {/* Customer Info */}
                                 <View style={styles.infoRow}>
                                     <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>{t('customer_label')}</Text>
-                                    <Text style={[styles.infoValue, { color: activeColors.text }]}>{selectedOrder.customerName || 'Walk-in'}</Text>
+                                    <Text style={[styles.infoValue, { color: activeColors.text }]}>{selectedOrder.customerName && selectedOrder.customerName !== 'Walk-in' ? selectedOrder.customerName : (t('estimation_number') || 'Estimation #') + selectedOrder.estimationNumber}</Text>
                                 </View>
                                 <View style={styles.infoRow}>
                                     <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>{t('operator_label')}</Text>

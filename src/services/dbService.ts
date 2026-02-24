@@ -228,7 +228,8 @@ export const initDatabase = async () => {
             await db.execAsync(`
                 CREATE TABLE IF NOT EXISTS purchase_categories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL UNIQUE
+                    name TEXT NOT NULL UNIQUE,
+                    metal TEXT DEFAULT 'GOLD' -- 'GOLD' or 'SILVER'
                 );
             `);
 
@@ -270,18 +271,24 @@ export const initDatabase = async () => {
             const purchaseCatCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM purchase_categories;');
             if (purchaseCatCount?.count === 0) {
                 console.log('Initializing default purchase categories...');
-                const defaultCats = ['Old Gold', 'Old Silver', 'Exchange'];
+                const defaultCats = [
+                    { name: 'Old Gold', metal: 'GOLD' },
+                    { name: 'Old Silver', metal: 'SILVER' },
+                    { name: 'Exchange (Gold)', metal: 'GOLD' },
+                    { name: 'Exchange (Silver)', metal: 'SILVER' }
+                ];
                 const defaultSubCats: Record<string, string[]> = {
                     'Old Gold': ['916 KDM', '916 Hallmark', 'Nallapusa', 'Melting'],
                     'Old Silver': ['925 Sterling', 'Local Silver', 'Patti', 'Vessels'],
-                    'Exchange': ['Gold Exchange', 'Silver Exchange'],
+                    'Exchange (Gold)': ['Gold Exchange'],
+                    'Exchange (Silver)': ['Silver Exchange'],
                 };
 
-                for (const catName of defaultCats) {
-                    const result = await db.runAsync('INSERT INTO purchase_categories (name) VALUES (?);', [catName]);
+                for (const cat of defaultCats) {
+                    const result = await db.runAsync('INSERT INTO purchase_categories (name, metal) VALUES (?, ?);', [cat.name, cat.metal]);
                     const catId = result.lastInsertRowId;
 
-                    const subs = defaultSubCats[catName] || ['General'];
+                    const subs = defaultSubCats[cat.name] || ['General'];
                     for (const subName of subs) {
                         await db.runAsync('INSERT INTO purchase_sub_categories (categoryId, name) VALUES (?, ?);', [catId, subName]);
                     }
@@ -293,6 +300,17 @@ export const initDatabase = async () => {
             if (settingsCount?.count === 0) {
                 await db.runAsync('INSERT INTO settings (key, value) VALUES (?, ?);', ['gst_percentage', '3']);
                 await db.runAsync('INSERT INTO settings (key, value) VALUES (?, ?);', ['shop_name', 'Gold Estimation App']);
+            }
+
+            // Migration: Add metal column to purchase_categories if missing
+            const pcTableInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(purchase_categories);');
+            const pcColumnNames = pcTableInfo.map(c => c.name);
+            if (!pcColumnNames.includes('metal')) {
+                console.log('Migrating: Adding metal column to purchase_categories table');
+                await db.execAsync("ALTER TABLE purchase_categories ADD COLUMN metal TEXT DEFAULT 'GOLD';");
+                // Update existing categories based on name
+                await db.runAsync("UPDATE purchase_categories SET metal = 'SILVER' WHERE name LIKE '%Silver%';");
+                await db.runAsync("UPDATE purchase_categories SET metal = 'SILVER' WHERE name = 'Exchange' AND id IN (SELECT categoryId FROM purchase_sub_categories WHERE name LIKE '%Silver%');");
             }
 
             console.log('Database initialized successfully');
@@ -412,7 +430,7 @@ export const deleteSubProduct = async (id: number): Promise<void> => {
 export const saveEstimation = async (estimation: DBEstimation): Promise<void> => {
     if (!db) await initDatabase();
     await db!.runAsync(
-        'INSERT INTO estimations (id, customerName, customerMobile, date, items, purchaseItems, chitItems, advanceItems, totalWeight, grandTotal, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
+        'INSERT OR REPLACE INTO estimations (id, customerName, customerMobile, date, items, purchaseItems, chitItems, advanceItems, totalWeight, grandTotal, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
         [
             estimation.id,
             estimation.customerName,
@@ -461,8 +479,11 @@ export interface DBPurchaseSubCategory {
     name: string;
 }
 
-export const getPurchaseCategories = async (): Promise<DBPurchaseCategory[]> => {
+export const getPurchaseCategories = async (metal?: 'GOLD' | 'SILVER'): Promise<DBPurchaseCategory[]> => {
     if (!db) await initDatabase();
+    if (metal) {
+        return await db!.getAllAsync<DBPurchaseCategory>('SELECT * FROM purchase_categories WHERE metal = ? ORDER BY name;', [metal]);
+    }
     return await db!.getAllAsync<DBPurchaseCategory>('SELECT * FROM purchase_categories ORDER BY name;');
 };
 
@@ -471,9 +492,9 @@ export const getPurchaseSubCategories = async (categoryId: number): Promise<DBPu
     return await db!.getAllAsync<DBPurchaseSubCategory>('SELECT * FROM purchase_sub_categories WHERE categoryId = ? ORDER BY name;', [categoryId]);
 };
 
-export const addPurchaseCategory = async (name: string): Promise<number> => {
+export const addPurchaseCategory = async (name: string, metal: 'GOLD' | 'SILVER' = 'GOLD'): Promise<number> => {
     if (!db) await initDatabase();
-    const result = await db!.runAsync('INSERT INTO purchase_categories (name) VALUES (?);', [name]);
+    const result = await db!.runAsync('INSERT INTO purchase_categories (name, metal) VALUES (?, ?);', [name, metal]);
     return result.lastInsertRowId;
 };
 
@@ -602,10 +623,14 @@ export const saveOrder = async (
 
     try {
         await db!.withTransactionAsync(async () => {
+            // Use INSERT OR REPLACE to update existing orders instead of creating duplicates
             await db!.runAsync(
-                'INSERT INTO orders (orderId, customerName, customerMobile, employeeName, date, grossTotal, netPayable, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?);',
+                'INSERT OR REPLACE INTO orders (orderId, customerName, customerMobile, employeeName, date, grossTotal, netPayable, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?);',
                 [order.orderId, order.customerName, order.customerMobile, order.employeeName, order.date, order.grossTotal, order.netPayable, order.estimationNumber || null]
             );
+
+            // Clear existing items for this orderId before adding updated ones
+            await db!.runAsync('DELETE FROM order_items WHERE orderId = ?;', [order.orderId]);
 
             for (const item of items) {
                 await db!.runAsync(

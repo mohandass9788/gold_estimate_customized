@@ -12,6 +12,9 @@ interface EstimationState {
     customer: Customer | null;
     totals: EstimationTotals;
     history: DBEstimation[];
+    currentId: string | null;
+    currentEstimationNumber: number | null;
+    currentOrderId: string | null; // Track if this is specifically from an order
 }
 
 type Action =
@@ -26,6 +29,7 @@ type Action =
     | { type: 'SET_HISTORY'; payload: DBEstimation[] }
     | { type: 'ADD_MULTIPLE_TAG_ITEMS'; payload: EstimationItem[] }
     | { type: 'CLEAR_FORM' }
+    | { type: 'LOAD_ESTIMATION'; payload: { items: EstimationItem[], purchaseItems: PurchaseItem[], chitItems: ChitItem[], advanceItems: AdvanceItem[], customer: Customer | null, id: string, estimationNumber: number, orderId?: string | null } }
     | { type: 'CLEAR_ESTIMATION' };
 
 const initialState: EstimationState = {
@@ -54,6 +58,9 @@ const initialState: EstimationState = {
         grandTotal: 0,
     },
     history: [],
+    currentId: null,
+    currentEstimationNumber: null,
+    currentOrderId: null,
 };
 
 const estimationReducer = (state: EstimationState, action: Action): EstimationState => {
@@ -148,6 +155,21 @@ const estimationReducer = (state: EstimationState, action: Action): EstimationSt
         case 'CLEAR_FORM':
             // Logic to clear working form state could be here or managed in the component
             return state;
+        case 'LOAD_ESTIMATION': {
+            const { items, purchaseItems, chitItems, advanceItems, customer, id, estimationNumber, orderId } = action.payload;
+            return {
+                ...state,
+                items,
+                purchaseItems,
+                chitItems,
+                advanceItems,
+                customer,
+                currentId: id,
+                currentEstimationNumber: estimationNumber,
+                currentOrderId: orderId || null,
+                totals: calculateEstimationTotals(items, purchaseItems, chitItems, advanceItems),
+            };
+        }
         case 'CLEAR_ESTIMATION':
             return {
                 ...initialState,
@@ -172,6 +194,7 @@ interface EstimationContextType {
     clearForm: () => void;
     resetEstimation: () => void;
     clearEstimation: () => void;
+    loadEstimationIntoContext: (estimation: DBEstimation, orderId?: string) => void;
 }
 
 const EstimationContext = createContext<EstimationContextType>({} as EstimationContextType);
@@ -239,11 +262,14 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
 
     const clearEstimation = async () => {
         if (state.items.length > 0) {
-            const estNum = await getNextEstimationNumber();
+            // Use existing number if editing, otherwise get next
+            const estNum = state.currentEstimationNumber || await getNextEstimationNumber();
+            const estId = state.currentId || Date.now().toString();
+
             // Auto-save to history when clearing/completing
             const dbEstimate: DBEstimation = {
-                id: Date.now().toString(),
-                customerName: state.customer?.name || 'Walk-in',
+                id: estId,
+                customerName: state.customer?.name || `Estimation #${estNum}`,
                 customerMobile: state.customer?.mobile || 'N/A',
                 date: new Date().toISOString(),
                 items: JSON.stringify(state.items),
@@ -259,6 +285,31 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
             dispatch({ type: 'SET_HISTORY', payload: history });
         }
         dispatch({ type: 'CLEAR_ESTIMATION' });
+    };
+
+    const loadEstimationIntoContext = (estimation: DBEstimation, orderId?: string) => {
+        const items = JSON.parse(estimation.items);
+        const purchaseItems = JSON.parse(estimation.purchaseItems || '[]');
+        const chitItems = JSON.parse(estimation.chitItems || '[]');
+        const advanceItems = JSON.parse(estimation.advanceItems || '[]');
+        const customer = estimation.customerName && estimation.customerName.indexOf('Estimation #') === -1 ? {
+            name: estimation.customerName,
+            mobile: estimation.customerMobile === 'N/A' ? '' : estimation.customerMobile
+        } : null;
+
+        dispatch({
+            type: 'LOAD_ESTIMATION',
+            payload: {
+                items,
+                purchaseItems,
+                chitItems,
+                advanceItems,
+                customer,
+                id: estimation.id,
+                estimationNumber: estimation.estimationNumber || 0,
+                orderId
+            }
+        });
     };
 
     return (
@@ -277,6 +328,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                 clearForm,
                 resetEstimation,
                 clearEstimation,
+                loadEstimationIntoContext,
             }}
         >
             {children}

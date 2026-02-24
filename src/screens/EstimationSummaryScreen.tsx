@@ -91,16 +91,16 @@ export default function EstimationSummaryScreen() {
 
                     // Direct thermal print for each individual item
                     for (const item of selectedItems) {
-                        await printEstimationReceipt([item], [], [], [], shopDetails, state.customer?.name, empName, receiptConfig);
+                        await printEstimationReceipt([item], [], [], [], shopDetails, state.customer?.name, empName, receiptConfig, undefined, t);
                     }
                     for (const item of selectedPurchases) {
-                        await printEstimationReceipt([], [item], [], [], shopDetails, state.customer?.name, empName, receiptConfig);
+                        await printEstimationReceipt([], [item], [], [], shopDetails, state.customer?.name, empName, receiptConfig, undefined, t);
                     }
                     for (const item of selectedChits) {
-                        await printEstimationReceipt([], [], [item], [], shopDetails, state.customer?.name, empName, receiptConfig);
+                        await printEstimationReceipt([], [], [item], [], shopDetails, state.customer?.name, empName, receiptConfig, undefined, t);
                     }
                     for (const item of selectedAdvances) {
-                        await printEstimationReceipt([], [], [], [item], shopDetails, state.customer?.name, empName, receiptConfig);
+                        await printEstimationReceipt([], [], [], [item], shopDetails, state.customer?.name, empName, receiptConfig, undefined, t);
                     }
                     return;
                 }
@@ -115,7 +115,9 @@ export default function EstimationSummaryScreen() {
                         shopDetails,
                         state.customer?.name,
                         empName,
-                        receiptConfig
+                        receiptConfig,
+                        undefined,
+                        t
                     );
                     return;
                 }
@@ -129,7 +131,9 @@ export default function EstimationSummaryScreen() {
                     shopDetails,
                     state.customer?.name,
                     empName,
-                    receiptConfig
+                    receiptConfig,
+                    undefined,
+                    t
                 );
                 setPreviewPayload(payload);
                 setShowPreviewModal(true);
@@ -156,7 +160,9 @@ export default function EstimationSummaryScreen() {
                 shopDetails,
                 state.customer?.name,
                 empNameForPrint,
-                newConfig
+                newConfig,
+                undefined,
+                t
             );
             setPreviewPayload(payload);
         } catch (error: any) {
@@ -181,7 +187,9 @@ export default function EstimationSummaryScreen() {
                 shopDetails,
                 state.customer?.name,
                 empNameForPrint,
-                receiptConfig
+                receiptConfig,
+                undefined,
+                t
             );
         } catch (error: any) {
             Alert.alert(t('error'), error.message || t('print_failed') || 'Failed to print');

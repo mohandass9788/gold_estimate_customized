@@ -127,7 +127,9 @@ export default function ItemDetailModal({ visible, onClose, item, type }: ItemDe
                 shopDetails,
                 item.customerName || (type === 'estimation' ? item.customerName : undefined),
                 currentEmployeeName,
-                receiptConfig
+                receiptConfig,
+                undefined,
+                t
             );
         } catch (error: any) {
             console.error('Print failed', error);

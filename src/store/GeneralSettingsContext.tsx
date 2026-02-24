@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { setSetting, getSetting } from '../services/dbService';
+import { initAutoConnect, PrinterData } from '../services/printService';
 import { Platform, NativeModules } from 'react-native';
 import * as Application from 'expo-application';
 import enTranslations from '../locales/en.json';
@@ -42,6 +43,9 @@ interface GeneralSettingsContextType {
     setPrinterType: (type: PrinterType) => void;
     isPrinterConnected: boolean;
     setIsPrinterConnected: (status: boolean) => void;
+    connectionStatus: 'idle' | 'connecting' | 'failed' | 'connected';
+    retryAttempt: number;
+    countdown: number;
     isBluetoothEnabled: boolean;
     setIsBluetoothEnabled: (status: boolean) => void;
     shopDetails: {
@@ -111,6 +115,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     const [adminPin, setAdminPin] = useState('1234');
 
     const [isPrinterConnected, setIsPrinterConnected] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'failed' | 'connected'>('idle');
+    const [retryAttempt, setRetryAttempt] = useState(0);
+    const [countdown, setCountdown] = useState(0);
     const [isBluetoothEnabled, setIsBluetoothEnabled] = useState(true);
     const [deviceName, setDeviceNameState] = useState<string>('');
     const [currentEmployeeName, setCurrentEmployeeName] = useState<string>('');
@@ -209,7 +216,56 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 if (savedDeviceName) setDeviceNameState(savedDeviceName);
             } catch (e) { }
         };
-        loadSettings();
+
+        const performAutoConnect = async () => {
+            const savedPrinter = await getSetting('connected_printer');
+            const savedPrinterType = await getSetting('printer_type');
+
+            if (savedPrinterType === 'thermal' && savedPrinter) {
+                const printer = JSON.parse(savedPrinter);
+                if (printer && printer.address) {
+                    setConnectionStatus('connecting');
+                    const backoff = [10, 20, 30, 40];
+
+                    for (let i = 0; i < 5; i++) {
+                        setRetryAttempt(i + 1);
+                        console.log(`Auto-connect attempt ${i + 1} to ${printer.address}`);
+
+                        const result = await initAutoConnect();
+                        if (result) {
+                            setConnectedPrinter(result as any);
+                            setIsPrinterConnected(true);
+                            setConnectionStatus('connected');
+                            setRetryAttempt(0);
+                            setCountdown(0);
+                            return;
+                        }
+
+                        if (i < 4) {
+                            let timeLeft = backoff[i];
+                            setCountdown(timeLeft);
+
+                            // Countdown interval
+                            const timer = setInterval(() => {
+                                timeLeft--;
+                                setCountdown(Math.max(0, timeLeft));
+                                if (timeLeft <= 0) clearInterval(timer);
+                            }, 1000);
+
+                            await new Promise(resolve => setTimeout(resolve, backoff[i] * 1000));
+                            clearInterval(timer);
+                        }
+                    }
+                    setConnectionStatus('failed');
+                    setRetryAttempt(0);
+                    setCountdown(0);
+                }
+            }
+        };
+
+        loadSettings().then(() => {
+            performAutoConnect();
+        });
     }, []);
 
     const updateShopDetails = async (details: Partial<typeof shopDetails>) => {
@@ -287,6 +343,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             updateAdminPin,
             isPrinterConnected,
             setIsPrinterConnected,
+            connectionStatus,
+            retryAttempt,
+            countdown,
             isBluetoothEnabled,
             setIsBluetoothEnabled,
             deviceName,

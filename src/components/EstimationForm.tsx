@@ -331,7 +331,7 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
             <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                 {/* Group 1: Type & Purity */}
                 <View style={styles.formGroup}>
-                    <Text style={[styles.groupTitle, { color: activeColors.primary }]}>{t('type_and_purity') || 'Type & Purity'}</Text>
+                    <Text style={[styles.groupTitle, { color: activeColors.primary }]}>{t('type_and_purity')}</Text>
                     <View style={styles.row}>
                         <DropdownField
                             label={t('metal')}
@@ -349,7 +349,7 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
                             style={{ flex: 1, marginRight: SPACING.sm }}
                         />
                         <DropdownField
-                            label={metal === 'GOLD' ? t('purity') : 'Silver Type'}
+                            label={metal === 'GOLD' ? t('purity') : t('silver_type')}
                             value={purity}
                             options={metalTypes
                                 .filter(t => t.metal === metal)
@@ -363,7 +363,7 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
 
                 {/* Group 2: Product Name & Sub-Product (Separate Rows) */}
                 <View style={styles.formGroup}>
-                    <Text style={[styles.groupTitle, { color: activeColors.primary }]}>{t('product_information') || 'Product Information'}</Text>
+                    <Text style={[styles.groupTitle, { color: activeColors.primary }]}>{t('product_information')}</Text>
                     {initialMode === 'TAG' ? (
                         // In TAG mode: text field so user can see/edit scanned product name
                         <InputField
@@ -390,14 +390,14 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
                             label={t('sub_product_name')}
                             value={subProductName}
                             onChangeText={setSubProductName}
-                            placeholder={t('optional') || 'Optional'}
+                            placeholder={t('optional')}
                         />
                     ) : (
                         <DropdownField
                             label={t('sub_product_name')}
                             value={subProductName}
                             options={[
-                                { label: t('optional') || 'None', value: '' },
+                                { label: t('none_label'), value: '' },
                                 ...availableSubProducts.map(sp => ({ label: sp.name, value: sp.name }))
                             ]}
                             onSelect={setSubProductName}
@@ -407,7 +407,7 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
 
                 {/* Group 3: Measurements */}
                 <View style={styles.formGroup}>
-                    <Text style={[styles.groupTitle, { color: activeColors.primary }]}>{t('measurements') || 'Measurements'}</Text>
+                    <Text style={[styles.groupTitle, { color: activeColors.primary }]}>{t('measurements')}</Text>
                     <View style={styles.row}>
                         <InputField
                             label={t('pcs')}
@@ -431,7 +431,7 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
 
                 {/* Group 4: Pricing & Charges */}
                 <View style={styles.formGroup}>
-                    <Text style={[styles.groupTitle, { color: activeColors.primary }]}>{t('pricing_and_charges') || 'Pricing & Charges'}</Text>
+                    <Text style={[styles.groupTitle, { color: activeColors.primary }]}>{t('pricing_and_charges')}</Text>
 
                     <View style={[styles.row, { alignItems: 'flex-end', marginBottom: SPACING.sm }]}>
                         <InputField
@@ -465,8 +465,8 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
                             label={t('type')}
                             selectedValue={makingChargeType === 'perGram' ? 'weight' : (makingChargeType === 'percentage' ? 'percentage' : 'fixed')}
                             options={[
-                                { label: 'Fixed', value: 'fixed' },
-                                { label: 'Weight /g', value: 'weight' },
+                                { label: t('fixed_label'), value: 'fixed' },
+                                { label: t('weight_gram'), value: 'weight' },
                                 // { label: '%', value: 'percentage' },
                             ]}
                             onSelect={val => {

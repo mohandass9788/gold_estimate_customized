@@ -1,19 +1,19 @@
 import React from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity, Platform, Image as RNImage } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity, Platform, Image as RNImage, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../store/AuthContext';
 import { useEstimation } from '../store/EstimationContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
-import { getSetting } from '../services/dbService';
 import ScreenContainer from '../components/ScreenContainer';
-import HeaderBar from '../components/HeaderBar';
 import GoldRateCard from '../components/GoldRateCard';
-import SummaryCard from '../components/SummaryCard';
 import RateUpdateModal from '../components/RateUpdateModal';
+import SafeLinearGradient from '../components/SafeLinearGradient';
 import { format } from 'date-fns';
 
+const { width } = Dimensions.get('window');
 
 // Fix for React 19 type mismatch
 const View = RNView as any;
@@ -26,22 +26,13 @@ export default function DashboardScreen() {
     const router = useRouter();
     const { logout } = useAuth();
     const { state, updateGoldRate } = useEstimation();
-    const { theme, t, connectedPrinter, printerType, isPrinterConnected, shopDetails, deviceName } = useGeneralSettings();
+    const {
+        theme, t, printerType, isPrinterConnected, shopDetails, deviceName,
+        connectionStatus, retryAttempt, countdown
+    } = useGeneralSettings();
     const [isRateModalVisible, setIsRateModalVisible] = React.useState(false);
 
-    const [shopName, setShopName] = React.useState('Gold Estimation App');
-    const [isBluetoothOn, setIsBluetoothOn] = React.useState(true);
-
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
-
-    React.useEffect(() => {
-        init();
-    }, []);
-
-
-    const init = async () => {
-        // Init logic if needed
-    };
 
     const getGreeting = () => {
         const hour = new Date().getHours();
@@ -50,16 +41,14 @@ export default function DashboardScreen() {
         return t('good_evening');
     };
 
-    const handleLogout = () => {
-        logout();
-        router.replace('/login');
-    };
-
-    const MetaMetric = ({ label, value, icon, color }: any) => (
+    const MetaMetric = ({ label, value, icon, colors }: any) => (
         <View style={[styles.metricCard, { backgroundColor: activeColors.cardBg }]}>
-            <View style={[styles.metricIcon, { backgroundColor: color + '20' }]}>
-                <Icon name={icon} size={20} color={color} />
-            </View>
+            <SafeLinearGradient
+                colors={[colors[0] + '20', colors[1] + '10']}
+                style={styles.metricIconWrap}
+            >
+                <Icon name={icon} size={22} color={colors[0]} />
+            </SafeLinearGradient>
             <View>
                 <Text style={[styles.metricValue, { color: activeColors.text }]}>{value}</Text>
                 <Text style={[styles.metricLabel, { color: activeColors.textLight }]}>{label}</Text>
@@ -67,179 +56,133 @@ export default function DashboardScreen() {
         </View>
     );
 
-    const MenuButton = ({ title, icon, route, color }: any) => (
+    const MenuButton = ({ title, icon, route, colors }: any) => (
         <TouchableOpacity
-            style={[styles.menuButton, { backgroundColor: color }]}
+            style={styles.menuButtonWrapper}
             onPress={() => router.push(route)}
-            activeOpacity={0.9}
+            activeOpacity={0.8}
         >
-            <Icon name={icon} size={32} color={COLORS.white} />
-            <Text style={styles.menuButtonText}>{title}</Text>
+            <SafeLinearGradient
+                colors={colors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.menuButton}
+            >
+                <View style={styles.menuIconCircle}>
+                    <Icon name={icon} size={28} color={activeColors.text} />
+                </View>
+                <Text style={styles.menuButtonText}>{title}</Text>
+            </SafeLinearGradient>
         </TouchableOpacity>
     );
 
-    const recentItems = state.items.slice(-3).reverse();
-
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
-            {/* Custom Attractive Header */}
-            <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingHorizontal: SPACING.md,
-                paddingVertical: SPACING.md,
-                backgroundColor: activeColors.cardBg,
-                elevation: 4,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-                borderBottomLeftRadius: 20,
-                borderBottomRightRadius: 20,
-                marginBottom: SPACING.md
-            }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    {shopDetails.appLogo ? (
-                        <Image
-                            source={{ uri: shopDetails.appLogo }}
-                            style={{ width: 50, height: 50, borderRadius: 25, marginRight: 10, borderWidth: 2, borderColor: COLORS.gold }}
-                        />
-                    ) : (
-                        <View style={{
-                            width: 50,
-                            height: 50,
-                            borderRadius: 25,
-                            marginRight: 10,
-                            borderWidth: 2,
-                            borderColor: COLORS.gold,
-                            backgroundColor: activeColors.primary + '20',
-                            justifyContent: 'center',
-                            alignItems: 'center'
-                        }}>
-                            <Icon name="diamond" size={24} color={COLORS.gold} />
+            {/* Premium Header */}
+            <SafeLinearGradient
+                colors={theme === 'light' ? ['#FFFFFF', '#F8F9FA'] : ['#1C1C1E', '#121212']}
+                style={styles.header}
+            >
+                <View style={styles.headerContent}>
+                    <View style={styles.userInfo}>
+                        <View style={[styles.avatarWrap, { borderColor: activeColors.primary }]}>
+                            {shopDetails.appLogo || shopDetails.appIcon ? (
+                                <Image source={{ uri: shopDetails.appLogo || shopDetails.appIcon }} style={styles.avatar} />
+                            ) : (
+                                <Icon name="person" size={24} color={activeColors.primary} />
+                            )}
                         </View>
-                    )}
-                    <View>
-                        <Text style={{ fontSize: FONT_SIZES.xs, color: activeColors.textLight }}>{getGreeting()}</Text>
-                        <Text style={{ fontSize: FONT_SIZES.lg, fontWeight: 'bold', color: activeColors.text, fontFamily: 'serif' }}>
-                            {shopDetails.name}
-                        </Text>
-                        <Text style={{ fontSize: 10, color: activeColors.textLight, opacity: 0.7 }}>
-                            ID: {deviceName}
-                        </Text>
+                        <View>
+                            <Text style={[styles.greeting, { color: activeColors.textLight }]}>{getGreeting()}</Text>
+                            <Text style={[styles.shopName, { color: activeColors.text }]}>{shopDetails.name}</Text>
+                        </View>
                     </View>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <TouchableOpacity
                         onPress={() => router.push('/settings/printers')}
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: (printerType === 'thermal' && !isPrinterConnected) ? activeColors.error + '15' : activeColors.success + '15',
-                            paddingHorizontal: 10,
-                            paddingVertical: 6,
-                            borderRadius: 20,
-                            marginRight: -4
-                        }}>
-                        <View style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: (printerType === 'thermal' && !isPrinterConnected) ? activeColors.error : activeColors.success,
-                            marginRight: 6
-                        }} />
-                        <Icon name="print-outline" size={16} color={(printerType === 'thermal' && !isPrinterConnected) ? activeColors.error : activeColors.success} />
+                        style={[styles.printerBadge, { backgroundColor: (printerType === 'thermal' && !isPrinterConnected) ? activeColors.error + '15' : activeColors.success + '15' }]}
+                    >
+                        <View style={[styles.statusDot, { backgroundColor: (printerType === 'thermal' && !isPrinterConnected) ? activeColors.error : activeColors.success }]} />
+                        <Icon name="print-outline" size={18} color={(printerType === 'thermal' && !isPrinterConnected) ? activeColors.error : activeColors.success} />
                     </TouchableOpacity>
                 </View>
-            </View>
-            {!state.goldRate || state.goldRate.rate22k === 0 ? (
-                <TouchableOpacity
-                    style={[styles.alertBanner, { backgroundColor: activeColors.error }]}
-                    onPress={() => setIsRateModalVisible(true)}
-                >
-                    <Icon name="warning" size={20} color={COLORS.white} />
-                    <Text style={styles.alertText}>{t('rate_not_set') || 'Gold Rate not set! Tap to update.'}</Text>
-                </TouchableOpacity>
-            ) : null}
+            </SafeLinearGradient>
 
-            {(printerType === 'thermal' && !isPrinterConnected) ? (
-                <TouchableOpacity
-                    style={[styles.alertBanner, { backgroundColor: activeColors.error }]}
-                    onPress={() => router.push('/settings/printers')}
-                >
-                    <Icon name="print" size={20} color={COLORS.white} />
-                    <Text style={styles.alertText}>{t('printer_not_connected') || 'Thermal Printer not connected! Tap to setup.'}</Text>
-                </TouchableOpacity>
-            ) : null}
+            {/* Connection Status Banner */}
+            {connectionStatus !== 'idle' && connectionStatus !== 'connected' && (
+                <View style={[
+                    styles.statusBanner,
+                    { backgroundColor: connectionStatus === 'failed' ? activeColors.error : '#FF9500' }
+                ]}>
+                    <Icon
+                        name={connectionStatus === 'failed' ? "alert-circle" : "sync"}
+                        size={18}
+                        color="#FFF"
+                        style={connectionStatus === 'connecting' ? styles.rotatingIcon : null}
+                    />
+                    <View style={styles.statusTextContainer}>
+                        <Text style={styles.statusBannerText}>
+                            {connectionStatus === 'connecting'
+                                ? t('printer_connection_attempt', { attempt: retryAttempt.toString(), total: '5' })
+                                : t('printer_not_connected_check')
+                            }
+                        </Text>
+                        {connectionStatus === 'connecting' && countdown > 0 && (
+                            <Text style={styles.countdownText}>
+                                {t('retrying_in', { seconds: countdown.toString() })}
+                            </Text>
+                        )}
+                    </View>
+                    {connectionStatus === 'failed' && (
+                        <TouchableOpacity
+                            onPress={() => router.push('/settings/printers')}
+                            style={styles.retryAction}
+                        >
+                            <Text style={styles.retryActionText}>{t('manual_connect')}</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            )}
 
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <GoldRateCard
-                    rate={state.goldRate}
-                    onEdit={() => setIsRateModalVisible(true)}
-                />
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                {/* Gold Rate Card Overhaul */}
+                <View style={{ marginBottom: SPACING.lg }}>
+                    <GoldRateCard
+                        rate={state.goldRate}
+                        onEdit={() => setIsRateModalVisible(true)}
+                    />
+                </View>
 
-                <RateUpdateModal
-                    visible={isRateModalVisible}
-                    currentRate={state.goldRate}
-                    onClose={() => setIsRateModalVisible(false)}
-                    onUpdate={updateGoldRate}
-                />
-
+                {/* Quick Info Cards */}
                 <View style={styles.metricsRow}>
                     <MetaMetric
                         label={t('estimates')}
                         value={state.items.length}
-                        icon="document-text-outline"
-                        color="#4A90E2"
+                        icon="document-text"
+                        colors={['#4A90E2', '#357ABD']}
                     />
                     <MetaMetric
                         label={t('total_weight')}
                         value={`${state.totals.totalWeight.toFixed(2)}g`}
-                        icon="speedometer-outline"
-                        color="#50E3C2"
+                        icon="speedometer"
+                        colors={['#50E3C2', '#3CB371']}
                     />
+                </View>
+
+                {/* Main Action Grid */}
+                <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('quick_actions')}</Text>
                 </View>
 
                 <View style={styles.grid}>
-                    <MenuButton
-                        title={t('scan_tag')}
-                        icon="qr-code-outline"
-                        route="/(tabs)/manual?mode=TAG"
-                        color="#4A90E2"
-                    />
-                    <MenuButton
-                        title={t('manual_entry')}
-                        icon="create-outline"
-                        route="/(tabs)/manual?mode=MANUAL"
-                        color="#50E3C2"
-                    />
-                    <MenuButton
-                        title={t('multi_tag_scan')}
-                        icon="layers-outline"
-                        route="/(tabs)/multi-scan"
-                        color="#F5A623"
-                    />
-                    <MenuButton
-                        title={t('chit')}
-                        icon="receipt-outline"
-                        route="/(tabs)/manual?mode=CHIT"
-                        color="#673AB7"
-                    />
-                    <MenuButton
-                        title={t('advance')}
-                        icon="wallet-outline"
-                        route="/(tabs)/manual?mode=ADVANCE"
-                        color="#FF5722"
-                    />
-                    <MenuButton
-                        title={t('purchase')}
-                        icon="cart-outline"
-                        route="/(tabs)/manual?mode=PURCHASE"
-                        color="#E040FB"
-                    />
+                    <MenuButton title={t('scan_tag')} icon="qr-code" route="/(tabs)/manual?mode=TAG" colors={['#FFD700', '#DAA520']} />
+                    <MenuButton title={t('manual_entry')} icon="create" route="/(tabs)/manual?mode=MANUAL" colors={['#50E3C2', '#3CB371']} />
+                    <MenuButton title={t('multi_tag_scan')} icon="layers" route="/(tabs)/multi-scan" colors={['#FF9500', '#FF8C00']} />
+                    <MenuButton title={t('chit')} icon="receipt" route="/(tabs)/manual?mode=CHIT" colors={['#AF52DE', '#8E44AD']} />
+                    <MenuButton title={t('advance')} icon="wallet" route="/(tabs)/manual?mode=ADVANCE" colors={['#FF3B30', '#D32F2F']} />
+                    <MenuButton title={t('purchase')} icon="cart" route="/(tabs)/manual?mode=PURCHASE" colors={['#5AC8FA', '#3498DB']} />
                 </View>
 
+                {/* Recent Activity List */}
                 <View style={styles.recentSection}>
                     <View style={styles.sectionHeader}>
                         <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('recent_activity')}</Text>
@@ -248,79 +191,112 @@ export default function DashboardScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Grouping Logic for Recent Activity */}
-                    {(() => {
-                        const history = state.history || [];
-                        const groups: { [date: string]: typeof state.history } = {};
-
-                        history.forEach(item => {
-                            const dateKey = item.date ? format(new Date(item.date), 'yyyy-MM-dd') : 'unknown';
-                            if (!groups[dateKey]) groups[dateKey] = [];
-                            groups[dateKey].push(item);
-                        });
-
-                        const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-
-                        if (sortedDates.length === 0) {
-                            return (
-                                <View style={styles.emptyRecent}>
-                                    <Text style={[styles.emptyText, { color: activeColors.textLight }]}>{t('no_recent_activity')}</Text>
-                                </View>
-                            );
-                        }
-
-                        return sortedDates.map(dateKey => (
-                            <View key={dateKey} style={{ marginBottom: SPACING.md }}>
-                                <Text style={[styles.dateHeader, { color: activeColors.textLight }]}>
-                                    {dateKey === 'unknown' ? 'Unknown Date' :
-                                        dateKey === format(new Date(), 'yyyy-MM-dd') ? 'Today' :
-                                            dateKey === format(new Date(Date.now() - 86400000), 'yyyy-MM-dd') ? 'Yesterday' :
-                                                format(new Date(dateKey), 'dd MMM yyyy')}
-                                </Text>
-                                {groups[dateKey].map((estimate) => (
-                                    <View key={estimate.id} style={[styles.recentCard, { backgroundColor: activeColors.cardBg }]}>
-                                        <View style={styles.recentInfo}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                <Text style={[styles.recentName, { color: activeColors.text }]}>{estimate.customerName || 'Walking Customer'}</Text>
-                                                {estimate.estimationNumber && (
-                                                    <View style={[styles.estNumBadge, { backgroundColor: activeColors.primary + '20' }]}>
-                                                        <Text style={[styles.estNumText, { color: activeColors.primary }]}>#{estimate.estimationNumber}</Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                            <Text style={[styles.recentSub, { color: activeColors.textLight }]}>
-                                                {estimate.date ? format(new Date(estimate.date), 'HH:mm') : 'N/A'} • {estimate.totalWeight.toFixed(2)}g
-                                            </Text>
-                                        </View>
-                                        <Text style={styles.recentPrice}>₹ {Math.round(estimate.grandTotal).toLocaleString()}</Text>
+                    {state.history && state.history.length > 0 ? (
+                        state.history.slice(0, 5).map((estimate) => (
+                            <TouchableOpacity
+                                key={estimate.id}
+                                style={[styles.recentCard, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}
+                                onPress={() => router.push({ pathname: '/(tabs)/summary', params: { id: estimate.id } })}
+                            >
+                                <View style={styles.recentCardLeft}>
+                                    <View style={[styles.recentIconWrap, { backgroundColor: activeColors.primary + '15' }]}>
+                                        <Icon name="document-text" size={20} color={activeColors.primary} />
                                     </View>
-                                ))}
-                            </View>
-                        ));
-                    })()}
+                                    <View>
+                                        <Text style={[styles.recentName, { color: activeColors.text }]}>
+                                            {estimate.customerName || `Est #${estimate.estimationNumber}`}
+                                        </Text>
+                                        <Text style={[styles.recentDate, { color: activeColors.textLight }]}>
+                                            {format(new Date(estimate.date), 'dd MMM, HH:mm')} • {estimate.totalWeight.toFixed(2)}g
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={styles.recentCardRight}>
+                                    <Text style={[styles.recentAmount, { color: activeColors.primary }]}>
+                                        ₹{Math.round(estimate.grandTotal).toLocaleString()}
+                                    </Text>
+                                    <Icon name="chevron-forward" size={16} color={activeColors.textLight} />
+                                </View>
+                            </TouchableOpacity>
+                        ))
+                    ) : (
+                        <View style={styles.emptyWrap}>
+                            <Icon name="file-tray-outline" size={48} color={activeColors.textLight + '40'} />
+                            <Text style={[styles.emptyText, { color: activeColors.textLight }]}>{t('no_recent_activity')}</Text>
+                        </View>
+                    )}
                 </View>
             </ScrollView>
+
+            <RateUpdateModal
+                visible={isRateModalVisible}
+                currentRate={state.goldRate}
+                onClose={() => setIsRateModalVisible(false)}
+                onUpdate={updateGoldRate}
+            />
         </ScreenContainer>
     );
 }
 
 const styles = StyleSheet.create({
-
-    dashboardHeader: {
-        padding: SPACING.lg,
-        paddingBottom: SPACING.md,
+    header: {
+        paddingTop: Platform.OS === 'ios' ? 50 : 20,
+        paddingBottom: 20,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+    },
+    headerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: SPACING.lg,
+    },
+    userInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    avatarWrap: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        borderWidth: 2,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: SPACING.md,
+        backgroundColor: '#FFF1',
+    },
+    avatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
     },
     greeting: {
+        fontSize: FONT_SIZES.xs,
+        fontWeight: '500',
+        marginBottom: 2,
+    },
+    shopName: {
         fontSize: FONT_SIZES.lg,
-        fontWeight: '600',
-    },
-    appName: {
-        fontSize: FONT_SIZES.xxl,
         fontWeight: 'bold',
-        marginTop: -4,
+        letterSpacing: -0.5,
     },
-    logoutButton: {
-        padding: SPACING.sm,
+    printerBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 8,
     },
     scrollContent: {
         padding: SPACING.md,
@@ -332,22 +308,21 @@ const styles = StyleSheet.create({
         marginBottom: SPACING.lg,
     },
     metricCard: {
-        flex: 1,
-        marginHorizontal: 4,
+        width: '48%',
         padding: SPACING.md,
-        borderRadius: BORDER_RADIUS.md,
+        borderRadius: BORDER_RADIUS.lg,
         flexDirection: 'row',
         alignItems: 'center',
-        elevation: 2,
+        elevation: 4,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
     },
-    metricIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+    metricIconWrap: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: SPACING.sm,
@@ -357,117 +332,160 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     metricLabel: {
-        fontSize: FONT_SIZES.xs,
-    },
-    grid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        marginBottom: SPACING.lg,
-    },
-    menuButton: {
-        width: '31%',
-        paddingVertical: SPACING.md,
-        borderRadius: BORDER_RADIUS.md,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: SPACING.md,
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-    },
-    menuButtonText: {
-        color: COLORS.white,
-        fontSize: FONT_SIZES.xs,
-        fontWeight: 'bold',
-        marginTop: SPACING.xs,
-        textAlign: 'center',
-    },
-    recentSection: {
-        marginTop: SPACING.sm,
+        fontSize: 10,
+        fontWeight: '500',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: SPACING.md,
+        paddingHorizontal: 4,
     },
     sectionTitle: {
-        fontSize: FONT_SIZES.lg,
+        fontSize: FONT_SIZES.xl,
         fontWeight: 'bold',
+        letterSpacing: -0.5,
     },
     viewAll: {
         color: COLORS.primary,
         fontSize: FONT_SIZES.sm,
         fontWeight: '600',
     },
-    recentCard: {
-        padding: SPACING.md,
-        borderRadius: BORDER_RADIUS.md,
+    grid: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: SPACING.sm,
-        borderLeftWidth: 4,
-        borderLeftColor: COLORS.primary,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        marginBottom: SPACING.xl,
     },
-    recentInfo: {
+    menuButtonWrapper: {
+        width: '31%',
+        aspectRatio: 0.9,
+        marginBottom: SPACING.md,
+    },
+    menuButton: {
         flex: 1,
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.sm,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+    },
+    menuIconCircle: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: 'rgba(255, 255, 255, 0.25)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: SPACING.xs,
+    },
+    menuButtonText: {
+        color: '#FFFFFF',
+        fontSize: 11,
+        fontWeight: '800',
+        textAlign: 'center',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    recentSection: {
+        marginTop: SPACING.sm,
+    },
+    recentCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.lg,
+        marginBottom: SPACING.sm,
+        borderWidth: 1,
+    },
+    recentCardLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    recentIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: SPACING.md,
     },
     recentName: {
         fontSize: FONT_SIZES.md,
-        fontWeight: 'bold',
+        fontWeight: '600',
+        marginBottom: 2,
     },
-    recentSub: {
+    recentDate: {
         fontSize: FONT_SIZES.xs,
     },
-    recentPrice: {
-        fontSize: FONT_SIZES.md,
-        fontWeight: 'bold',
-        color: COLORS.primary,
-    },
-    emptyRecent: {
-        padding: SPACING.xl,
-        alignItems: 'center',
-    },
-    emptyText: {
-        fontSize: FONT_SIZES.sm,
-    },
-    dateHeader: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        marginBottom: 8,
-        letterSpacing: 1,
-    },
-    estNumBadge: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        marginLeft: 8,
-    },
-    estNumText: {
-        fontSize: 9,
-        fontWeight: '800',
-    },
-    alertBanner: {
+    recentCardRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: SPACING.md,
-        margin: SPACING.md,
-        borderRadius: BORDER_RADIUS.md,
     },
-    alertText: {
-        color: COLORS.white,
+    recentAmount: {
+        fontSize: FONT_SIZES.md,
         fontWeight: 'bold',
-        marginLeft: SPACING.sm,
+        marginRight: 8,
+    },
+    emptyWrap: {
+        padding: SPACING.xl,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: 0.6,
+    },
+    emptyText: {
+        marginTop: SPACING.md,
+        fontSize: FONT_SIZES.sm,
+        fontWeight: '500',
+    },
+    statusBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        marginHorizontal: SPACING.md,
+        marginTop: SPACING.sm,
+        borderRadius: BORDER_RADIUS.md,
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+    },
+    statusTextContainer: {
+        flex: 1,
+        marginLeft: 10,
+    },
+    statusBannerText: {
+        color: '#FFF',
+        fontSize: 13,
+        fontWeight: 'bold',
+    },
+    countdownText: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 11,
+        fontWeight: '500',
+    },
+    retryAction: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+    },
+    retryActionText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    rotatingIcon: {
+        // Logic to animate would go here in Reanimated, for now static
     }
 });
