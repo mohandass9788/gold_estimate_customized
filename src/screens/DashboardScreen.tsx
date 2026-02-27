@@ -11,6 +11,7 @@ import ScreenContainer from '../components/ScreenContainer';
 import GoldRateCard from '../components/GoldRateCard';
 import RateUpdateModal from '../components/RateUpdateModal';
 import SafeLinearGradient from '../components/SafeLinearGradient';
+import StatusSnackbar from '../components/StatusSnackbar';
 import { format } from 'date-fns';
 
 const { width } = Dimensions.get('window');
@@ -69,12 +70,22 @@ export default function DashboardScreen() {
                 style={styles.menuButton}
             >
                 <View style={styles.menuIconCircle}>
-                    <Icon name={icon} size={28} color={activeColors.text} />
+                    <Icon name={icon} size={28} color="#FFF" />
                 </View>
                 <Text style={styles.menuButtonText}>{title}</Text>
             </SafeLinearGradient>
         </TouchableOpacity>
     );
+
+    // Helper to get printer status color
+    const getPrinterStatusInfo = () => {
+        if (printerType === 'system') return { color: activeColors.success, label: t('system_ready') };
+        if (isPrinterConnected) return { color: activeColors.success, label: t('connected') };
+        if (connectionStatus === 'connecting') return { color: '#FF9500', label: t('connecting') };
+        return { color: activeColors.error, label: t('disconnected') };
+    };
+
+    const printerStatus = getPrinterStatusInfo();
 
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
@@ -84,26 +95,34 @@ export default function DashboardScreen() {
                 style={styles.header}
             >
                 <View style={styles.headerContent}>
-                    <View style={styles.userInfo}>
-                        <View style={[styles.avatarWrap, { borderColor: activeColors.primary }]}>
+                    <View style={styles.shopInfo}>
+                        <View style={[styles.logoWrap, { borderColor: activeColors.primary }]}>
                             {shopDetails.appLogo || shopDetails.appIcon ? (
-                                <Image source={{ uri: shopDetails.appLogo || shopDetails.appIcon }} style={styles.avatar} />
+                                <Image source={{ uri: shopDetails.appLogo || shopDetails.appIcon }} style={styles.logo} />
                             ) : (
-                                <Icon name="person" size={24} color={activeColors.primary} />
+                                <Icon name="business" size={24} color={activeColors.primary} />
                             )}
                         </View>
                         <View>
-                            <Text style={[styles.greeting, { color: activeColors.textLight }]}>{getGreeting()}</Text>
-                            <Text style={[styles.shopName, { color: activeColors.text }]}>{shopDetails.name}</Text>
+                            <Text style={[styles.welcomeText, { color: activeColors.textLight }]}>{getGreeting()}</Text>
+                            <Text style={[styles.shopName, { color: activeColors.text }]} numberOfLines={1}>{shopDetails.name}</Text>
                         </View>
                     </View>
-                    <TouchableOpacity
-                        onPress={() => router.push('/settings/printers')}
-                        style={[styles.printerBadge, { backgroundColor: (printerType === 'thermal' && !isPrinterConnected) ? activeColors.error + '15' : activeColors.success + '15' }]}
-                    >
-                        <View style={[styles.statusDot, { backgroundColor: (printerType === 'thermal' && !isPrinterConnected) ? activeColors.error : activeColors.success }]} />
-                        <Icon name="print-outline" size={18} color={(printerType === 'thermal' && !isPrinterConnected) ? activeColors.error : activeColors.success} />
-                    </TouchableOpacity>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            onPress={() => router.push('/settings/printers')}
+                            style={[styles.printerBadge, { backgroundColor: printerStatus.color + '15' }]}
+                        >
+                            <View style={[styles.statusDot, { backgroundColor: printerStatus.color }]} />
+                            <Icon name="print-outline" size={18} color={printerStatus.color} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => router.push('/settings')}
+                            style={[styles.profileButton, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}
+                        >
+                            <Icon name="person-outline" size={20} color={activeColors.primary} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </SafeLinearGradient>
 
@@ -156,7 +175,7 @@ export default function DashboardScreen() {
                 <View style={styles.metricsRow}>
                     <MetaMetric
                         label={t('estimates')}
-                        value={state.items.length}
+                        value={state.history.length}
                         icon="document-text"
                         colors={['#4A90E2', '#357ABD']}
                     />
@@ -234,48 +253,45 @@ export default function DashboardScreen() {
                 onClose={() => setIsRateModalVisible(false)}
                 onUpdate={updateGoldRate}
             />
+
         </ScreenContainer>
     );
 }
 
 const styles = StyleSheet.create({
     header: {
-        paddingTop: Platform.OS === 'ios' ? 50 : 20,
+        paddingTop: Platform.OS === 'ios' ? 60 : 40,
         paddingBottom: 20,
+        paddingHorizontal: SPACING.lg,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
     },
     headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: SPACING.lg,
     },
-    userInfo: {
+    shopInfo: {
         flexDirection: 'row',
         alignItems: 'center',
+        flex: 1,
     },
-    avatarWrap: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        borderWidth: 2,
+    logoWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        borderWidth: 1.5,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: SPACING.md,
         backgroundColor: '#FFF1',
+        overflow: 'hidden',
     },
-    avatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+    logo: {
+        width: '100%',
+        height: '100%',
     },
-    greeting: {
+    welcomeText: {
         fontSize: FONT_SIZES.xs,
         fontWeight: '500',
         marginBottom: 2,
@@ -285,18 +301,69 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         letterSpacing: -0.5,
     },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
     printerBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
         borderRadius: 20,
+        marginRight: SPACING.sm,
+    },
+    profileButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        borderWidth: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     statusDot: {
         width: 8,
         height: 8,
         borderRadius: 4,
-        marginRight: 8,
+        marginRight: 6,
+    },
+    statusBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        marginHorizontal: SPACING.md,
+        marginTop: SPACING.sm,
+        borderRadius: BORDER_RADIUS.md,
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+    },
+    statusTextContainer: {
+        flex: 1,
+        marginLeft: 10,
+    },
+    statusBannerText: {
+        color: '#FFF',
+        fontSize: 13,
+        fontWeight: 'bold',
+    },
+    countdownText: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 11,
+        fontWeight: '500',
+    },
+    retryAction: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+    },
+    retryActionText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: '900',
     },
     scrollContent: {
         padding: SPACING.md,
@@ -447,45 +514,5 @@ const styles = StyleSheet.create({
         fontSize: FONT_SIZES.sm,
         fontWeight: '500',
     },
-    statusBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 12,
-        marginHorizontal: SPACING.md,
-        marginTop: SPACING.sm,
-        borderRadius: BORDER_RADIUS.md,
-        elevation: 6,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-    },
-    statusTextContainer: {
-        flex: 1,
-        marginLeft: 10,
-    },
-    statusBannerText: {
-        color: '#FFF',
-        fontSize: 13,
-        fontWeight: 'bold',
-    },
-    countdownText: {
-        color: 'rgba(255,255,255,0.8)',
-        fontSize: 11,
-        fontWeight: '500',
-    },
-    retryAction: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 12,
-    },
-    retryActionText: {
-        color: '#FFF',
-        fontSize: 10,
-        fontWeight: '900',
-    },
-    rotatingIcon: {
-        // Logic to animate would go here in Reanimated, for now static
-    }
+    rotatingIcon: {},
 });

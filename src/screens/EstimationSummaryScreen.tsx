@@ -27,7 +27,7 @@ const Icon = Ionicons as any;
 export default function EstimationSummaryScreen() {
     const router = useRouter();
     const { state, removeItem, clearEstimation, setCustomer } = useEstimation();
-    const { theme, t, shopDetails, requestPrint, currentEmployeeName, receiptConfig, updateReceiptConfig } = useGeneralSettings();
+    const { theme, t, showAlert, shopDetails, requestPrint, currentEmployeeName, receiptConfig, updateReceiptConfig } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [showCustomerModal, setShowCustomerModal] = React.useState(false);
@@ -37,7 +37,7 @@ export default function EstimationSummaryScreen() {
     const [selectedItemType, setSelectedItemType] = React.useState<'estimation' | 'purchase' | 'chit' | 'advance'>('estimation');
     const [previewPayload, setPreviewPayload] = React.useState('');
     const [isPrinting, setIsPrinting] = React.useState(false);
-    const [empNameForPrint, setEmpNameForPrint] = React.useState('');
+    const [printDetails, setPrintDetails] = React.useState<any>(null);
 
     // Selection State
     const [selectedItemIds, setSelectedItemIds] = React.useState<string[]>([]);
@@ -79,31 +79,43 @@ export default function EstimationSummaryScreen() {
         const selectedAdvances = state.advanceItems.filter(i => selectedAdvanceIds.includes(i.id));
 
         if (selectedCount === 0) {
-            Alert.alert(t('error'), t('select_at_least_one') || 'Please select at least one item to print');
+            showAlert(t('error') || 'Error', t('select_at_least_one') || 'Please select at least one item to print', 'error');
             return;
         }
 
-        requestPrint(async (empName) => {
-            setEmpNameForPrint(empName);
+        requestPrint(async (details) => {
+            setPrintDetails(details);
             try {
                 if (isSeparate) {
-                    Alert.alert(t('printing'), t('printing_separately') || 'Printing items separately...');
+                    showAlert(t('printing') || 'Printing', t('printing_separately') || 'Printing items separately...', 'info');
+
+                    const sharedShop = {
+                        ...shopDetails,
+                        customerAddress: details.place || state.customer?.address || '',
+                        customerMobile: details.mobile || state.customer?.mobile || ''
+                    };
 
                     // Direct thermal print for each individual item
                     for (const item of selectedItems) {
-                        await printEstimationReceipt([item], [], [], [], shopDetails, state.customer?.name, empName, receiptConfig, undefined, t);
+                        await printEstimationReceipt([item], [], [], [], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t);
                     }
                     for (const item of selectedPurchases) {
-                        await printEstimationReceipt([], [item], [], [], shopDetails, state.customer?.name, empName, receiptConfig, undefined, t);
+                        await printEstimationReceipt([], [item], [], [], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t);
                     }
                     for (const item of selectedChits) {
-                        await printEstimationReceipt([], [], [item], [], shopDetails, state.customer?.name, empName, receiptConfig, undefined, t);
+                        await printEstimationReceipt([], [], [item], [], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t);
                     }
                     for (const item of selectedAdvances) {
-                        await printEstimationReceipt([], [], [], [item], shopDetails, state.customer?.name, empName, receiptConfig, undefined, t);
+                        await printEstimationReceipt([], [], [], [item], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t);
                     }
                     return;
                 }
+
+                const sharedShopMerged = {
+                    ...shopDetails,
+                    customerAddress: details.place || state.customer?.address || '',
+                    customerMobile: details.mobile || state.customer?.mobile || ''
+                };
 
                 if (selectedCount === 1) {
                     // Direct print if single item
@@ -112,9 +124,9 @@ export default function EstimationSummaryScreen() {
                         selectedPurchases,
                         selectedChits,
                         selectedAdvances,
-                        shopDetails,
-                        state.customer?.name,
-                        empName,
+                        sharedShopMerged,
+                        details.customerName,
+                        details.employeeName,
                         receiptConfig,
                         undefined,
                         t
@@ -128,9 +140,9 @@ export default function EstimationSummaryScreen() {
                     selectedPurchases,
                     selectedChits,
                     selectedAdvances,
-                    shopDetails,
-                    state.customer?.name,
-                    empName,
+                    sharedShopMerged,
+                    details.customerName,
+                    details.employeeName,
                     receiptConfig,
                     undefined,
                     t
@@ -138,9 +150,9 @@ export default function EstimationSummaryScreen() {
                 setPreviewPayload(payload);
                 setShowPreviewModal(true);
             } catch (error: any) {
-                Alert.alert(t('error'), error.message || t('print_failed') || 'Failed to print');
+                showAlert(t('error') || 'Error', error.message || t('print_failed') || 'Failed to print', 'error');
             }
-        });
+        }, false);
     };
 
     const handleWidthChange = async (width: '58mm' | '80mm' | '112mm') => {
@@ -159,7 +171,7 @@ export default function EstimationSummaryScreen() {
                 selectedAdvances,
                 shopDetails,
                 state.customer?.name,
-                empNameForPrint,
+                printDetails?.employeeName || currentEmployeeName,
                 newConfig,
                 undefined,
                 t
@@ -184,30 +196,41 @@ export default function EstimationSummaryScreen() {
                 selectedPurchases,
                 selectedChits,
                 selectedAdvances,
-                shopDetails,
-                state.customer?.name,
-                empNameForPrint,
+                {
+                    ...shopDetails,
+                    customerAddress: printDetails?.place || state.customer?.address || '',
+                    customerMobile: printDetails?.mobile || state.customer?.mobile || ''
+                },
+                printDetails?.customerName || '',
+                printDetails?.employeeName || currentEmployeeName,
                 receiptConfig,
                 undefined,
                 t
             );
         } catch (error: any) {
-            Alert.alert(t('error'), error.message || t('print_failed') || 'Failed to print');
+            showAlert(t('error') || 'Error', error.message || t('print_failed') || 'Failed to print', 'error');
         } finally {
             setIsPrinting(false);
         }
     };
 
     const handleClear = () => {
-        Alert.alert('Confirm', 'Are you sure you want to clear the estimation?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Clear', style: 'destructive', onPress: () => {
-                    clearEstimation();
-                    router.back();
+        showAlert(
+            'Confirm',
+            'Are you sure you want to clear the estimation?',
+            'warning',
+            [
+                { text: 'Cancel', onPress: () => { }, style: 'cancel' },
+                {
+                    text: 'Clear',
+                    style: 'destructive',
+                    onPress: () => {
+                        clearEstimation();
+                        router.back();
+                    }
                 }
-            }
-        ]);
+            ]
+        );
     };
 
     const handleView = (item: any, type: 'estimation' | 'purchase' | 'chit' | 'advance' = 'estimation') => {
@@ -226,15 +249,6 @@ export default function EstimationSummaryScreen() {
                 }
             />
 
-            <CustomerDetailsModal
-                visible={showCustomerModal}
-                onClose={() => setShowCustomerModal(false)}
-                onSubmit={(customer) => {
-                    setCustomer(customer);
-                    setShowCustomerModal(false);
-                }}
-                initialData={state.customer}
-            />
 
             <PrintPreviewModal
                 visible={showPreviewModal}
@@ -361,22 +375,6 @@ export default function EstimationSummaryScreen() {
                         </View>
 
                         <View style={styles.footerContainer}>
-                            {state.customer ? (
-                                <View style={[styles.customerCard, { backgroundColor: activeColors.cardBg }]}>
-                                    <Text style={[styles.customerTitle, { color: activeColors.text }]}>{t('customer_name')}: {state.customer.name}</Text>
-                                    <Text style={{ color: activeColors.textLight }}>{state.customer.mobile}</Text>
-                                    <TouchableOpacity onPress={() => setShowCustomerModal(true)}>
-                                        <Text style={[styles.editLink, { color: activeColors.primary }]}>{t('edit_btn')}</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <PrimaryButton
-                                    title={t('customer_info') || "Add Customer Details"}
-                                    variant="outline"
-                                    onPress={() => setShowCustomerModal(true)}
-                                    style={{ marginBottom: SPACING.md }}
-                                />
-                            )}
 
                             <SummaryCard totals={state.totals} />
 
@@ -407,7 +405,7 @@ export default function EstimationSummaryScreen() {
                                 <PrimaryButton
                                     title="Convert to Bill"
                                     variant="secondary"
-                                    onPress={() => Alert.alert('Coming Soon', 'Billing feature is under development.')}
+                                    onPress={() => showAlert('Coming Soon', 'Billing feature is under development.', 'info')}
                                     style={styles.actionButton}
                                 />
                             </View>

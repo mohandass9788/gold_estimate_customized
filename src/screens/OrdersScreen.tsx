@@ -26,7 +26,7 @@ const RNFlatListAny = RNFlatList as any;
 
 export default function OrdersScreen() {
     const router = useRouter();
-    const { theme, t, shopDetails, requestPrint, currentEmployeeName } = useGeneralSettings();
+    const { theme, t, showAlert, shopDetails, requestPrint, currentEmployeeName } = useGeneralSettings();
     const { clearEstimation, loadEstimationIntoContext } = useEstimation();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
@@ -98,12 +98,12 @@ export default function OrdersScreen() {
             setSelectedOrderItems(items);
             setShowOrderDetails(true);
         } catch (error) {
-            Alert.alert('Error', 'Failed to load order details');
+            showAlert('Error', 'Failed to load order details', 'error');
         }
     };
 
     const handlePrint = async (orderId: string) => {
-        requestPrint(async (empName) => {
+        requestPrint(async (details) => {
             setIsPrinting(true);
             try {
                 const { order, items } = await getOrderDetails(orderId);
@@ -112,9 +112,9 @@ export default function OrdersScreen() {
                 const chits = items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData));
                 const advances = items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData));
 
-                await printEstimationReceipt(products, purchases, chits, advances, shopDetails, order.customerName, empName, undefined, undefined, t);
+                await printEstimationReceipt(products, purchases, chits, advances, shopDetails, order.customerName, details.employeeName, undefined, undefined, t);
             } catch (error: any) {
-                Alert.alert('Print Error', error.message || 'Failed to print');
+                showAlert('Print Error', error.message || 'Failed to print', 'error');
             } finally {
                 setIsPrinting(false);
             }
@@ -122,11 +122,12 @@ export default function OrdersScreen() {
     };
 
     const handleReload = async (orderId: string) => {
-        Alert.alert(
+        showAlert(
             'Reload Order',
             'This will clear your current estimation and load this order for editing. Proceed?',
+            'warning',
             [
-                { text: t('cancel'), style: 'cancel' },
+                { text: t('cancel'), onPress: () => { }, style: 'cancel' },
                 {
                     text: 'Reload',
                     onPress: async () => {
@@ -155,16 +156,16 @@ export default function OrdersScreen() {
                                     purchaseItems: JSON.stringify(items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData))),
                                     chitItems: JSON.stringify(items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData))),
                                     advanceItems: JSON.stringify(items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData))),
-                                    totalWeight: 0, // Calculations will handle this
+                                    totalWeight: 0, // Context will handle this
                                     grandTotal: order.netPayable,
-                                    estimationNumber: order.estimationNumber
+                                    estimationNumber: (order.estimationNumber !== null && order.estimationNumber !== undefined) ? order.estimationNumber : 0
                                 };
                                 loadEstimationIntoContext(mockEst as any, order.orderId);
                             }
                             router.push('/estimation');
                         } catch (error) {
                             console.error('Reload Error:', error);
-                            Alert.alert('Error', 'Failed to reload order');
+                            showAlert('Error', 'Failed to reload order', 'error');
                         }
                     }
                 }
@@ -173,11 +174,12 @@ export default function OrdersScreen() {
     };
 
     const handleDelete = (orderId: string) => {
-        Alert.alert(
+        showAlert(
             'Delete Order',
             'Are you sure you want to delete this order from history?',
+            'warning',
             [
-                { text: t('cancel'), style: 'cancel' },
+                { text: t('cancel'), onPress: () => { }, style: 'cancel' },
                 {
                     text: 'Delete',
                     style: 'destructive',

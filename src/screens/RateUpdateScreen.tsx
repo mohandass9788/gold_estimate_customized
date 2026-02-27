@@ -19,7 +19,7 @@ const Icon = Ionicons as any;
 
 export default function RateUpdateScreen() {
     const { state, updateGoldRate } = useEstimation();
-    const { theme, t } = useGeneralSettings();
+    const { theme, t, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [rates, setRates] = useState({
@@ -44,7 +44,7 @@ export default function RateUpdateScreen() {
 
         updateGoldRate(newGoldRate);
         setShowModal(false);
-        Alert.alert(t('success'), t('rates_updated_success') || 'Rates updated successfully');
+        showAlert(t('success'), t('rates_updated_success') || 'Rates updated successfully', 'success');
     };
 
     const RateInput = ({ label, value, keyName, icon, iconColor }: { label: string; value: string; keyName: keyof typeof rates; icon: string; iconColor: string }) => (

@@ -94,13 +94,21 @@ export default function PrintPreviewModal({
                             ]}
                         >
                             {printerType === 'thermal' ? (
-                                <Text style={styles.thermalText}>
-                                    {cleanText}
-                                </Text>
+                                <View style={{ padding: 5 }}>
+                                    <Text style={styles.thermalText}>
+                                        {cleanText}
+                                    </Text>
+                                </View>
                             ) : (
-                                <Text style={{ color: '#000', textAlign: 'center', padding: 20 }}>
-                                    System Print Preview (HTML Layout) - Ready to print.
-                                </Text>
+                                <View style={{ alignItems: 'center', padding: 20 }}>
+                                    <Ionicons name="document-text-outline" size={48} color={activeColors.primary} style={{ marginBottom: 10 }} />
+                                    <Text style={{ color: '#000', textAlign: 'center', fontWeight: 'bold' }}>
+                                        SYSTEM RECEIPT (HTML)
+                                    </Text>
+                                    <Text style={{ color: '#666', textAlign: 'center', fontSize: 12, marginTop: 5 }}>
+                                        Ready to print using system dialog. Layout will match the premium design.
+                                    </Text>
+                                </View>
                             )}
                         </View>
                     </ScrollView>

@@ -16,6 +16,7 @@ patchPrinterModules();
 import { AuthProvider } from '../src/store/AuthContext';
 import { EstimationProvider } from '../src/store/EstimationContext';
 import { GeneralSettingsProvider } from '../src/store/GeneralSettingsContext';
+import { ActivationProvider } from '../src/store/ActivationContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import React, { useState } from 'react';
@@ -27,15 +28,17 @@ export default function RootLayout() {
     return (
         <SafeAreaProvider>
             <GeneralSettingsProvider>
-                <AuthProvider>
-                    <EstimationProvider>
-                        {showSplash ? (
-                            <CustomSplashScreen onFinish={() => setShowSplash(false)} />
-                        ) : (
-                            <Stack screenOptions={{ headerShown: false }} />
-                        )}
-                    </EstimationProvider>
-                </AuthProvider>
+                <ActivationProvider>
+                    <AuthProvider>
+                        <EstimationProvider>
+                            {showSplash ? (
+                                <CustomSplashScreen onFinish={() => setShowSplash(false)} />
+                            ) : (
+                                <Stack screenOptions={{ headerShown: false }} />
+                            )}
+                        </EstimationProvider>
+                    </AuthProvider>
+                </ActivationProvider>
             </GeneralSettingsProvider>
         </SafeAreaProvider>
     );

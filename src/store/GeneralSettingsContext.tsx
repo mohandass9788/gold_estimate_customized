@@ -5,6 +5,7 @@ import { Platform, NativeModules } from 'react-native';
 import * as Application from 'expo-application';
 import enTranslations from '../locales/en.json';
 import taTranslations from '../locales/ta.json';
+import { AlertButton } from '../components/CustomAlertModal';
 
 type ThemeMode = 'light' | 'dark';
 type Language = 'en' | 'ta';
@@ -21,6 +22,9 @@ export interface ReceiptConfig {
     showFooter: boolean;
     showOperator: boolean;
     showCustomer: boolean;
+    showCustomerName: boolean;
+    showCustomerMobile: boolean;
+    showCustomerAddress: boolean;
     showGST: boolean;
     showWastage: boolean;
     showMakingCharge: boolean;
@@ -28,6 +32,14 @@ export interface ReceiptConfig {
     wastageDisplayType: 'percentage' | 'grams';
     makingChargeDisplayType: 'percentage' | 'grams' | 'fixed';
     paperWidth: '58mm' | '80mm' | '112mm';
+    mergePrint: boolean;
+}
+
+export interface PrintDetails {
+    customerName: string;
+    mobile: string;
+    place: string;
+    employeeName: string;
 }
 
 type PrinterType = 'system' | 'thermal';
@@ -48,6 +60,16 @@ interface GeneralSettingsContextType {
     countdown: number;
     isBluetoothEnabled: boolean;
     setIsBluetoothEnabled: (status: boolean) => void;
+    deviceId: string;
+    alertConfig: {
+        visible: boolean;
+        title: string;
+        message: string;
+        type: 'success' | 'error' | 'warning' | 'info';
+        buttons: AlertButton[];
+    };
+    showAlert: (title: string, message: string, type?: 'success' | 'error' | 'warning' | 'info', buttons?: AlertButton[]) => void;
+    hideAlert: () => void;
     shopDetails: {
         name: string;
         address: string;
@@ -77,13 +99,13 @@ interface GeneralSettingsContextType {
     updateDeviceName: (name: string) => void;
     currentEmployeeName: string;
     setCurrentEmployeeName: (name: string) => void;
-    showEmployeeModal: boolean;
-    setShowEmployeeModal: (show: boolean) => void;
-    handleEmployeeConfirm: (name: string) => Promise<void>;
-    requestPrint: (callback: (employeeName: string) => Promise<void>) => void;
+    showPrintDetailsModal: boolean;
+    setShowPrintDetailsModal: (show: boolean) => void;
+    handlePrintConfirm: (details: PrintDetails) => Promise<void>;
+    requestPrint: (callback: (details: PrintDetails) => Promise<void>, bypassDetails?: boolean, initialData?: PrintDetails) => void;
     receiptConfig: ReceiptConfig;
     updateReceiptConfig: (config: Partial<ReceiptConfig>) => void;
-    deviceId: string;
+    printDetailsModalInitialData: PrintDetails | null;
 }
 
 const GeneralSettingsContext = createContext<GeneralSettingsContextType | undefined>(undefined);
@@ -121,12 +143,38 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     const [isBluetoothEnabled, setIsBluetoothEnabled] = useState(true);
     const [deviceName, setDeviceNameState] = useState<string>('');
     const [currentEmployeeName, setCurrentEmployeeName] = useState<string>('');
-    const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+    const [showPrintDetailsModal, setShowPrintDetailsModal] = useState(false);
+    const [printDetailsModalInitialData, setPrintDetailsModalInitialData] = useState<PrintDetails | null>(null);
+    const [alertConfig, setAlertConfig] = useState<{
+        visible: boolean;
+        title: string;
+        message: string;
+        type: 'success' | 'error' | 'warning' | 'info';
+        buttons: AlertButton[];
+    }>({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: []
+    });
+
+    const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons: AlertButton[] = []) => {
+        setAlertConfig({ visible: true, title, message, type, buttons });
+    };
+
+    const hideAlert = () => {
+        setAlertConfig(prev => ({ ...prev, visible: false }));
+    };
+
     const [receiptConfig, setReceiptConfig] = useState<ReceiptConfig>({
         showHeader: true,
         showFooter: true,
         showOperator: true,
         showCustomer: true,
+        showCustomerName: true,
+        showCustomerMobile: true,
+        showCustomerAddress: true,
         showGST: true,
         showWastage: true,
         showMakingCharge: true,
@@ -134,19 +182,33 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         wastageDisplayType: 'percentage',
         makingChargeDisplayType: 'fixed',
         paperWidth: '58mm',
+        mergePrint: true,
     });
-    const printCallbackRef = useRef<((employeeName: string) => Promise<void>) | null>(null);
+    const printCallbackRef = useRef<((details: PrintDetails) => Promise<void>) | null>(null);
 
-    const requestPrint = (callback: (employeeName: string) => Promise<void>) => {
+    const requestPrint = (callback: (details: PrintDetails) => Promise<void>, bypassDetails = false, initialData?: PrintDetails) => {
         printCallbackRef.current = callback;
-        setShowEmployeeModal(true);
+        if (bypassDetails) {
+            callback({
+                customerName: '',
+                mobile: '',
+                place: '',
+                employeeName: currentEmployeeName || 'Admin'
+            }).then(() => {
+                printCallbackRef.current = null;
+            });
+        } else {
+            setPrintDetailsModalInitialData(initialData || null);
+            setShowPrintDetailsModal(true);
+        }
     };
 
-    const handleEmployeeConfirm = async (name: string) => {
-        setCurrentEmployeeName(name);
-        setShowEmployeeModal(false);
+    const handlePrintConfirm = async (details: PrintDetails) => {
+        setCurrentEmployeeName(details.employeeName);
+        setShowPrintDetailsModal(false);
+        setPrintDetailsModalInitialData(null);
         if (printCallbackRef.current) {
-            await printCallbackRef.current(name);
+            await printCallbackRef.current(details);
             printCallbackRef.current = null;
         }
     };
@@ -257,9 +319,12 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                         }
                     }
                     setConnectionStatus('failed');
+                    setIsPrinterConnected(false);
                     setRetryAttempt(0);
                     setCountdown(0);
                 }
+            } else {
+                setIsPrinterConnected(false);
             }
         };
 
@@ -300,6 +365,10 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     const setPrinterType = (type: PrinterType) => {
         setPrinterTypeState(type);
         setSetting('printer_type', type);
+        if (type === 'system') {
+            setIsPrinterConnected(false);
+            setConnectionStatus('idle');
+        }
     };
 
     const updateDeviceName = async (name: string) => {
@@ -334,6 +403,10 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             printerType,
             setConnectedPrinter: async (printer: ConnectedPrinter | null) => {
                 setConnectedPrinter(printer);
+                if (!printer) {
+                    setIsPrinterConnected(false);
+                    setConnectionStatus('idle');
+                }
                 await setSetting('connected_printer', printer ? JSON.stringify(printer) : '');
             },
             shopDetails,
@@ -352,13 +425,17 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             updateDeviceName,
             currentEmployeeName,
             setCurrentEmployeeName,
-            showEmployeeModal,
-            setShowEmployeeModal,
-            handleEmployeeConfirm,
+            showPrintDetailsModal,
+            setShowPrintDetailsModal,
+            handlePrintConfirm,
             requestPrint,
             receiptConfig,
             updateReceiptConfig,
-            deviceId
+            deviceId,
+            alertConfig,
+            showAlert,
+            hideAlert,
+            printDetailsModalInitialData
         }}>
             {children}
         </GeneralSettingsContext.Provider>

@@ -9,6 +9,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import { useEstimation } from '../store/EstimationContext';
 import { calculateItemTotal } from '../utils/calculations';
 import { SPACING } from '../constants/theme';
+import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { EstimationItem, MakingChargeType, WastageType } from '../types';
 
 // Fix for React 19 type mismatch
@@ -17,6 +18,7 @@ const ScrollView = RNScrollView as any;
 export default function ManualEntryScreen() {
     const router = useRouter();
     const { addManualItem, state } = useEstimation();
+    const { t, showAlert } = useGeneralSettings();
 
     const [name, setName] = useState('');
     const [weight, setWeight] = useState('');
@@ -74,7 +76,7 @@ export default function ManualEntryScreen() {
         };
 
         addManualItem(newItem);
-        Alert.alert('Success', 'Item added to estimation', [
+        showAlert('Success', 'Item added to estimation', 'success', [
             { text: 'Add More', onPress: resetForm },
             { text: 'View Summary', onPress: () => router.push('/summary') }
         ]);

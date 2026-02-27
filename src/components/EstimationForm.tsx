@@ -55,7 +55,6 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
     const [metal, setMetal] = useState<'GOLD' | 'SILVER'>('GOLD');
     const [purity, setPurity] = useState('22'); // 18, 20, 22, 24
     const [rate, setRate] = useState('');
-    const [customerName, setCustomerName] = useState('');
     const isInitialLoad = useRef(false);
 
     // Load initial data for editing
@@ -75,7 +74,6 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
             setMetal(initialData.metal || 'GOLD');
             setPurity(initialData.purity.toString());
             setRate(initialData.rate.toString());
-            setCustomerName(initialData.customerName || '');
 
             // Allow other effects to run after this initial population
             setTimeout(() => {
@@ -256,7 +254,6 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
             wastageValue: calcs.wastageValue,
             gstValue: calcs.gstValue,
             totalValue: calcs.total,
-            customerName,
             metal,
             tagNumber: initialMode === 'TAG' ? tagNo : undefined,
         };
@@ -274,7 +271,6 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
         setStoneWeight('0');
         setWastage('0');
         setMakingCharge('0');
-        setCustomerName('');
         setErrors({});
         onClear();
     };
@@ -505,7 +501,7 @@ export default function EstimationForm({ initialMode, onAdd, onClear, initialDat
                     <PreviewRow colors={activeColors} label={t('total')} value={`₹ ${parseFloat(currentCalcs.total.toFixed(2)).toLocaleString()}`} highlight />
                 </View>
 
-                <InputField label={t('customer_name')} value={customerName} onChangeText={setCustomerName} />
+
             </View>
 
             <View style={styles.actionRow}>

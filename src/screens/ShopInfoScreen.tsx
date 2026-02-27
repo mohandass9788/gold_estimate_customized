@@ -19,7 +19,7 @@ const TouchableOpacity = RNRTouchableOpacity as any;
 
 export default function ShopInfoScreen() {
     const router = useRouter();
-    const { theme, t, shopDetails, updateShopDetails, deviceName, updateDeviceName } = useGeneralSettings();
+    const { theme, t, showAlert, shopDetails, updateShopDetails, deviceName, updateDeviceName } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [shopName, setShopName] = useState(shopDetails.name);
@@ -52,7 +52,7 @@ export default function ShopInfoScreen() {
 
     const handleSave = () => {
         if (!shopName.trim()) {
-            Alert.alert(t('error'), t('shop_name_required') || 'Shop Name is required');
+            showAlert(t('error'), t('shop_name_required') || 'Shop Name is required', 'error');
             return;
         }
 
@@ -68,7 +68,7 @@ export default function ShopInfoScreen() {
         });
         updateDeviceName(localDeviceName);
 
-        Alert.alert(t('success'), t('settings_saved'), [
+        showAlert(t('success'), t('settings_saved'), 'success', [
             { text: 'OK', onPress: () => router.back() }
         ]);
     };

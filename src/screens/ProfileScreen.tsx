@@ -40,7 +40,7 @@ export default function ProfileScreen() {
         }
     };
 
-    const { t, theme, adminPin, updateAdminPin } = useGeneralSettings();
+    const { t, theme, showAlert, adminPin, updateAdminPin } = useGeneralSettings();
     const [newAdminPin, setNewAdminPin] = useState('');
     const [isPinLoading, setIsPinLoading] = useState(false);
 
@@ -52,16 +52,16 @@ export default function ProfileScreen() {
 
     const handleUpdatePin = async () => {
         if (!newAdminPin || newAdminPin.length < 4) {
-            Alert.alert('Error', 'PIN must be at least 4 digits');
+            showAlert('Error', 'PIN must be at least 4 digits', 'error');
             return;
         }
 
         setIsPinLoading(true);
         try {
             await updateAdminPin(newAdminPin);
-            Alert.alert('Success', 'Admin PIN updated successfully');
+            showAlert('Success', 'Admin PIN updated successfully', 'success');
         } catch (e) {
-            Alert.alert('Error', 'Failed to update PIN');
+            showAlert('Error', 'Failed to update PIN', 'error');
         } finally {
             setIsPinLoading(false);
         }
@@ -69,17 +69,17 @@ export default function ProfileScreen() {
 
     const handleUpdate = async () => {
         if (!newUsername.trim()) {
-            Alert.alert('Error', 'Username cannot be empty');
+            showAlert('Error', 'Username cannot be empty', 'error');
             return;
         }
 
         if (newPassword || confirmPassword) {
             if (newPassword !== confirmPassword) {
-                Alert.alert('Error', 'Passwords do not match');
+                showAlert('Error', 'Passwords do not match', 'error');
                 return;
             }
             if (newPassword.length < 4) {
-                Alert.alert('Error', 'Password must be at least 4 characters');
+                showAlert('Error', 'Password must be at least 4 characters', 'error');
                 return;
             }
         }
@@ -87,7 +87,7 @@ export default function ProfileScreen() {
         setIsLoading(true);
         try {
             await updateUserCredentials(currentUsername, newPassword || undefined, newUsername !== currentUsername ? newUsername : undefined);
-            Alert.alert('Success', 'Profile updated successfully. Please login again.', [
+            showAlert('Success', 'Profile updated successfully. Please login again.', 'success', [
                 {
                     text: 'OK',
                     onPress: () => {
@@ -97,7 +97,7 @@ export default function ProfileScreen() {
                 }
             ]);
         } catch (e) {
-            Alert.alert('Error', 'Failed to update profile');
+            showAlert('Error', 'Failed to update profile', 'error');
             console.error(e);
         } finally {
             setIsLoading(false);

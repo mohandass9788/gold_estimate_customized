@@ -28,7 +28,6 @@ export interface EstimationItem extends Product {
   wastageValue: number;
   gstValue: number;
   totalValue: number;
-  customerName?: string;
   metal: 'GOLD' | 'SILVER';
 }
 

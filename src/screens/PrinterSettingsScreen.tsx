@@ -23,7 +23,7 @@ export default function PrinterSettingsScreen() {
     const {
         theme, t, printerType, setPrinterType, connectedPrinter, setConnectedPrinter,
         isPrinterConnected, setIsPrinterConnected, isBluetoothEnabled, setIsBluetoothEnabled,
-        requestPrint, receiptConfig, updateReceiptConfig
+        requestPrint, receiptConfig, updateReceiptConfig, showAlert
     } = useGeneralSettings();
 
     // Silence NativeEventEmitter warnings
@@ -71,15 +71,16 @@ export default function PrinterSettingsScreen() {
             const hasPermission = await requestBluetoothPermissions();
             if (!hasPermission) {
                 setLastError('Bluetooth permissions are required.');
-                Alert.alert('Permission Denied', 'Bluetooth permissions are required to scan for printers.');
+                showAlert('Permission Denied', 'Bluetooth permissions are required to scan for printers.', 'error');
                 return;
             }
 
             if (!NativeModules.RNBLEPrinter) {
                 setLastError('Thermal printer module missing.');
-                Alert.alert(
+                showAlert(
                     'Native Module Missing',
-                    'The Bluetooth printer module is not available. If you are using Expo Go, please use a development build.'
+                    'The Bluetooth printer module is not available. If you are using Expo Go, please use a development build.',
+                    'error'
                 );
                 return;
             }
@@ -97,7 +98,7 @@ export default function PrinterSettingsScreen() {
                 setLastError('Bluetooth is OFF');
             } else {
                 setLastError('Scan Failed');
-                Alert.alert('Scan Error', 'Failed to search for Bluetooth devices. Ensure Bluetooth is ON.');
+                showAlert('Scan Error', 'Failed to search for Bluetooth devices. Ensure Bluetooth is ON.', 'error');
             }
         } finally {
             setIsScanning(false);
@@ -123,14 +124,14 @@ export default function PrinterSettingsScreen() {
                 };
                 setConnectedPrinter(printerData);
                 setIsPrinterConnected(true);
-                Alert.alert('Printer Connected', `${printerData.name} is ready for use.`);
+                showAlert('Printer Connected', `${printerData.name} is ready for use.`, 'success');
             } else {
                 throw new Error('Connection failed');
             }
         } catch (e) {
             console.error('Connection Error', e);
             setIsPrinterConnected(false);
-            Alert.alert('Connection Error', 'Failed to connect to this printer. Ensure it is turned ON and pairable.');
+            showAlert('Connection Error', 'Failed to connect to this printer. Ensure it is turned ON and pairable.', 'error');
         } finally {
             setConnectingDeviceId(null);
         }
@@ -142,26 +143,26 @@ export default function PrinterSettingsScreen() {
                 const Intent = require('expo-intent-launcher');
                 Intent.startActivityAsync(Intent.ActivityAction.BLUETOOTH_SETTINGS);
             } catch (err) {
-                Alert.alert('Error', 'Could not open Bluetooth settings. Please enable it manually.');
+                showAlert('Error', 'Could not open Bluetooth settings. Please enable it manually.', 'error');
             }
         } else {
-            Alert.alert('Please enable Bluetooth in your system settings.');
+            showAlert('Warning', 'Please enable Bluetooth in your system settings.', 'warning');
         }
     };
 
     const handleTestPrint = async () => {
-        requestPrint(async (empName) => {
+        requestPrint(async (details) => {
             setIsPrinting(true);
             try {
-                await sendTestPrint(empName, receiptConfig);
+                await sendTestPrint(details.employeeName, receiptConfig);
                 setIsPrinterConnected(true);
             } catch (e) {
                 setIsPrinterConnected(false);
-                Alert.alert('Print Error', 'Failed to send print job. Ensure printer is ON and within range.');
+                showAlert('Print Error', 'Failed to send print job. Ensure printer is ON and within range.', 'error');
             } finally {
                 setIsPrinting(false);
             }
-        });
+        }, true);
     };
 
     return (
@@ -375,6 +376,41 @@ export default function PrinterSettingsScreen() {
                                 thumbColor={receiptConfig.showCustomer ? activeColors.primary : '#f4f3f4'}
                             />
                         </View>
+
+                        {receiptConfig.showCustomer && (
+                            <View style={[styles.subConfigColumn, { borderLeftWidth: 2, borderLeftColor: activeColors.primary + '30', marginLeft: SPACING.md, paddingLeft: SPACING.sm }]}>
+                                <View style={styles.configItemSmall}>
+                                    <Text style={[styles.configLabelSmall, { color: activeColors.text }]}>{t('show_customer_name')}</Text>
+                                    <Switch
+                                        value={receiptConfig.showCustomerName}
+                                        onValueChange={(val) => updateReceiptConfig({ showCustomerName: val })}
+                                        trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                        thumbColor={receiptConfig.showCustomerName ? activeColors.primary : '#f4f3f4'}
+                                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                    />
+                                </View>
+                                <View style={styles.configItemSmall}>
+                                    <Text style={[styles.configLabelSmall, { color: activeColors.text }]}>{t('show_customer_mobile')}</Text>
+                                    <Switch
+                                        value={receiptConfig.showCustomerMobile}
+                                        onValueChange={(val) => updateReceiptConfig({ showCustomerMobile: val })}
+                                        trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                        thumbColor={receiptConfig.showCustomerMobile ? activeColors.primary : '#f4f3f4'}
+                                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                    />
+                                </View>
+                                <View style={styles.configItemSmall}>
+                                    <Text style={[styles.configLabelSmall, { color: activeColors.text }]}>{t('show_customer_address')}</Text>
+                                    <Switch
+                                        value={receiptConfig.showCustomerAddress}
+                                        onValueChange={(val) => updateReceiptConfig({ showCustomerAddress: val })}
+                                        trackColor={{ false: '#767577', true: activeColors.primary + '80' }}
+                                        thumbColor={receiptConfig.showCustomerAddress ? activeColors.primary : '#f4f3f4'}
+                                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                    />
+                                </View>
+                            </View>
+                        )}
 
                         <View style={styles.divider} />
 
@@ -731,5 +767,18 @@ const styles = StyleSheet.create({
     subConfigText: {
         fontSize: 10,
         fontWeight: 'bold',
+    },
+    subConfigColumn: {
+        paddingVertical: 4,
+    },
+    configItemSmall: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 4,
+    },
+    configLabelSmall: {
+        fontSize: FONT_SIZES.sm,
+        fontWeight: '500',
     }
 });

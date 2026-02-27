@@ -140,7 +140,10 @@ const estimationReducer = (state: EstimationState, action: Action): EstimationSt
         case 'UPDATE_GOLD_RATE':
             return {
                 ...state,
-                goldRate: action.payload,
+                goldRate: {
+                    ...action.payload,
+                    date: action.payload.date || new Date().toISOString()
+                },
             };
         case 'SET_CUSTOMER':
             return {
@@ -194,6 +197,7 @@ interface EstimationContextType {
     clearForm: () => void;
     resetEstimation: () => void;
     clearEstimation: () => void;
+    saveCurrentEstimation: (estimationNumber: number) => Promise<void>;
     loadEstimationIntoContext: (estimation: DBEstimation, orderId?: string) => void;
 }
 
@@ -219,6 +223,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
             const rate20k = await getSetting('rate_20k');
             const rate18k = await getSetting('rate_18k');
             const silver = await getSetting('rate_silver');
+            const rateDate = await getSetting('rate_date');
 
             if (rate24k && rate22k) {
                 dispatch({
@@ -229,7 +234,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                         rate20k: parseFloat(rate20k || '0'),
                         rate18k: parseFloat(rate18k || '0'),
                         silver: parseFloat(silver || '0'),
-                        date: new Date().toISOString()
+                        date: rateDate || new Date().toISOString()
                     }
                 });
             }
@@ -255,6 +260,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
         await setSetting('rate_20k', rate.rate20k.toString());
         await setSetting('rate_18k', rate.rate18k.toString());
         await setSetting('rate_silver', rate.silver.toString());
+        await setSetting('rate_date', rate.date || new Date().toISOString());
     };
     const setCustomer = (customer: Customer) => dispatch({ type: 'SET_CUSTOMER', payload: customer });
     const clearForm = () => dispatch({ type: 'CLEAR_FORM' });
@@ -287,6 +293,26 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
         dispatch({ type: 'CLEAR_ESTIMATION' });
     };
 
+    const saveCurrentEstimation = async (estimationNumber: number) => {
+        const estId = state.currentId || Date.now().toString();
+        const dbEstimate: DBEstimation = {
+            id: estId,
+            customerName: state.customer?.name || `Estimation #${estimationNumber}`,
+            customerMobile: state.customer?.mobile || 'N/A',
+            date: new Date().toISOString(),
+            items: JSON.stringify(state.items),
+            purchaseItems: JSON.stringify(state.purchaseItems),
+            chitItems: JSON.stringify(state.chitItems),
+            advanceItems: JSON.stringify(state.advanceItems),
+            totalWeight: state.totals.totalWeight,
+            grandTotal: state.totals.grandTotal,
+            estimationNumber: estimationNumber
+        };
+        await saveEstimation(dbEstimate);
+        const history = await getRecentEstimations(10);
+        dispatch({ type: 'SET_HISTORY', payload: history });
+    };
+
     const loadEstimationIntoContext = (estimation: DBEstimation, orderId?: string) => {
         const items = JSON.parse(estimation.items);
         const purchaseItems = JSON.parse(estimation.purchaseItems || '[]');
@@ -306,7 +332,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                 advanceItems,
                 customer,
                 id: estimation.id,
-                estimationNumber: estimation.estimationNumber || 0,
+                estimationNumber: (estimation.estimationNumber !== null && estimation.estimationNumber !== undefined) ? estimation.estimationNumber : 0,
                 orderId
             }
         });
@@ -328,6 +354,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                 clearForm,
                 resetEstimation,
                 clearEstimation,
+                saveCurrentEstimation,
                 loadEstimationIntoContext,
             }}
         >

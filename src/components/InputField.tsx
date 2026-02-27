@@ -19,6 +19,7 @@ interface InputFieldProps {
     maxLength?: number;
     editable?: boolean;
     helperText?: string;
+    required?: boolean;
 }
 
 // Fix for React 19 type mismatch
@@ -42,13 +43,19 @@ export default function InputField({
     maxLength,
     editable = true,
     helperText,
+    required = false,
 }: InputFieldProps) {
     const { theme } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     return (
         <View style={[styles.container, style]}>
-            {label && <Text style={[styles.label, { color: activeColors.text }]}>{label}</Text>}
+            {label && (
+                <Text style={[styles.label, { color: activeColors.text }]}>
+                    {label}
+                    {required && <Text style={{ color: activeColors.error }}> *</Text>}
+                </Text>
+            )}
             <View style={[
                 styles.inputWrapper,
                 { backgroundColor: activeColors.cardBg, borderColor: activeColors.border },

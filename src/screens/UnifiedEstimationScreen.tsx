@@ -35,8 +35,11 @@ type Mode = 'TAG' | 'MANUAL' | 'PURCHASE' | 'CHIT' | 'ADVANCE';
 export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initialMode?: Mode }) {
     const router = useRouter();
     const params = useLocalSearchParams();
-    const { state, addTagItem, addManualItem, addPurchaseItem, addChitItem, addAdvanceItem, removeItem, resetEstimation, clearEstimation } = useEstimation();
-    const { theme, t, shopDetails, deviceName, requestPrint, currentEmployeeName, receiptConfig } = useGeneralSettings();
+    const { state, addTagItem, addManualItem, addPurchaseItem, addChitItem, addAdvanceItem, removeItem, resetEstimation, clearEstimation, saveCurrentEstimation } = useEstimation();
+    const {
+        receiptConfig, currentEmployeeName, shopDetails, deviceName,
+        isPrinterConnected, printerType, t, showAlert, theme, requestPrint
+    } = useGeneralSettings();
     const [mode, setMode] = useState<Mode>((params.mode as Mode) || initialMode);
     const [editingItem, setEditingItem] = useState<EstimationItem | null>(null);
     const [viewingItem, setViewingItem] = useState<any | null>(null);
@@ -60,7 +63,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     // Form State
-    const [customerName, setCustomerName] = useState('');
+    const [printDetails, setPrintDetails] = useState<any>(null);
 
     // Purchase Panel State
     const [categories, setCategories] = useState<DBPurchaseCategory[]>([]);
@@ -232,10 +235,14 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         }
 
         // Fetch the next estimation number for today if we don't already have one
-        const nextNum = state.currentEstimationNumber || await getNextEstimationNumber();
+        const currentEstNum = state.currentEstimationNumber;
+        const nextNum = (currentEstNum !== null && currentEstNum !== undefined && currentEstNum !== 0)
+            ? currentEstNum
+            : await getNextEstimationNumber();
         setEstimationNum(nextNum);
 
-        requestPrint(async (empName) => {
+        requestPrint(async (details) => {
+            setPrintDetails(details);
             const items = state.items.filter(item => selectedItems.has(item.id));
             const purchases = state.purchaseItems.filter(item => selectedItems.has(item.id));
             const chits = state.chitItems.filter(item => selectedItems.has(item.id));
@@ -278,6 +285,11 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     { text: t('cancel'), style: 'cancel' }
                 ]
             );
+        }, false, {
+            customerName: state.customer?.name || '',
+            mobile: state.customer?.mobile || '',
+            place: state.customer?.address || '',
+            employeeName: currentEmployeeName || ''
         });
     };
 
@@ -286,7 +298,23 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setShowPrintPreview(false);
         try {
             if (previewType === 'merged') {
-                await printEstimationReceipt(itemsToPrint, purchaseItemsToPrint, chitItemsToPrint, advanceItemsToPrint, { ...shopDetails, deviceName }, customerName, currentEmployeeName, receiptConfig, estimationNum || undefined, t);
+                await printEstimationReceipt(
+                    itemsToPrint,
+                    purchaseItemsToPrint,
+                    chitItemsToPrint,
+                    advanceItemsToPrint,
+                    {
+                        ...shopDetails,
+                        deviceName,
+                        customerAddress: printDetails?.place || state.customer?.address || '',
+                        customerMobile: printDetails?.mobile || state.customer?.mobile || ''
+                    },
+                    printDetails?.customerName || '',
+                    printDetails?.employeeName || currentEmployeeName,
+                    receiptConfig,
+                    estimationNum || undefined,
+                    t
+                );
 
                 // Save Order to History
                 try {
@@ -302,9 +330,9 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
                     const orderData = {
                         orderId,
-                        customerName,
-                        customerMobile: state.customer?.mobile || '',
-                        employeeName: currentEmployeeName,
+                        customerName: printDetails?.customerName || '',
+                        customerMobile: printDetails?.mobile || state.customer?.mobile || '',
+                        employeeName: printDetails?.employeeName || currentEmployeeName,
                         date: new Date().toISOString(),
                         grossTotal: totalGross,
                         netPayable,
@@ -321,11 +349,17 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
                     await saveOrder(orderData, orderItems);
 
-                    Alert.alert(
+                    // Also update recent activity estimation history
+                    if (estimationNum) {
+                        await saveCurrentEstimation(estimationNum);
+                    }
+
+                    showAlert(
                         t('print_success') || 'Print Successful',
                         t('print_success_msg') || 'Receipt printed and order saved. Clear list?',
+                        'success',
                         [
-                            { text: t('keep_list') || 'Keep List', style: 'cancel' },
+                            { text: t('keep_list') || 'Keep List', onPress: () => { }, style: 'cancel' },
                             { text: t('clear_list_confirm') || 'Clear List', onPress: () => clearEstimation(), style: 'destructive' }
                         ]
                     );
@@ -340,9 +374,14 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         purchaseItemsToPrint,
                         [],
                         [],
-                        { ...shopDetails, deviceName },
-                        customerName,
-                        currentEmployeeName,
+                        {
+                            ...shopDetails,
+                            deviceName,
+                            customerAddress: printDetails?.place || state.customer?.address || '',
+                            customerMobile: printDetails?.mobile || state.customer?.mobile || ''
+                        },
+                        printDetails?.customerName || '',
+                        printDetails?.employeeName || currentEmployeeName,
                         receiptConfig,
                         estimationNum || undefined,
                         t
@@ -350,13 +389,24 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 }
 
                 // Print each Chit and Advance item as a completely separate receipt
-                for (const item of chitItemsToPrint) await printChitItem(item, shopDetails, currentEmployeeName, receiptConfig, t);
-                for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails, currentEmployeeName, receiptConfig, t);
+                for (const item of chitItemsToPrint) await printChitItem(item, shopDetails, printDetails?.employeeName || currentEmployeeName, receiptConfig, t, printDetails?.customerName, printDetails?.mobile, printDetails?.place);
+                for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails, printDetails?.employeeName || currentEmployeeName, receiptConfig, t, printDetails?.customerName, printDetails?.mobile, printDetails?.place);
             }
-            Alert.alert(t('success'), t('printing_completed') || 'Printing completed');
             setSelectedItems(new Set());
+            // Show clear list prompt for separate print flow as well if not already shown
+            if (!receiptConfig.mergePrint) {
+                showAlert(
+                    t('success'),
+                    t('printing_completed') || 'Printing completed. Clear list?',
+                    'success',
+                    [
+                        { text: t('keep_list') || 'Keep List', onPress: () => { }, style: 'cancel' },
+                        { text: t('clear_list_confirm') || 'Clear List', onPress: () => clearEstimation(), style: 'destructive' }
+                    ]
+                );
+            }
         } catch (error: any) {
-            Alert.alert(t('error'), error.message || t('print_failed') || 'Failed to print items');
+            showAlert(t('error'), error.message || t('print_failed') || 'Failed to print items', 'error');
         } finally {
             setIsPrinting(false);
         }
@@ -402,7 +452,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             isInitialLoadPurchase.current = false;
         }, 150);
 
-        Alert.alert(t('editing'), t('purchase_loaded'));
+        showAlert(t('editing'), t('purchase_loaded'), 'info');
     };
 
     const handleEditChit = (item: ChitItem) => {
@@ -410,7 +460,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setChitAmount(item.amount.toString());
         setMode('CHIT');
         removeItem(item.id, 'chit');
-        Alert.alert(t('editing'), t('chit_loaded'));
+        showAlert(t('editing'), t('chit_loaded'), 'info');
     };
 
     const handleEditAdvance = (item: AdvanceItem) => {
@@ -418,15 +468,16 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setAdvanceAmount(item.amount.toString());
         setMode('ADVANCE');
         removeItem(item.id, 'advance');
-        Alert.alert(t('editing'), t('advance_loaded'));
+        showAlert(t('editing'), t('advance_loaded'), 'info');
     };
 
     const handleRemoveItem = (id: string, type: 'estimation' | 'purchase' | 'chit' | 'advance' = 'estimation') => {
-        Alert.alert(
+        showAlert(
             t('confirm_remove'),
             t('confirm_remove_msg'),
+            'warning',
             [
-                { text: t('cancel'), style: 'cancel' },
+                { text: t('cancel'), onPress: () => { }, style: 'cancel' },
                 { text: t('remove'), onPress: () => removeItem(id, type), style: 'destructive' }
             ]
         );
@@ -452,7 +503,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         }
 
         if (!purchaseCategoryId || isNaN(gWeightNum) || gWeightNum <= 0 || isNaN(rateValNum) || rateValNum <= 0) {
-            Alert.alert(t('error'), t('field_required'));
+            showAlert(t('error'), t('field_required'), 'error');
             return;
         }
 
@@ -477,12 +528,12 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
         addPurchaseItem(item);
         clearPurchaseForm();
-        Alert.alert(t('success'), t('item_added'));
+        showAlert(t('success'), t('item_added'), 'success');
     };
 
     const handleAddChit = () => {
         if (!chitId || !chitAmount) {
-            Alert.alert('Error', t('field_required'));
+            showAlert('Error', t('field_required'), 'error');
             return;
         }
         addChitItem({
@@ -492,12 +543,12 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         });
         setChitId('');
         setChitAmount('');
-        Alert.alert(t('success'), t('item_added'));
+        showAlert(t('success'), t('item_added'), 'success');
     };
 
     const handleAddAdvance = () => {
         if (!advanceId || !advanceAmount) {
-            Alert.alert('Error', t('field_required'));
+            showAlert('Error', t('field_required'), 'error');
             return;
         }
         addAdvanceItem({
@@ -507,24 +558,25 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         });
         setAdvanceId('');
         setAdvanceAmount('');
-        Alert.alert(t('success'), t('item_added'));
+        showAlert(t('success'), t('item_added'), 'success');
     };
 
 
     const handleReset = () => {
         if (state.items.length === 0 && state.purchaseItems.length === 0) return;
 
-        Alert.alert(
+        showAlert(
             t('reset') || 'Reset',
             t('reset_confirm_msg') || 'Clear the current list of items? This will not save to history.',
+            'warning',
             [
-                { text: t('cancel'), style: 'cancel' },
+                { text: t('cancel'), onPress: () => { }, style: 'cancel' },
                 {
                     text: t('reset') || 'Reset',
                     style: 'destructive',
                     onPress: () => {
                         resetEstimation();
-                        setCustomerName('');
+                        setPrintDetails(null);
                         setPurchaseCategoryId('');
                         setPurchaseSubCategoryId('');
                         setPurchaseGross('');
@@ -534,7 +586,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         setChitAmount('');
                         setAdvanceId('');
                         setAdvanceAmount('');
-                        Alert.alert('Reset', 'Items list and form cleared.');
+                        showAlert('Reset', 'Items list and form cleared.', 'info');
                     }
                 }
             ]
@@ -592,7 +644,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 11px;">
                         <div>{t('date')}: ${new Date().toLocaleString()}</div>
                         ${estimationNum ? `<div>${t('est_hash')} <b>${estimationNum}</b></div>` : ''}
-                        ${customerName ? `<div>${t('customer')}: <b>${customerName}</b></div>` : ''}
+                        ${printDetails?.customerName ? `<div>${t('customer')}: <b>${printDetails.customerName}</b></div>` : ''}
                     </div>
 
                     <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
@@ -732,72 +784,63 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     </View>
 
                     <ScrollView style={styles.previewBody} showsVerticalScrollIndicator={false}>
-                        <View style={[styles.previewReceipt, { backgroundColor: '#FFF', borderColor: '#EEE', borderWidth: 1 }]}>
-                            <View style={[styles.previewHeader, { alignItems: 'center' }]}>
-                                <Text style={[styles.previewShopName, { color: '#000' }]}>{shopDetails.name}</Text>
-                                <Text style={[styles.previewShopInfo, { color: '#666' }]}>Device: {deviceName || 'Main Terminal'}</Text>
-                                <Text style={[styles.previewShopInfo, { color: '#666' }]}>{shopDetails.address}</Text>
-                                <Text style={[styles.previewShopInfo, { color: '#666' }]}>{shopDetails.phone}</Text>
+                        <View style={[styles.previewReceipt, { backgroundColor: '#FFF', borderColor: '#DDD', borderWidth: 1, borderRadius: 8, padding: 15 }]}>
+                            <View style={[styles.previewHeader, { alignItems: 'center', marginBottom: 12 }]}>
+                                <Text style={[styles.previewShopName, { color: '#000', fontSize: 18, fontWeight: 'bold', textTransform: 'uppercase' }]}>{shopDetails.name}</Text>
+                                <Text style={[styles.previewShopInfo, { color: '#444', fontSize: 10 }]}>{shopDetails.address}</Text>
+                                <Text style={[styles.previewShopInfo, { color: '#444', fontSize: 10 }]}>{shopDetails.phone}</Text>
+                                {shopDetails.gstNumber ? <Text style={[styles.previewShopInfo, { color: '#444', fontSize: 10 }]}>GSTIN: {shopDetails.gstNumber}</Text> : null}
                             </View>
-                            <View style={styles.previewDivider} />
-                            <View style={styles.previewSubHeader}>
-                                <View style={{ width: '45%' }}>
-                                    <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>{t('date')}: {new Date().toLocaleDateString()}</Text>
-                                    <Text style={[styles.previewInfo, { color: activeColors.textLight, fontWeight: 'bold' }]}>{t('estimation_number') || 'Est #'}: {estimationNum || '...'}</Text>
+
+                            <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderStyle: 'dashed', paddingVertical: 8, marginVertical: 10, borderColor: '#000' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>Gold 22K: Rs.{state.goldRate?.rate22k}</Text>
+                                    <Text style={{ fontSize: 10 }}>Date: {new Date().toLocaleDateString()}</Text>
                                 </View>
-                                <View style={{ width: '45%', alignItems: 'flex-end' }}>
-                                    {customerName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>{t('cust_label')}: {customerName}</Text> : null}
-                                    {currentEmployeeName ? <Text style={[styles.previewInfo, { color: activeColors.textLight }]}>{t('by_label')}: {currentEmployeeName}</Text> : null}
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                                    <Text style={{ fontSize: 10 }}>Silver: Rs.{state.goldRate?.silver} /g</Text>
                                 </View>
                             </View>
-                            <View style={styles.previewDivider} />
-                            {/* Preview Body - Items */}
-                            {itemsToPrint.map((item, index) => (
-                                <View key={item.id} style={[styles.previewRow, { alignItems: 'flex-start', marginBottom: 6 }]}>
-                                    <View style={{ flex: 1, paddingRight: 10 }}>
-                                        <Text style={{ fontSize: 11, fontWeight: 'bold' }}>{item.name} {item.subProductName ? `(${item.subProductName})` : ''}</Text>
-                                        <Text style={{ fontSize: 9, color: '#444', marginTop: 1 }}>{item.netWeight.toFixed(3)}g x ₹{item.rate.toLocaleString()}</Text>
+
+                            {printDetails?.customerName && (
+                                <View style={{ borderBottomWidth: 0.5, borderColor: '#EEE', paddingBottom: 8, marginBottom: 12 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 2 }}>Name: {printDetails.customerName.toUpperCase()}</Text>
+                                    {printDetails.mobile ? <Text style={{ fontSize: 9 }}>Phone: {printDetails.mobile}</Text> : null}
+                                    {printDetails.place ? <Text style={{ fontSize: 9 }}>Place: {printDetails.place.toUpperCase()}</Text> : null}
+                                </View>
+                            )}
+
+                            <View style={{ borderBottomWidth: 1, borderStyle: 'dashed', paddingBottom: 4, marginBottom: 8 }}>
+                                <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{t('items_and_details').toUpperCase()}</Text>
+                            </View>
+
+                            {itemsToPrint.map((item) => (
+                                <View key={item.id} style={{ marginBottom: 10 }}>
+                                    <Text style={{ fontSize: 11, fontWeight: 'bold' }}>{item.name.toUpperCase()} | {item.pcs} PCS</Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+                                        <Text style={{ fontSize: 9 }}>G.WT: {item.grossWeight.toFixed(3)}g</Text>
+                                        <Text style={{ fontSize: 9 }}>N.WT: {item.netWeight.toFixed(3)}g</Text>
                                     </View>
-                                    <Text style={{ fontSize: 11, fontWeight: 'bold', textAlign: 'right' }}>₹ {Math.round(item.totalValue).toLocaleString()}</Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <Text style={{ fontSize: 9 }}>VA: {item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`} ({(item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage).toFixed(3)}g)</Text>
+                                        <Text style={{ fontSize: 9 }}>MC: {item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge}`)}</Text>
+                                    </View>
                                 </View>
                             ))}
 
-                            <View style={[styles.previewDivider, { height: 1, backgroundColor: '#000', opacity: 0.1, marginVertical: 8 }]} />
-
-                            {/* Totals Section */}
-                            <View style={styles.previewRow}>
-                                <Text style={[styles.previewInfo, { fontSize: 10 }]}>{t('items_total')}:</Text>
-                                <Text style={[styles.previewInfo, { fontWeight: 'bold', fontSize: 10 }]}>₹ {Math.round(itemsToPrint.reduce((s, i) => s + i.totalValue, 0)).toLocaleString()}</Text>
+                            <View style={{ borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 8, marginVertical: 10, borderColor: '#000' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>TOTAL G.WT:</Text>
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{itemsToPrint.reduce((s, i) => s + i.grossWeight, 0).toFixed(3)}g</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>TOTAL N.WT:</Text>
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{itemsToPrint.reduce((s, i) => s + i.netWeight, 0).toFixed(3)}g</Text>
+                                </View>
                             </View>
 
-                            {purchaseItemsToPrint.length > 0 && (
-                                <View style={styles.previewRow}>
-                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>{t('old_gold_deduction')}:</Text>
-                                    <Text style={[styles.previewInfo, { color: activeColors.error, fontSize: 10 }]}>- ₹ {Math.round(purchaseItemsToPrint.reduce((s, i) => s + i.amount, 0)).toLocaleString()}</Text>
-                                </View>
-                            )}
-
-                            {chitItemsToPrint.length > 0 && (
-                                <View style={styles.previewRow}>
-                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>{t('chit_deduction')}:</Text>
-                                    <Text style={[styles.previewInfo, { color: activeColors.error, fontSize: 10 }]}>- ₹ {Math.round(chitItemsToPrint.reduce((s, i) => s + i.amount, 0)).toLocaleString()}</Text>
-                                </View>
-                            )}
-
-                            {advanceItemsToPrint.length > 0 && (
-                                <View style={styles.previewRow}>
-                                    <Text style={[styles.previewInfo, { fontSize: 10 }]}>{t('advance_deduction')}:</Text>
-                                    <Text style={[styles.previewInfo, { color: activeColors.error, fontSize: 10 }]}>- ₹ {Math.round(advanceItemsToPrint.reduce((s, i) => s + i.amount, 0)).toLocaleString()}</Text>
-                                </View>
-                            )}
-
-                            {/* Add other deductions similarly with Math.round */}
-
-                            <View style={[styles.previewDivider, { height: 2, backgroundColor: '#000', opacity: 0.8, marginVertical: 10 }]} />
-
-                            <View style={styles.previewRow}>
-                                <Text style={{ fontSize: 13, fontWeight: 'bold' }}>{t('net_payable')}:</Text>
-                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: activeColors.success }}>₹ {Math.round(
+                            <View style={{ alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderStyle: 'dashed', marginBottom: 10 }}>
+                                <Text style={{ fontSize: 16, fontWeight: 'bold' }}>NET PAYABLE: Rs.{Math.round(
                                     itemsToPrint.reduce((s, i) => s + i.totalValue, 0) -
                                     (purchaseItemsToPrint.reduce((s, i) => s + i.amount, 0) +
                                         chitItemsToPrint.reduce((s, i) => s + i.amount, 0) +
@@ -805,7 +848,13 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                 ).toLocaleString()}</Text>
                             </View>
 
-                            <Text style={styles.previewFooter}>{shopDetails.footerMessage}</Text>
+                            <View style={{ alignItems: 'flex-end', marginTop: 10 }}>
+                                <Text style={{ fontSize: 10, fontWeight: 'bold' }}>EMPLOYEE: {printDetails?.employeeName || currentEmployeeName}</Text>
+                            </View>
+
+                            <Text style={{ textAlign: 'center', marginTop: 20, fontSize: 11, fontWeight: 'bold', fontStyle: 'italic' }}>
+                                THANK YOU VISIT AGAIN
+                            </Text>
                         </View>
                     </ScrollView>
                     <View style={styles.modalFooter}>

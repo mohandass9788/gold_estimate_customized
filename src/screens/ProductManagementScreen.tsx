@@ -54,7 +54,7 @@ const Icon = Ionicons as any;
 const { width } = Dimensions.get('window');
 
 export default function ProductManagementScreen() {
-    const { t } = useGeneralSettings();
+    const { t, showAlert } = useGeneralSettings();
     const [products, setProducts] = useState<DBProduct[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<DBProduct | null>(null);
     const [subProducts, setSubProducts] = useState<DBSubProduct[]>([]);
@@ -99,7 +99,7 @@ export default function ProductManagementScreen() {
 
     const handleAddProduct = async () => {
         if (!newProductName.trim()) {
-            Alert.alert(t('error'), t('product_name_required') || 'Product name is required');
+            showAlert(t('error'), t('product_name_required') || 'Product name is required', 'error');
             return;
         }
         try {
@@ -116,10 +116,10 @@ export default function ProductManagementScreen() {
             resetForms();
             setShowAddModal(false);
             loadProducts();
-            Alert.alert(t('success'), t('product_added_successfully') || 'Product added successfully');
+            showAlert(t('success'), t('product_added_successfully') || 'Product added successfully', 'success');
         } catch (error) {
             console.error('Add product error:', error);
-            Alert.alert(t('error'), t('product_add_failed') || 'Product already exists or could not be added');
+            showAlert(t('error'), t('product_add_failed') || 'Product already exists or could not be added', 'error');
         }
     };
 
@@ -136,9 +136,9 @@ export default function ProductManagementScreen() {
                 hsnCode: hsnCode.trim()
             });
             loadProducts();
-            Alert.alert(t('success'), t('product_defaults_updated') || 'Product defaults updated');
+            showAlert(t('success'), t('product_defaults_updated') || 'Product defaults updated', 'success');
         } catch (error) {
-            Alert.alert(t('error'), t('product_update_failed') || 'Could not update product defaults');
+            showAlert(t('error'), t('product_update_failed') || 'Could not update product defaults', 'error');
         }
     };
 
@@ -151,7 +151,7 @@ export default function ProductManagementScreen() {
             loadSubProducts(selectedProduct.id);
         } catch (error) {
             console.error('Add sub-product error:', error);
-            Alert.alert(t('error'), t('sub_product_add_failed') || 'Sub-product already exists or could not be added');
+            showAlert(t('error'), t('sub_product_add_failed') || 'Sub-product already exists or could not be added', 'error');
         }
     };
 
@@ -168,13 +168,14 @@ export default function ProductManagementScreen() {
     };
 
     const handleDataManagement = () => {
-        Alert.alert(
+        showAlert(
             t('manage_data') || 'Manage Data',
             t('select_action') || 'Select an action:',
+            'info',
             [
                 { text: t('download_sample'), onPress: handleDownloadSample },
                 { text: t('import_excel'), onPress: () => handleImportExcel(true) },
-                { text: t('cancel'), style: 'cancel' }
+                { text: t('cancel'), onPress: () => { }, style: 'cancel' }
             ]
         );
     };
@@ -198,9 +199,10 @@ export default function ProductManagementScreen() {
                 console.error('DocumentPicker load failed:', e);
                 // Only alert if this was a manual user action
                 if (isManualCall) {
-                    Alert.alert(
+                    showAlert(
                         t('error') || 'Error',
-                        'The Document Picker module is not available. Please ensure you are using a development build with the expo-document-picker module included.'
+                        'The Document Picker module is not available. Please ensure you are using a development build with the expo-document-picker module included.',
+                        'error'
                     );
                 }
                 return;
@@ -228,7 +230,7 @@ export default function ProductManagementScreen() {
             const data = XLSX.utils.sheet_to_json(worksheet) as any[];
 
             if (data.length === 0) {
-                Alert.alert(t('error'), 'File is empty');
+                showAlert(t('error'), 'File is empty', 'error');
                 setIsImporting(false);
                 return;
             }
@@ -283,10 +285,10 @@ export default function ProductManagementScreen() {
             if (skippedCount > 0) message += `\n• ${t('existing_products') || 'Existing (Skipped)'}: ${skippedCount}`;
             message += `\n• ${t('sub_products_added') || 'Sub-products Added'}: ${subProductsAdded}`;
 
-            Alert.alert(t('success'), message);
+            showAlert(t('success'), message, 'success');
         } catch (error) {
             console.error('Import error:', error);
-            Alert.alert(t('error'), 'Failed to import products. Ensure file format is correct.');
+            showAlert(t('error'), 'Failed to import products. Ensure file format is correct.', 'error');
         } finally {
             setIsImporting(false);
         }
@@ -337,18 +339,18 @@ export default function ProductManagementScreen() {
                     UTI: 'com.microsoft.excel.xlsx'
                 });
             } else {
-                Alert.alert(t('error'), 'Sharing is not available on this device');
+                showAlert(t('error'), 'Sharing is not available on this device', 'error');
             }
             setIsImporting(false);
         } catch (error) {
             console.error('Download sample error:', error);
-            Alert.alert(t('error'), 'Failed to generate sample template');
+            showAlert(t('error'), 'Failed to generate sample template', 'error');
         }
     };
 
     const handleDeleteProduct = (id: number) => {
-        Alert.alert(t('confirm_delete') || 'Confirm Delete', t('delete_product_confirm') || 'Deleting a product will delete all its sub-products. Proceed?', [
-            { text: t('cancel'), style: 'cancel' },
+        showAlert(t('confirm_delete') || 'Confirm Delete', t('delete_product_confirm') || 'Deleting a product will delete all its sub-products. Proceed?', 'warning', [
+            { text: t('cancel'), onPress: () => { }, style: 'cancel' },
             {
                 text: t('remove'), style: 'destructive', onPress: async () => {
                     await deleteProduct(id);
@@ -647,8 +649,8 @@ export default function ProductManagementScreen() {
                                             <View key={sub.id} style={styles.subProductRow}>
                                                 <Text style={styles.subProductText}>{sub.name}</Text>
                                                 <TouchableOpacity onPress={() => {
-                                                    Alert.alert(t('remove'), t('delete_sub_confirm'), [
-                                                        { text: t('no') },
+                                                    showAlert(t('remove'), t('delete_sub_confirm'), 'warning', [
+                                                        { text: t('no'), onPress: () => { }, style: 'cancel' },
                                                         {
                                                             text: t('yes'), onPress: () => deleteSubProduct(sub.id).then(() => {
                                                                 if (selectedProduct) loadSubProducts(selectedProduct.id);

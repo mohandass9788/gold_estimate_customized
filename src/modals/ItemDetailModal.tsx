@@ -20,7 +20,7 @@ interface ItemDetailModalProps {
 }
 
 export default function ItemDetailModal({ visible, onClose, item, type }: ItemDetailModalProps) {
-    const { theme, t, shopDetails, currentEmployeeName, receiptConfig } = useGeneralSettings();
+    const { theme, t, shopDetails, currentEmployeeName, receiptConfig, requestPrint } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     if (!item) return null;
@@ -113,27 +113,29 @@ export default function ItemDetailModal({ visible, onClose, item, type }: ItemDe
     };
 
     const handlePrint = async () => {
-        try {
-            const items = type === 'estimation' ? [item] : [];
-            const purchaseItems = type === 'purchase' ? [item] : [];
-            const chitItems = type === 'chit' ? [item] : [];
-            const advanceItems = type === 'advance' ? [item] : [];
+        requestPrint(async (details) => {
+            try {
+                const items = type === 'estimation' ? [item] : [];
+                const purchaseItems = type === 'purchase' ? [item] : [];
+                const chitItems = type === 'chit' ? [item] : [];
+                const advanceItems = type === 'advance' ? [item] : [];
 
-            await printEstimationReceipt(
-                items,
-                purchaseItems,
-                chitItems,
-                advanceItems,
-                shopDetails,
-                item.customerName || (type === 'estimation' ? item.customerName : undefined),
-                currentEmployeeName,
-                receiptConfig,
-                undefined,
-                t
-            );
-        } catch (error: any) {
-            console.error('Print failed', error);
-        }
+                await printEstimationReceipt(
+                    items,
+                    purchaseItems,
+                    chitItems,
+                    advanceItems,
+                    shopDetails,
+                    details.customerName || item.customerName || (type === 'estimation' ? item.customerName : undefined),
+                    details.employeeName || currentEmployeeName,
+                    receiptConfig,
+                    undefined,
+                    t
+                );
+            } catch (error: any) {
+                console.error('Print failed', error);
+            }
+        });
     };
 
     return (

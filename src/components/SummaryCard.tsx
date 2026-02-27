@@ -71,7 +71,6 @@ export default function SummaryCard({ totals, style }: SummaryCardProps) {
             <View style={styles.grandTotalContainer}>
                 <View style={styles.grandTotalRow}>
                     <View style={styles.grandTotalLeft}>
-                        <Text style={[styles.rateCardTitle, { color: colors.textLight }]}>{t('calc_rates_ref')}</Text>
                         <Text style={[styles.grandTotalLabel, { color: colors.text }]}>{t('net_payable')}</Text>
                         {!expanded && (
                             <View style={[styles.badge, { backgroundColor: colors.primary + '15' }]}>

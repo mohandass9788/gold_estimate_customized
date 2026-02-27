@@ -22,7 +22,7 @@ const TouchableWithoutFeedback = RNRTouchableWithoutFeedback as any;
 
 export default function ManageGoldScreen() {
     const router = useRouter();
-    const { theme, t } = useGeneralSettings();
+    const { theme, t, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [metalTypes, setMetalTypes] = useState<DBMetalType[]>([]);
@@ -45,13 +45,13 @@ export default function ManageGoldScreen() {
 
     const handleSave = async () => {
         if (!name || !purity) {
-            Alert.alert('Error', 'Please fill all fields');
+            showAlert('Error', 'Please fill all fields', 'error');
             return;
         }
 
         const purityVal = parseFloat(purity);
         if (isNaN(purityVal)) {
-            Alert.alert('Error', 'Invalid purity value');
+            showAlert('Error', 'Invalid purity value', 'error');
             return;
         }
 
@@ -70,16 +70,17 @@ export default function ManageGoldScreen() {
             resetForm();
             loadMetalTypes();
         } catch (error) {
-            Alert.alert('Error', 'Failed to save metal type. Name might be duplicate.');
+            showAlert('Error', 'Failed to save metal type. Name might be duplicate.', 'error');
         }
     };
 
     const handleDelete = (id: number) => {
-        Alert.alert(
+        showAlert(
             'Confirm Delete',
             'Are you sure you want to delete this metal type?',
+            'warning',
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: 'Cancel', onPress: () => { }, style: 'cancel' },
                 {
                     text: 'Delete',
                     style: 'destructive',
