@@ -10,16 +10,13 @@ WebBrowser.maybeCompleteAuthSession();
 
 // Google Client IDs - Updated for proper platform support
 const GOOGLE_CLIENT_IDS = {
-    web: '372914702820-43bo8au2brbhin5tuu8q473lmv893o9d.apps.googleusercontent.com', // For Expo Go
     android: '372914702820-43bo8au2brbhin5tuu8q473lmv893o9d.apps.googleusercontent.com', // User needs to replace
-    ios: '372914702820-43bo8au2brbhin5tuu8q473lmv893o9d.apps.googleusercontent.com' // User needs to replace
 };
 
 const MICROSOFT_CLIENT_ID = 'YOUR_MICROSOFT_CLIENT_ID';
 
 const REDIRECT_URI = AuthSession.makeRedirectUri({
-    scheme: 'goldestimation',
-    path: 'auth',
+    scheme: 'goldestimation'
 });
 
 console.log('Redirect URI:', REDIRECT_URI);
@@ -53,16 +50,13 @@ export class CloudBackupService {
     public async loginGoogle(): Promise<boolean> {
         const discovery = await AuthSession.fetchDiscoveryAsync('https://accounts.google.com');
 
-        const clientId = Platform.select({
-            android: GOOGLE_CLIENT_IDS.android,
-            ios: GOOGLE_CLIENT_IDS.ios,
-            default: GOOGLE_CLIENT_IDS.web,
-        });
+        const clientId = GOOGLE_CLIENT_IDS.android;
 
         const request = new AuthSession.AuthRequest({
             clientId,
             scopes: GOOGLE_SCOPES,
             redirectUri: REDIRECT_URI,
+            responseType: AuthSession.ResponseType.Token,
         });
 
         const result = await request.promptAsync(discovery);
@@ -73,7 +67,7 @@ export class CloudBackupService {
         return false;
     }
 
-    public async uploadToGoogle(dbUri: string): Promise<boolean> {
+    public async uploadToGoogle(dbUri: string, deviceName?: string): Promise<boolean> {
         if (!this.googleToken) return false;
 
         try {
@@ -137,7 +131,7 @@ export class CloudBackupService {
         return false;
     }
 
-    public async uploadToOneDrive(dbUri: string): Promise<boolean> {
+    public async uploadToOneDrive(dbUri: string, deviceName?: string): Promise<boolean> {
         if (!this.microsoftToken) return false;
 
         try {

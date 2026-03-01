@@ -119,6 +119,8 @@ interface GeneralSettingsContextType {
     featureFlags: FeatureFlags;
     updateFeatureFlags: (flags: Partial<FeatureFlags>) => void;
     printDetailsModalInitialData: PrintDetails | null;
+    serverApiUrl: string;
+    updateServerApiUrl: (url: string) => void;
 }
 
 const GeneralSettingsContext = createContext<GeneralSettingsContextType | undefined>(undefined);
@@ -172,6 +174,8 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         type: 'info',
         buttons: []
     });
+
+    const [serverApiUrl, setServerApiUrlState] = useState<string>('https://school.agnisofterp.com/maha/agni');
 
     const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons: AlertButton[] = []) => {
         setAlertConfig({ visible: true, title, message, type, buttons });
@@ -287,6 +291,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 if (savedShopDetails[8]) setShopDetails(prev => ({ ...prev, splashImage: savedShopDetails[8]! }));
                 if (savedShopDetails[9]) setShopDetails(prev => ({ ...prev, gstPercentage: savedShopDetails[9]! }));
 
+                const savedServerUrl = await getSetting('server_api_url');
+                if (savedServerUrl) setServerApiUrlState(savedServerUrl);
+
                 const savedPin = await getSetting('admin_pin');
                 if (savedPin) setAdminPin(savedPin);
 
@@ -310,9 +317,11 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 }
 
                 const savedDeviceName = await getSetting('device_name');
-                if (savedDeviceName) {
-                    setDeviceNameState(savedDeviceName);
-                } else {
+                const savedDeviceId = await getSetting('custom_device_id');
+
+                let effectiveName = savedDeviceName || savedDeviceId;
+
+                if (!effectiveName) {
                     let defaultName = 'DEVICE';
                     try {
                         let uniqueId = '';
@@ -327,9 +336,13 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                             defaultName = `DEV-${Math.floor(Math.random() * 1000000)}`;
                         }
                     } catch (e) { }
-                    setDeviceNameState(defaultName);
-                    setSetting('device_name', defaultName); // Save the generated default
+                    effectiveName = defaultName;
+                    await setSetting('device_name', defaultName);
+                    await setSetting('custom_device_id', defaultName);
                 }
+
+                setDeviceNameState(effectiveName);
+                setDeviceId(effectiveName);
 
                 const savedFeatureFlags = await getSetting('feature_flags');
                 if (savedFeatureFlags) {
@@ -433,12 +446,21 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
     const updateDeviceName = async (name: string) => {
         setDeviceNameState(name);
+        setDeviceId(name);
         await setSetting('device_name', name);
+        await setSetting('custom_device_id', name);
     };
 
     const updateDeviceId = async (id: string) => {
         setDeviceId(id);
+        setDeviceNameState(id);
         await setSetting('custom_device_id', id);
+        await setSetting('device_name', id);
+    };
+
+    const updateServerApiUrl = async (url: string) => {
+        setServerApiUrlState(url);
+        await setSetting('server_api_url', url);
     };
 
     const updateReceiptConfig = async (config: Partial<ReceiptConfig>) => {
@@ -509,7 +531,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             alertConfig,
             showAlert,
             hideAlert,
-            printDetailsModalInitialData
+            printDetailsModalInitialData,
+            serverApiUrl,
+            updateServerApiUrl
         }}>
             {children}
         </GeneralSettingsContext.Provider>

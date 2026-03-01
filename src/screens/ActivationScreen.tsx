@@ -58,22 +58,20 @@ export default function ActivationScreen() {
             }
         } catch (error) {
             console.error('Activation error:', error);
-            Alert.alert(t('error'), 'Something went wrong. Please try again.');
+            Alert.alert(t('error'), t('something_went_wrong'));
         } finally {
             setLoading(false);
         }
     };
 
     const openLink = (url: string) => {
-        Linking.openURL(url).catch(() => {
-            Alert.alert(t('error'), 'Could not open link');
-        });
+        Alert.alert(t('error'), t('could_not_open_link'));
     };
 
     const contactMethods = [
-        { icon: 'call', label: 'Call', url: `tel:+919788339566`, color: '#007AFF' },
-        { icon: 'logo-whatsapp', label: 'WhatsApp', url: `whatsapp://send?phone=+919788339566`, color: '#25D366' },
-        { icon: 'mail', label: 'Email', url: `mailto:mohandass9788@gmail.com`, color: '#EA4335' },
+        { icon: 'call', label: t('call'), url: `tel:+919788339566`, color: '#007AFF' },
+        { icon: 'logo-whatsapp', label: t('whatsapp'), url: `whatsapp://send?phone=+919788339566`, color: '#25D366' },
+        { icon: 'mail', label: t('email'), url: `mailto:nexooai@gmail.com`, color: '#EA4335' },
         { icon: 'logo-facebook', label: 'Facebook', url: `fb://profile/mohandass.shanthi`, color: '#1877F2' },
     ];
 

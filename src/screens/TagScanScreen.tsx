@@ -20,7 +20,7 @@ const Text = RNText as any;
 export default function TagScanScreen() {
     const router = useRouter();
     const { addTagItem, state } = useEstimation();
-    const { theme, t } = useGeneralSettings();
+    const { theme, t, serverApiUrl } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [permission, requestPermission] = useCameraPermissions();
@@ -47,7 +47,7 @@ export default function TagScanScreen() {
 
         try {
             console.log("Scanning tag:", data);
-            const product = await fetchTagDetailsFromApi(data, 'ajithkumar');
+            const product = await fetchTagDetailsFromApi(data, 'ajithkumar', serverApiUrl);
             console.log("Mapped Product:", product);
 
             // Navigate to UnifiedEstimationScreen with scanned data

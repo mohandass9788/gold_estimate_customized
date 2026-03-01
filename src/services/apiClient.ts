@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Replace with your actual API base URL
-const BASE_URL = 'https://api.goldestimation.com/v1';
+const BASE_URL = 'https://school.agnisofterp.com/maha/agni';
 
 const apiClient = axios.create({
     baseURL: BASE_URL,

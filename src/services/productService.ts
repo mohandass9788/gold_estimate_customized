@@ -2,7 +2,7 @@ import apiClient from './apiClient';
 import axios from 'axios';
 import { Product } from '../types';
 
-export const getProductByTag = async (tagNumber: string): Promise<Product> => {
+export const getProductByTag = async (tagNumber: string, baseUrl?: string): Promise<Product> => {
     // Mock response for development if API is not available
     if (tagNumber === 'TAG001') {
         return {
@@ -23,6 +23,10 @@ export const getProductByTag = async (tagNumber: string): Promise<Product> => {
     }
 
     try {
+        if (baseUrl) {
+            const response = await axios.get<Product>(`${baseUrl}/product/tag/${tagNumber}`);
+            return response.data;
+        }
         const response = await apiClient.get<Product>(`/product/tag/${tagNumber}`);
         return response.data;
     } catch (error) {
@@ -31,9 +35,11 @@ export const getProductByTag = async (tagNumber: string): Promise<Product> => {
     }
 };
 
-export const fetchTagDetailsFromApi = async (itemtag: string, employeename: string = 'ajithkumar'): Promise<Product> => {
+export const fetchTagDetailsFromApi = async (itemtag: string, employeename: string = 'ajithkumar', baseUrl?: string): Promise<Product> => {
     try {
-        const response = await axios.post<any>('https://school.agnisofterp.com/maha/agni/tag/details', {
+        const url = baseUrl ? `${baseUrl}/tag/details` : 'https://school.agnisofterp.com/maha/agni/tag/details';
+        console.log("API URL:", url);
+        const response = await axios.post<any>(url, {
             itemtag,
             employeename
         }, {
@@ -97,8 +103,12 @@ export const fetchTagDetailsFromApi = async (itemtag: string, employeename: stri
     }
 };
 
-export const uploadMultiTags = async (tags: string[]): Promise<Product[]> => {
+export const uploadMultiTags = async (tags: string[], baseUrl?: string): Promise<Product[]> => {
     try {
+        if (baseUrl) {
+            const response = await axios.post<Product[]>(`${baseUrl}/product/multi-tag`, { tags });
+            return response.data;
+        }
         const response = await apiClient.post<Product[]>('/product/multi-tag', { tags });
         return response.data;
     } catch (error) {

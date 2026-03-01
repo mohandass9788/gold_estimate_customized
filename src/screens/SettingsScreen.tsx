@@ -1,4 +1,4 @@
-import { View as RNView, Text as RNText, StyleSheet, TouchableOpacity as RNRTouchableOpacity, ScrollView as RNScrollView, TextInput as RNTextInput, Modal as RNModal, Linking, Image as RNImage } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, TouchableOpacity as RNRTouchableOpacity, ScrollView as RNScrollView, TextInput as RNTextInput, Modal as RNModal, Linking, Image as RNImage, Alert } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,10 +27,14 @@ const Image = RNImage as any;
 export default function SettingsScreen() {
     const router = useRouter();
     const { logout, isSuperAdmin } = useAuth();
-    const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName, deviceId, updateDeviceId } = useGeneralSettings();
+    const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName, deviceId, updateDeviceId, serverApiUrl, updateServerApiUrl, receiptConfig, updateReceiptConfig } = useGeneralSettings();
     const [showHelpModal, setShowHelpModal] = useState(false);
     const [showEditIdModal, setShowEditIdModal] = useState(false);
+    const [showEditServerUrlModal, setShowEditServerUrlModal] = useState(false);
+    const [showEditQrUrlModal, setShowEditQrUrlModal] = useState(false);
     const [tempDeviceId, setTempDeviceId] = useState('');
+    const [tempServerUrl, setTempServerUrl] = useState('');
+    const [tempQrUrl, setTempQrUrl] = useState('');
 
 
 
@@ -49,15 +53,17 @@ export default function SettingsScreen() {
     );
 
     const handleWhatsApp = () => {
-        Linking.openURL('whatsapp://send?phone=+919876543210');
+        Linking.openURL('whatsapp://send?phone=+919585141535');
     };
 
     const handleEmail = () => {
-        Linking.openURL('mailto:support@goldestimation.com');
+        Linking.openURL('mailto:nexooai@gmail.com').catch(() => {
+            Alert.alert(t('error'), t('could_not_open_mail'));
+        });
     };
 
     const handleCall = () => {
-        Linking.openURL('tel:+919876543210');
+        Linking.openURL('tel:+919585141535');
     };
 
     return (
@@ -150,6 +156,26 @@ export default function SettingsScreen() {
                     />
                 </View>
 
+                <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('api_settings') || 'API Settings'}</Text>
+                    <SettingItem
+                        icon="server-outline"
+                        label={t('server_api_url')}
+                        onPress={() => {
+                            setTempServerUrl(serverApiUrl);
+                            setShowEditServerUrlModal(true);
+                        }}
+                    />
+                    <SettingItem
+                        icon="qr-code-outline"
+                        label={t('qr_endpoint_url')}
+                        onPress={() => {
+                            setTempQrUrl(receiptConfig.qrEndpointUrl || '');
+                            setShowEditQrUrlModal(true);
+                        }}
+                    />
+                </View>
+
                 {isSuperAdmin && (
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                         <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('super_admin')}</Text>
@@ -215,8 +241,7 @@ export default function SettingsScreen() {
                             <View style={styles.contactLeft}>
                                 <Icon name="call-outline" size={24} color={activeColors.primary} />
                                 <View style={styles.contactInfo}>
-                                    <Text style={[styles.contactLabel, { color: activeColors.textLight }]}>{t('helpline')}</Text>
-                                    <Text style={[styles.contactValue, { color: activeColors.text }]}>+91 98765 43210</Text>
+                                    <Text style={[styles.contactValue, { color: activeColors.text }]}>+91 95851 41535</Text>
                                 </View>
                             </View>
                             <Icon name="chevron-forward" size={20} color={activeColors.textLight} />
@@ -227,7 +252,7 @@ export default function SettingsScreen() {
                                 <Icon name="logo-whatsapp" size={24} color={COLORS.success} />
                                 <View style={styles.contactInfo}>
                                     <Text style={[styles.contactLabel, { color: activeColors.textLight }]}>{t('whatsapp')}</Text>
-                                    <Text style={[styles.contactValue, { color: activeColors.text }]}>+91 98765 43210</Text>
+                                    <Text style={[styles.contactValue, { color: activeColors.text }]}>+91 95851 41535</Text>
                                 </View>
                             </View>
                             <Icon name="chevron-forward" size={20} color={activeColors.textLight} />
@@ -238,7 +263,7 @@ export default function SettingsScreen() {
                                 <Icon name="mail-outline" size={24} color={COLORS.error} />
                                 <View style={styles.contactInfo}>
                                     <Text style={[styles.contactLabel, { color: activeColors.textLight }]}>{t('email')}</Text>
-                                    <Text style={[styles.contactValue, { color: activeColors.text }]}>support@goldestimation.com</Text>
+                                    <Text style={[styles.contactValue, { color: activeColors.text }]}>nexooai@gmail.com</Text>
                                 </View>
                             </View>
                             <Icon name="chevron-forward" size={20} color={activeColors.textLight} />
@@ -289,6 +314,109 @@ export default function SettingsScreen() {
                                 onPress={() => {
                                     updateDeviceId(tempDeviceId || '');
                                     setShowEditIdModal(false);
+                                }}
+                                style={styles.modalBtn as any}
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+            <Modal
+                visible={showEditServerUrlModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowEditServerUrlModal(false)}
+            >
+                <View style={styles.modalOverlayCen}>
+                    <View style={[styles.modalCard, { backgroundColor: activeColors.cardBg }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>{t('server_api_url')}</Text>
+                            <TouchableOpacity onPress={() => setShowEditServerUrlModal(false)}>
+                                <Icon name="close" size={24} color={activeColors.text} />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={[styles.modalSubtitle, { color: activeColors.textLight }]}>
+                            {t('server_api_desc')}
+                        </Text>
+                        <TextInput
+                            style={[
+                                styles.textInput,
+                                {
+                                    backgroundColor: activeColors.background,
+                                    borderColor: activeColors.border,
+                                    color: activeColors.text,
+                                }
+                            ]}
+                            value={tempServerUrl}
+                            onChangeText={setTempServerUrl}
+                            placeholder={t('enter_server_api_url')}
+                            placeholderTextColor={activeColors.textLight}
+                            autoCapitalize="none"
+                            keyboardType="url"
+                        />
+                        <View style={styles.modalActions}>
+                            <PrimaryButton
+                                title={t('cancel')}
+                                onPress={() => setShowEditServerUrlModal(false)}
+                                style={{ ...styles.modalBtn, backgroundColor: activeColors.border } as any}
+                            />
+                            <PrimaryButton
+                                title={t('save')}
+                                onPress={() => {
+                                    updateServerApiUrl(tempServerUrl);
+                                    setShowEditServerUrlModal(false);
+                                }}
+                                style={styles.modalBtn as any}
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                visible={showEditQrUrlModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowEditQrUrlModal(false)}
+            >
+                <View style={styles.modalOverlayCen}>
+                    <View style={[styles.modalCard, { backgroundColor: activeColors.cardBg }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>{t('qr_endpoint_url')}</Text>
+                            <TouchableOpacity onPress={() => setShowEditQrUrlModal(false)}>
+                                <Icon name="close" size={24} color={activeColors.text} />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={[styles.modalSubtitle, { color: activeColors.textLight }]}>
+                            {t('qr_endpoint_desc')}
+                        </Text>
+                        <TextInput
+                            style={[
+                                styles.textInput,
+                                {
+                                    backgroundColor: activeColors.background,
+                                    borderColor: activeColors.border,
+                                    color: activeColors.text,
+                                }
+                            ]}
+                            value={tempQrUrl}
+                            onChangeText={setTempQrUrl}
+                            placeholder={t('enter_qr_endpoint_url')}
+                            placeholderTextColor={activeColors.textLight}
+                            autoCapitalize="none"
+                            keyboardType="url"
+                        />
+                        <View style={styles.modalActions}>
+                            <PrimaryButton
+                                title={t('cancel')}
+                                onPress={() => setShowEditQrUrlModal(false)}
+                                style={{ ...styles.modalBtn, backgroundColor: activeColors.border } as any}
+                            />
+                            <PrimaryButton
+                                title={t('save')}
+                                onPress={() => {
+                                    updateReceiptConfig({ qrEndpointUrl: tempQrUrl });
+                                    setShowEditQrUrlModal(false);
                                 }}
                                 style={styles.modalBtn as any}
                             />

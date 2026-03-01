@@ -31,6 +31,20 @@ export const ActivationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (validateActivationKey(key)) {
             await saveActivationStatus();
             setIsActivated(true);
+
+            // Auto trigger activation report with device details
+            try {
+                // We need deviceName from GeneralSettingsContext, but we don't have it here directly
+                // For now, we use a placeholder or get it from SecureStore if available
+                // Actually, ActivationProvider is probably outside GeneralSettingsProvider
+                const { getSetting } = await import('../services/dbService');
+                const deviceName = await getSetting('deviceName') || 'Unknown Device';
+                const { reportActivation } = await import('../services/activationReportService');
+                await reportActivation(deviceName);
+            } catch (e) {
+                console.error('Failed to report activation:', e);
+            }
+
             return true;
         }
         return false;

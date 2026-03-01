@@ -11,6 +11,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { cloudBackup } from '../services/cloudBackupService';
+import { backupDatabaseLocal, restoreDatabaseLocal } from '../services/localBackupService';
 
 // Fix for React 19 type mismatch
 const View = RNView as any;
@@ -21,7 +22,7 @@ const Icon = Ionicons as any;
 
 export default function BackupRestoreScreen() {
     const router = useRouter();
-    const { theme, t } = useGeneralSettings();
+    const { theme, t, deviceName } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [loading, setLoading] = useState(false);
@@ -64,8 +65,8 @@ export default function BackupRestoreScreen() {
         try {
             const dbUri = `${FileSystem.documentDirectory}SQLite/gold_estimation.db`;
             const success = provider === 'google'
-                ? await cloudBackup.uploadToGoogle(dbUri)
-                : await cloudBackup.uploadToOneDrive(dbUri);
+                ? await cloudBackup.uploadToGoogle(dbUri, deviceName)
+                : await cloudBackup.uploadToOneDrive(dbUri, deviceName);
 
             if (success) {
                 const now = new Date().toLocaleString();
@@ -77,6 +78,30 @@ export default function BackupRestoreScreen() {
         } catch (error) {
             console.error('Backup Error:', error);
             Alert.alert(t('error'), t('backup_failed'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLocalBackup = async () => {
+        setLoading(true);
+        try {
+            const success = await backupDatabaseLocal(deviceName, t);
+            if (success) {
+                // Success message handled by service
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLocalRestore = async () => {
+        setLoading(true);
+        try {
+            const success = await restoreDatabaseLocal(t);
+            if (success) {
+                // Success message handled by service
+            }
         } finally {
             setLoading(false);
         }
@@ -116,6 +141,26 @@ export default function BackupRestoreScreen() {
         </View>
     );
 
+    const LocalProviderCard = ({ title, icon, color, description, onAction }: any) => (
+        <View style={[styles.card, { backgroundColor: activeColors.cardBg }]}>
+            <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
+                    <Icon name={icon} size={30} color={color} />
+                </View>
+                <View style={styles.cardInfo}>
+                    <Text style={[styles.cardTitle, { color: activeColors.text }]}>{title}</Text>
+                    <Text style={[styles.cardStatus, { color: activeColors.textLight }]}>{description}</Text>
+                </View>
+            </View>
+            <PrimaryButton
+                title={title}
+                onPress={onAction}
+                isLoading={loading}
+                style={{ marginTop: SPACING.md }}
+            />
+        </View>
+    );
+
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
             <HeaderBar title={t('backup_restore') || 'Backup & Restore'} />
@@ -149,6 +194,28 @@ export default function BackupRestoreScreen() {
                     isConnected={microsoftConnected}
                     onLogin={handleMicrosoftLogin}
                     onBackup={() => handleBackup('microsoft')}
+                />
+
+                <View style={{ marginTop: SPACING.xl, marginBottom: SPACING.md }}>
+                    <Text style={{ color: activeColors.primary, fontSize: FONT_SIZES.lg, fontWeight: 'bold' }}>
+                        {t('local_backup_restore') || 'Local Backup & Restore'}
+                    </Text>
+                </View>
+
+                <LocalProviderCard
+                    title={t('local_backup') || 'Local Backup'}
+                    icon="phone-portrait-outline"
+                    color={activeColors.primary}
+                    description={t('local_backup_desc') || "Save a copy of your database to your device's storage."}
+                    onAction={handleLocalBackup}
+                />
+
+                <LocalProviderCard
+                    title={t('local_restore') || 'Local Restore'}
+                    icon="download-outline"
+                    color="#F2994A"
+                    description={t('local_restore_desc') || "Restore data from a previously saved .db file."}
+                    onAction={handleLocalRestore}
                 />
 
                 <View style={[styles.warningSection, { backgroundColor: activeColors.error + '10' }]}>
