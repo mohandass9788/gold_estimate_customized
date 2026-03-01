@@ -35,6 +35,13 @@ export interface ReceiptConfig {
     mergePrint: boolean;
 }
 
+export interface FeatureFlags {
+    isChitEnabled: boolean;
+    isAdvanceEnabled: boolean;
+    isRepairEnabled: boolean;
+    isPurchaseEnabled: boolean;
+}
+
 export interface PrintDetails {
     customerName: string;
     mobile: string;
@@ -105,6 +112,8 @@ interface GeneralSettingsContextType {
     requestPrint: (callback: (details: PrintDetails) => Promise<void>, bypassDetails?: boolean, initialData?: PrintDetails) => void;
     receiptConfig: ReceiptConfig;
     updateReceiptConfig: (config: Partial<ReceiptConfig>) => void;
+    featureFlags: FeatureFlags;
+    updateFeatureFlags: (flags: Partial<FeatureFlags>) => void;
     printDetailsModalInitialData: PrintDetails | null;
 }
 
@@ -183,6 +192,13 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         makingChargeDisplayType: 'fixed',
         paperWidth: '58mm',
         mergePrint: true,
+    });
+
+    const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({
+        isChitEnabled: true,
+        isAdvanceEnabled: true,
+        isRepairEnabled: true,
+        isPurchaseEnabled: true,
     });
     const printCallbackRef = useRef<((details: PrintDetails) => Promise<void>) | null>(null);
 
@@ -276,6 +292,11 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
                 const savedDeviceName = await getSetting('device_name');
                 if (savedDeviceName) setDeviceNameState(savedDeviceName);
+
+                const savedFeatureFlags = await getSetting('feature_flags');
+                if (savedFeatureFlags) {
+                    try { setFeatureFlags(prev => ({ ...prev, ...JSON.parse(savedFeatureFlags) })); } catch (e) { }
+                }
             } catch (e) { }
         };
 
@@ -382,6 +403,12 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         await setSetting('receipt_config', JSON.stringify(newConfig));
     };
 
+    const updateFeatureFlags = async (flags: Partial<FeatureFlags>) => {
+        const newFlags = { ...featureFlags, ...flags };
+        setFeatureFlags(newFlags);
+        await setSetting('feature_flags', JSON.stringify(newFlags));
+    };
+
     const t = (key: string, params?: Record<string, string>) => {
         let translation = translations[language][key] || key;
         if (params) {
@@ -431,6 +458,8 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             requestPrint,
             receiptConfig,
             updateReceiptConfig,
+            featureFlags,
+            updateFeatureFlags,
             deviceId,
             alertConfig,
             showAlert,

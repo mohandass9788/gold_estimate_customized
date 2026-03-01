@@ -125,7 +125,11 @@ export default function ItemDetailModal({ visible, onClose, item, type }: ItemDe
                     purchaseItems,
                     chitItems,
                     advanceItems,
-                    shopDetails,
+                    {
+                        ...shopDetails,
+                        customerMobile: details.mobile || item.customerMobile || '',
+                        customerAddress: details.place || item.customerAddress || ''
+                    },
                     details.customerName || item.customerName || (type === 'estimation' ? item.customerName : undefined),
                     details.employeeName || currentEmployeeName,
                     receiptConfig,

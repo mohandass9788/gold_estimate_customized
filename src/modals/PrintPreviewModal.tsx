@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, StyleSheet, View as RNView, Text as RNText, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, Dimensions } from 'react-native';
+import { Modal, StyleSheet, View as RNView, Text as RNText, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, Dimensions, Image } from 'react-native';
 import { SPACING, COLORS, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import PrimaryButton from '../components/PrimaryButton';
@@ -18,6 +18,7 @@ interface PrintPreviewModalProps {
     thermalPayload?: string;
     html?: string;
     title?: string;
+    qrData?: string;
     onWidthChange?: (width: '58mm' | '80mm' | '112mm') => void;
 }
 
@@ -28,9 +29,10 @@ export default function PrintPreviewModal({
     thermalPayload,
     html,
     title = 'Print Preview',
+    qrData,
     onWidthChange
 }: PrintPreviewModalProps) {
-    const { theme, t, receiptConfig, printerType } = useGeneralSettings();
+    const { theme, t, receiptConfig, printerType, shopDetails } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const paperWidth = receiptConfig.paperWidth || '58mm';
@@ -38,9 +40,6 @@ export default function PrintPreviewModal({
     const cleanText = thermalPayload ? cleanThermalPayload(thermalPayload) : '';
 
     // Calculate display width based on paper width
-    // 58mm: 200px approx
-    // 80mm: 300px approx
-    // 112mm: 400px approx
     const getDisplayWidth = () => {
         if (paperWidth === '112mm') return 380;
         if (paperWidth === '80mm') return 300;
@@ -63,6 +62,52 @@ export default function PrintPreviewModal({
                         </TouchableOpacity>
                     </View>
 
+
+                    <ScrollView style={styles.previewScroll} contentContainerStyle={styles.scrollContent}>
+                        <View
+                            style={[
+                                styles.receiptContainer,
+                                {
+                                    width: getDisplayWidth(),
+                                    backgroundColor: '#fff', // Always white for paper feel
+                                }
+                            ]}
+                        >
+                            {cleanText ? (
+                                <View style={{ padding: 5 }}>
+                                    <Text style={styles.thermalText}>
+                                        {cleanText}
+                                    </Text>
+                                    {qrData && (
+                                        <View style={{ alignItems: 'center', marginTop: 10, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10 }}>
+                                            <Text style={{ fontSize: 8, color: '#666', marginBottom: 5 }}>{t('scan_to_track') || 'SCAN TO TRACK'}</Text>
+                                            <Image
+                                                source={{ uri: `https://quickchart.io/qr?text=${qrData ? encodeURIComponent(qrData) : ''}&size=200` }}
+                                                style={{ width: 140, height: 140 }}
+                                            />
+                                            <Text style={{ fontSize: 12, fontWeight: 'bold', marginTop: 5, letterSpacing: 1 }}>{t('id_label') || 'ID:'} {qrData}</Text>
+                                        </View>
+                                    )}
+                                    {(!receiptConfig || receiptConfig.showFooter !== false) && (
+                                        <Text style={[styles.thermalText, { textAlign: 'center', marginTop: 15, fontWeight: 'bold' }]}>
+                                            {shopDetails?.footerMessage || t('thank_you_visit_again') || 'Thank You Visit Again'}
+                                        </Text>
+                                    )}
+                                </View>
+                            ) : (
+                                <View style={{ alignItems: 'center', padding: 20 }}>
+                                    <Ionicons name="document-text-outline" size={48} color={activeColors.primary} style={{ marginBottom: 10 }} />
+                                    <Text style={{ color: '#000', textAlign: 'center', fontWeight: 'bold' }}>
+                                        {t('system_receipt_html') || 'SYSTEM RECEIPT (HTML)'}
+                                    </Text>
+                                    <Text style={{ color: '#666', textAlign: 'center', fontSize: 12, marginTop: 5 }}>
+                                        {t('ready_to_print_sys') || 'Ready to print using system dialog. Layout will match the premium design.'}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    </ScrollView>
+
                     <View style={styles.infoContainer}>
                         {['58mm', '80mm', '112mm'].map((width: any) => (
                             <TouchableOpacity
@@ -82,36 +127,6 @@ export default function PrintPreviewModal({
                             </TouchableOpacity>
                         ))}
                     </View>
-
-                    <ScrollView style={styles.previewScroll} contentContainerStyle={styles.scrollContent}>
-                        <View
-                            style={[
-                                styles.receiptContainer,
-                                {
-                                    width: getDisplayWidth(),
-                                    backgroundColor: '#fff', // Always white for paper feel
-                                }
-                            ]}
-                        >
-                            {printerType === 'thermal' ? (
-                                <View style={{ padding: 5 }}>
-                                    <Text style={styles.thermalText}>
-                                        {cleanText}
-                                    </Text>
-                                </View>
-                            ) : (
-                                <View style={{ alignItems: 'center', padding: 20 }}>
-                                    <Ionicons name="document-text-outline" size={48} color={activeColors.primary} style={{ marginBottom: 10 }} />
-                                    <Text style={{ color: '#000', textAlign: 'center', fontWeight: 'bold' }}>
-                                        SYSTEM RECEIPT (HTML)
-                                    </Text>
-                                    <Text style={{ color: '#666', textAlign: 'center', fontSize: 12, marginTop: 5 }}>
-                                        Ready to print using system dialog. Layout will match the premium design.
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-                    </ScrollView>
 
                     <View style={styles.footer}>
                         <PrimaryButton
@@ -141,7 +156,7 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         width: '90%',
-        maxHeight: '80%',
+        height: '80%',
         borderRadius: BORDER_RADIUS.lg,
         overflow: 'hidden',
         elevation: 5,
@@ -196,6 +211,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         minHeight: 300,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderStyle: 'dashed',
     },
     thermalText: {
         fontFamily: 'monospace',

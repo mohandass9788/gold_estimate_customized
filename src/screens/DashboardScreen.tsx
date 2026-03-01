@@ -29,7 +29,7 @@ export default function DashboardScreen() {
     const { state, updateGoldRate } = useEstimation();
     const {
         theme, t, printerType, isPrinterConnected, shopDetails, deviceName,
-        connectionStatus, retryAttempt, countdown
+        connectionStatus, retryAttempt, countdown, featureFlags
     } = useGeneralSettings();
     const [isRateModalVisible, setIsRateModalVisible] = React.useState(false);
 
@@ -196,9 +196,14 @@ export default function DashboardScreen() {
                     <MenuButton title={t('scan_tag')} icon="qr-code" route="/(tabs)/manual?mode=TAG" colors={['#FFD700', '#DAA520']} />
                     <MenuButton title={t('manual_entry')} icon="create" route="/(tabs)/manual?mode=MANUAL" colors={['#50E3C2', '#3CB371']} />
                     <MenuButton title={t('multi_tag_scan')} icon="layers" route="/(tabs)/multi-scan" colors={['#FF9500', '#FF8C00']} />
-                    <MenuButton title={t('chit')} icon="receipt" route="/(tabs)/manual?mode=CHIT" colors={['#AF52DE', '#8E44AD']} />
-                    <MenuButton title={t('advance')} icon="wallet" route="/(tabs)/manual?mode=ADVANCE" colors={['#FF3B30', '#D32F2F']} />
-                    <MenuButton title={t('purchase')} icon="cart" route="/(tabs)/manual?mode=PURCHASE" colors={['#5AC8FA', '#3498DB']} />
+                    {featureFlags.isChitEnabled && <MenuButton title={t('chit')} icon="receipt" route="/(tabs)/manual?mode=CHIT" colors={['#AF52DE', '#8E44AD']} />}
+                    {featureFlags.isAdvanceEnabled && <MenuButton title={t('advance')} icon="wallet" route="/(tabs)/manual?mode=ADVANCE" colors={['#FF3B30', '#D32F2F']} />}
+                    {featureFlags.isPurchaseEnabled && <MenuButton title={t('purchase')} icon="cart" route="/(tabs)/manual?mode=PURCHASE" colors={['#5AC8FA', '#3498DB']} />}
+                    {featureFlags.isRepairEnabled ? (
+                        <MenuButton title={t('repairs')} icon="construct" route="/(tabs)/repairs/new" colors={['#FF2D55', '#D00036']} />
+                    ) : (
+                        <MenuButton title={t('update_rates')} icon="trending-up" route="/(tabs)/rates" colors={['#FF2D55', '#D00036']} />
+                    )}
                 </View>
 
                 {/* Recent Activity List */}

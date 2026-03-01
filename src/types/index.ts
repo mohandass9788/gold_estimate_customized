@@ -33,6 +33,34 @@ export interface EstimationItem extends Product {
 
 export type LessWeightType = 'grams' | 'percentage' | 'amount';
 
+export type RepairStatus = 'PENDING' | 'DELIVERED';
+export type RepairType = 'CUSTOMER' | 'COMPANY';
+
+export interface RepairEntry {
+  id: string; // Repair No
+  date: string;
+  type: RepairType;
+  dueDays: number;
+  dueDate: string;
+  itemName: string;
+  subProductName: string;
+  pcs: number;
+  grossWeight: number;
+  netWeight: number;
+  natureOfRepair: string;
+  empId: string;
+  images: string; // JSON string of string[]
+  amount: number;
+  advance: number;
+  balance: number;
+  status: RepairStatus;
+  extraAmount?: number;
+  totalAmount?: number; // balance + extraAmount
+  deliveryDate?: string;
+  customerName?: string;
+  customerMobile?: string;
+}
+
 export interface PurchaseItem {
   id: string;
   category: string;

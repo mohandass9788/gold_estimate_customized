@@ -334,8 +334,7 @@ export const getPurchaseItemsHTML = (purchaseItems: PurchaseItem[], totalPurchas
         </table>
         <div class="dash-line">${DASH}</div>
         <div class="row-bold">
-            <span>${t('purchase_total')}</span>
-            <span>Rs. ${totalPurchaseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span>${t('purchase_total')}:Rs. ${totalPurchaseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
     `;
 };

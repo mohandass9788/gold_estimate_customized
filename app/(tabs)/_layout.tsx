@@ -8,7 +8,7 @@ const Icon = Ionicons as any;
 const ViewAny = View as any;
 
 export default function TabsLayout() {
-    const { t, theme } = useGeneralSettings();
+    const { t, theme, featureFlags } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     return (
@@ -54,9 +54,18 @@ export default function TabsLayout() {
                 }}
             />
             <Tabs.Screen
+                name="repairs"
+                options={{
+                    title: t('repairs'),
+                    href: featureFlags.isRepairEnabled ? '/(tabs)/repairs' : null,
+                    tabBarIcon: ({ color, size }) => <Icon name="construct-outline" color={color} size={size} />,
+                }}
+            />
+            <Tabs.Screen
                 name="rates"
                 options={{
-                    title: t('rate'),
+                    title: t('rate', { defaultValue: 'Rate' }),
+                    href: !featureFlags.isRepairEnabled ? '/(tabs)/rates' : null,
                     tabBarIcon: ({ color, size }) => <Icon name="trending-up-outline" color={color} size={size} />,
                 }}
             />
@@ -72,6 +81,7 @@ export default function TabsLayout() {
             <Tabs.Screen name="manual" options={{ href: null, title: t('manual_entry') }} />
             <Tabs.Screen name="multi-scan" options={{ href: null, title: t('multi_tag_scan') }} />
             <Tabs.Screen name="estimation" options={{ href: null }} />
+            <Tabs.Screen name="repairs/new" options={{ href: null }} />
         </Tabs>
     );
 }

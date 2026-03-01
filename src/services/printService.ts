@@ -369,25 +369,40 @@ export const printPurchaseItem = async (
                 if (customerAddress && config?.showCustomerAddress !== false) payload += `${_t('address_label')} ${customerAddress.toUpperCase()}\x0a`;
             }
 
-            payload += `${thermalCommands.divider(32)}${thermalCommands.boldOn}${_t('purchase_receipt')}${thermalCommands.boldOff}\x0a`;
+            const cw = getCharWidth(config?.paperWidth);
+
+            payload += `${thermalCommands.divider(cw)}${thermalCommands.boldOn}${_t('purchase_receipt')}${thermalCommands.boldOff}\x0a`;
             payload += `${thermalCommands.left}${item.category.toUpperCase()}\x0a`;
             if (item.subCategory) payload += `${item.subCategory}\x0a`;
 
-            payload += `${thermalCommands.divider(32)}`;
-            payload += `${_t('purity')}: ${item.purity}\x0a`;
-            payload += `${_t('gross_wt_label')}: ${item.grossWeight.toFixed(3)} g\x0a`;
-            const lessLabel = item.lessWeightType === 'percentage' ? `${item.lessWeight}%` : item.lessWeightType === 'amount' ? `Rs.${item.lessWeight}` : `${item.lessWeight}g`;
-            payload += `${_t('less_label')} (${lessLabel}): -${item.lessWeightType === 'amount' ? item.lessWeight : (item.grossWeight - item.netWeight).toFixed(3)}\x0a`;
-            payload += `${_t('net_wt_label')}:   ${item.netWeight.toFixed(3)} g\x0a`;
-            payload += `${_t('rate_per_g')}: Rs.${item.rate}\x0a`;
+            payload += `${thermalCommands.divider(cw)}`;
 
-            payload += `${thermalCommands.divider(32)}`;
+            if (cw === 32) {
+                payload += `${_t('purity')}: ${item.purity}\x0a`;
+                payload += `${_t('gross_wt_label')}: ${item.grossWeight.toFixed(3)} g\x0a`;
+                const lessLabel = item.lessWeightType === 'percentage' ? `${item.lessWeight}%` : item.lessWeightType === 'amount' ? `Rs.${item.lessWeight}` : `${item.lessWeight}g`;
+                payload += `${_t('less_label')} (${lessLabel}): -${item.lessWeightType === 'amount' ? item.lessWeight : (item.grossWeight - item.netWeight).toFixed(3)}\x0a`;
+                payload += `${_t('net_wt_label')}:   ${item.netWeight.toFixed(3)} g\x0a`;
+                payload += `${_t('rate_per_g')}: Rs.${item.rate}\x0a`;
+            } else {
+                const lessLabel = item.lessWeightType === 'percentage' ? `${item.lessWeight}%` : item.lessWeightType === 'amount' ? `Rs.${item.lessWeight}` : `${item.lessWeight}g`;
+                const c1 = Math.floor(cw / 2);
+                payload += `${padR(`${_t('purity')}: ${item.purity}`, c1)}${padR(`${_t('rate_per_g')}: Rs.${item.rate}`, cw - c1)}\x0a`;
+                payload += `${padR(`G.Wt: ${item.grossWeight.toFixed(3)}g`, c1)}${padR(`N.Wt: ${item.netWeight.toFixed(3)}g`, cw - c1)}\x0a`;
+                payload += `${_t('less_label')} (${lessLabel}): -${item.lessWeightType === 'amount' ? item.lessWeight : (item.grossWeight - item.netWeight).toFixed(3)}\x0a`;
+            }
+
+            payload += `${thermalCommands.divider(cw)}`;
             payload += `${thermalCommands.boldOn}${thermalCommands.doubleOn}${_t('value_label')}: Rs.${item.amount.toLocaleString()}${thermalCommands.doubleOff}${thermalCommands.boldOff}\x0a`;
             if ((!config || config.showOperator) && employeeName) payload += `${_t('employee_name')}: ${employeeName}\x0a`;
-            payload += `\x0a\x0a\x0a\x0a`;
 
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
             BLEPrinter.printText(payload);
+            await printQRCodeImage(item.id, type);
+            let footer = '';
+            if (!config || config.showFooter) footer += `${thermalCommands.center}${_t('thank_you_visit_again')}\x0a`;
+            footer += `\x0a\x0a\x0a\x0a`;
+            BLEPrinter.printText(footer);
             return;
         } else {
             throw new Error('Could not connect to thermal printer. Please ensure it is ON and nearby.');
@@ -527,11 +542,12 @@ export const getEstimationReceiptThermalPayload = async (
     let totalPurchaseAmount = 0;
 
     if (hasItems) {
-        const isTableLayout = paperWidth === '80mm' || paperWidth === '112mm';
-
-        if (isTableLayout) {
-            // Table Header: ITEM | QTY | AMOUNT
-            payload += `${thermalCommands.boldOn}${padR(_t('item'), col.name)}${padL(_t('qty'), col.pcs + col.wt + col.wst + col.mc)}${padL(_t('amount'), col.amt)}${thermalCommands.boldOff} \x0a`;
+        if (paperWidth === '58mm') {
+            // 58mm 2-Col (Max 32 chars)
+            // Allocate 16 chars to Item Name, 16 chars to Amount 
+            const cwItem = 16;
+            const cwAmt = 16;
+            payload += `${thermalCommands.boldOn}${padR(_t('item'), cwItem)}${padL(_t('amount_header'), cwAmt)}${thermalCommands.boldOff} \x0a`;
             payload += DASH;
 
             items.forEach(item => {
@@ -540,53 +556,76 @@ export const getEstimationReceiptThermalPayload = async (
                 totalGrossWeight += item.grossWeight;
                 totalNetWeight += item.netWeight;
 
-                payload += `${thermalCommands.boldOn}${padR(item.name.toUpperCase(), col.name)}${padL(item.pcs.toString() + ' Pcs', col.pcs + col.wt + col.wst + col.mc)}${padL(formatCurrency(item.totalValue), col.amt + 4)}${thermalCommands.boldOff} \x0a`;
-                if (item.tagNumber) payload += `  TAG: ${item.tagNumber} \x0a`;
-                payload += `  GROSS WT: ${padL(item.grossWeight.toFixed(3), 10)}g\x0a`;
-                if (item.stoneWeight > 0) payload += `  STONE WT: ${padL(item.stoneWeight.toFixed(3), 10)}g\x0a`;
-                payload += `  NET WT  : ${padL(item.netWeight.toFixed(3), 10)}g\x0a`;
-
-                const wLabel = item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`;
-                const mcLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge}`);
-
-                payload += `  VA (${wLabel}): ${padL((item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage).toFixed(3), 10)}g\x0a`;
-                payload += `  MC: ${mcLabel}\x0a`;
-                payload += DASH;
-            });
-        } else {
-            // Multi-line layout for 58mm
-            payload += `${thermalCommands.boldOn}${padR(_t('items_and_details'), charWidth - 12)}${padL(_t('amount_header'), 12)}${thermalCommands.boldOff} \x0a`;
-            payload += DASH;
-
-            items.forEach(item => {
-                const itemTaxable = item.goldValue + item.wastageValue + item.makingChargeValue;
-                totalTaxableValue += itemTaxable;
-                totalGrossWeight += item.grossWeight;
-                totalNetWeight += item.netWeight;
-
-                payload += `${thermalCommands.boldOn}${padR(item.name.toUpperCase(), charWidth - 14)}${padL(formatCurrency(item.totalValue), 14)}${thermalCommands.boldOff} \x0a`;
+                payload += `${thermalCommands.boldOn}${padR(item.name.toUpperCase().substring(0, cwItem - 1), cwItem)}${padL(formatCurrency(item.totalValue).substring(0, cwAmt), cwAmt)}${thermalCommands.boldOff} \x0a`;
                 payload += `  ${item.pcs} Pcs \x0a`;
                 if (item.tagNumber) payload += `  TAG: ${item.tagNumber} \x0a`;
 
-                // Detail 1: Weights and Basic Info
-                payload += `  GROSS WT: ${item.grossWeight.toFixed(3)}g\x0a`;
-                if (item.stoneWeight > 0) {
-                    payload += `  STONE WT: ${item.stoneWeight.toFixed(3)}g\x0a`;
-                }
-                payload += `  NET WT  : ${item.netWeight.toFixed(3)}g | @Rs.${item.rate} \x0a`;
+                payload += `  N.Wt: ${item.netWeight.toFixed(3)}g | @Rs.${item.rate} \x0a`;
 
-                // Detail 2: Wastage formula
                 if (!config || config.showWastage) {
                     const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
                     const wLabel = item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`;
-                    payload += `  VA (${wLabel}): ${vWeight.toFixed(3)}g\x0a`;
+                    payload += `  VA: ${vWeight.toFixed(3)}g (${wLabel})\x0a`;
                 }
 
-                // Detail 3: Making charge formula
                 if (!config || config.showMakingCharge) {
                     const mcLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge}`);
                     payload += `  MC: ${mcLabel}\x0a`;
                 }
+                payload += DASH;
+            });
+        } else if (paperWidth === '80mm') {
+            // 3-Column Layout for 80mm (ITEM | WEIGHT | AMOUNT) -> Max 48 chars
+            const cwItem = 20;
+            const cwWt = 12;
+            const cwAmt = 16;
+            payload += `${thermalCommands.boldOn}${padR(_t('item'), cwItem)}${padR('WEIGHT', cwWt)}${padL(_t('amount'), cwAmt)}${thermalCommands.boldOff} \x0a`;
+            payload += DASH;
+
+            items.forEach(item => {
+                const itemTaxable = item.goldValue + item.wastageValue + item.makingChargeValue;
+                totalTaxableValue += itemTaxable;
+                totalGrossWeight += item.grossWeight;
+                totalNetWeight += item.netWeight;
+
+                payload += `${thermalCommands.boldOn}${padR(item.name.toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(item.netWeight.toFixed(3) + 'g', cwWt)}${padL(formatCurrency(item.totalValue), cwAmt)}${thermalCommands.boldOff} \x0a`;
+                if (item.tagNumber) payload += `${padR(`  TAG: ${item.tagNumber}`, cwItem)}\x0a`;
+
+                const wLabel = item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`;
+                payload += `${padR(`  ${item.pcs} Pcs`, cwItem)}${padR(`VA:${wLabel}`, cwWt)} \x0a`;
+
+                const mcLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge}`);
+                payload += `${padR(`  @Rs.${item.rate}`, cwItem)}${padR(`MC:${mcLabel}`, cwWt)} \x0a`;
+                payload += DASH;
+            });
+        } else if (paperWidth === '112mm') {
+            // 4-Column Layout for 112mm (ITEM | WEIGHT | VA & MC | AMOUNT) -> Max 64 chars
+            const cwItem = 22;
+            const cwWt = 12;
+            const cwVaMc = 14;
+            const cwAmt = 16;
+            payload += `${thermalCommands.boldOn}${padR(_t('item'), cwItem)}${padR('WEIGHT', cwWt)}${padR('VA & MC', cwVaMc)}${padL(_t('amount'), cwAmt)}${thermalCommands.boldOff} \x0a`;
+            payload += DASH;
+
+            items.forEach(item => {
+                const itemTaxable = item.goldValue + item.wastageValue + item.makingChargeValue;
+                totalTaxableValue += itemTaxable;
+                totalGrossWeight += item.grossWeight;
+                totalNetWeight += item.netWeight;
+
+                payload += `${thermalCommands.boldOn}${padR(item.name.toUpperCase().substring(0, cwItem - 1), cwItem)}${padR('N:' + item.netWeight.toFixed(3) + 'g', cwWt)}`;
+
+                const wLabel = item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`;
+                payload += `${padR(`V:${wLabel}`, cwVaMc)}`;
+
+                payload += `${padL(formatCurrency(item.totalValue), cwAmt)}${thermalCommands.boldOff} \x0a`;
+
+                if (item.tagNumber) payload += `${padR(`  TAG: ${item.tagNumber}`, cwItem)}\x0a`;
+                payload += `${padR(`  ${item.pcs} Pcs`, cwItem)}${padR('G:' + item.grossWeight.toFixed(3) + 'g', cwWt)}`;
+
+                const mcLabel = item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge}`);
+                payload += `${padR(`M:${mcLabel}`, cwVaMc)} \x0a`;
+                payload += `${padR(`  @Rs.${item.rate}`, cwItem)}\x0a`;
                 payload += DASH;
             });
         }
@@ -600,10 +639,21 @@ export const getEstimationReceiptThermalPayload = async (
             const netWeightPrefix = _t('net_wt_label');
             const netWeightWidth = charWidth - netWeightPrefix.length;
             payload += `${netWeightPrefix}${padL(totalNetWeight.toFixed(3) + 'g', netWeightWidth)}\x0a`;
-        } else {
-            payload += `${thermalCommands.boldOn}${padR(_t('total'), col.name)}${padR('', col.pcs)}${padR(totalGrossWeight.toFixed(3), col.wt)}${padR('', col.wst)}${padR('', col.mc)}${padL(formatCurrency(totalTaxableValue), col.amt + 4)}${thermalCommands.boldOff}\x0a`;
+        } else if (paperWidth === '80mm') {
+            const cwItem = 20;
+            const cwWt = 12;
+            const cwAmt = 16;
+            payload += `${thermalCommands.boldOn}${padR(_t('total'), cwItem)}${padR(totalGrossWeight.toFixed(3), cwWt)}${padL(formatCurrency(totalTaxableValue).substring(0, cwAmt), cwAmt)}${thermalCommands.boldOff}\x0a`;
             payload += DASH;
-            payload += `${padR(_t('net_wt_label'), col.name)}${padR('', col.pcs)}${padR(totalNetWeight.toFixed(3), col.wt)}\x0a`;
+            payload += `${padR(_t('net_wt_label'), cwItem)}${padR(totalNetWeight.toFixed(3), cwWt)}\x0a`;
+        } else if (paperWidth === '112mm') {
+            const cwItem = 22;
+            const cwWt = 12;
+            const cwVaMc = 14;
+            const cwAmt = 16;
+            payload += `${thermalCommands.boldOn}${padR(_t('total'), cwItem)}${padR(totalGrossWeight.toFixed(3), cwWt)}${padR('', cwVaMc)}${padL(formatCurrency(totalTaxableValue).substring(0, cwAmt), cwAmt)}${thermalCommands.boldOff}\x0a`;
+            payload += DASH;
+            payload += `${padR(_t('net_wt_label'), cwItem)}${padR(totalNetWeight.toFixed(3), cwWt)}\x0a`;
         }
         payload += DASH;
 
@@ -635,8 +685,8 @@ export const getEstimationReceiptThermalPayload = async (
             // Purchase Table Header: ITEMS | WT | LESS | RATE | AMOUNT
             // Re-using col config or defining specific for purchase
             const pCol = paperWidth === '80mm' ?
-                { name: 12, wt: 8, less: 12, rate: 8, amt: 8 } :
-                { name: 20, wt: 10, less: 16, rate: 10, amt: 8 };
+                { name: 10, wt: 8, less: 8, rate: 6, amt: 16 } : // 10+8+8+6+16 = 48
+                { name: 16, wt: 10, less: 12, rate: 10, amt: 16 }; // 16+10+12+10+16 = 64
 
             payload += `${thermalCommands.boldOn}${padR(_t('item'), pCol.name)}${padL(_t('weight_g'), pCol.wt)}${padL(_t('less_label'), pCol.less)}${padL(_t('rate'), pCol.rate)}${padL(_t('amount_header'), pCol.amt)}${thermalCommands.boldOff}\x0a`;
             payload += DASH;
@@ -648,33 +698,39 @@ export const getEstimationReceiptThermalPayload = async (
 
                 const lessWeightValue = item.lessWeightType === 'percentage' ? (item.grossWeight * item.lessWeight / 100) : (item.lessWeightType === 'amount' ? 0 : item.lessWeight);
                 const lessStr = item.lessWeightType === 'percentage' ? `${item.lessWeight}%` : (item.lessWeightType === 'amount' ? `Rs.${item.lessWeight}` : `${item.lessWeight}g`);
-
-                payload += `${padR(item.category.toUpperCase(), pCol.name)}${padL(item.netWeight.toFixed(3), pCol.wt)}${padL(lessStr, pCol.less)}${padL(item.rate.toString(), pCol.rate)}${padL(formatCurrency(item.amount), pCol.amt + 4)}\x0a`;
+                // Truncate category name to avoid shifting columns
+                const catName = item.category.toUpperCase().substring(0, pCol.name - 1);
+                payload += `${padR(catName, pCol.name)}${padL(item.netWeight.toFixed(3), pCol.wt)}${padL(lessStr.substring(0, pCol.less), pCol.less)}${padL(item.rate.toString().substring(0, pCol.rate), pCol.rate)}${padL(formatCurrency(item.amount).substring(0, pCol.amt), pCol.amt)}\x0a`;
             });
             payload += DASH;
-            payload += `${thermalCommands.boldOn}${padR(_t('purchase_total'), pCol.name)}${padL(totalPurWeight.toFixed(3), pCol.wt)}${padR('', pCol.less)}${padR('', pCol.rate)}${padL(formatCurrency(totalPurchaseAmount), pCol.amt + 4)}${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.boldOn}${padR(_t('purchase_total'), pCol.name)}${padL(totalPurWeight.toFixed(3), pCol.wt)}${padR('', pCol.less)}${padR('', pCol.rate)}${padL(formatCurrency(totalPurchaseAmount).substring(0, pCol.amt), pCol.amt)}${thermalCommands.boldOff}\x0a`;
         } else {
-            payload += `${thermalCommands.left}${padR(_t('item'), charWidth - 12)}${padL(_t('amount_header'), 12)}\x0a`;
+            // 58mm Purchase Layout (Max 32 chars)
+            // Header: ITEM (16 chars)  AMOUNT (16 chars)
+            const pCwItem = 16;
+            const pCwAmt = 16;
+            payload += `${thermalCommands.left}${padR(_t('item'), pCwItem)}${padL(_t('amount_header'), pCwAmt)}\x0a`;
             payload += DASH;
             let totalPurWeight = 0;
             purchaseItems.forEach(item => {
                 totalPurchaseAmount += item.amount;
                 totalPurWeight += item.netWeight;
-                payload += `${item.category.toUpperCase()}\x0a`;
+
+                // Truncate category name if too long
+                const catName = item.category.toUpperCase().substring(0, pCwItem - 1);
+                payload += `${thermalCommands.boldOn}${padR(catName, pCwItem)}${padL(formatCurrency(item.amount).substring(0, pCwAmt), pCwAmt)}${thermalCommands.boldOff}\x0a`;
+
                 const lessWeightValue = item.lessWeightType === 'percentage' ? (item.grossWeight * item.lessWeight / 100) : (item.lessWeightType === 'amount' ? 0 : item.lessWeight);
-                const lessStr = item.lessWeightType === 'percentage' ? `${item.lessWeight}% (${lessWeightValue.toFixed(3)}g)` : (item.lessWeightType === 'amount' ? `Rs. ${item.lessWeight}` : `${item.lessWeight}g`);
-                payload += ` ${_t('gross_wt_label')}: ${item.grossWeight.toFixed(3)}g  \n ${_t('less_label')}:${lessStr} \n`;
-                payload += ` ${_t('net_wt_label')}: ${item.netWeight.toFixed(3)}g | @Rs.${item.rate}\x0a`;
-                payload += `${padL(formatCurrency(item.amount), charWidth)}\x0a`;
+                const lessStr = item.lessWeightType === 'percentage' ? `${item.lessWeight}%` : (item.lessWeightType === 'amount' ? `Rs.${item.lessWeight}` : `${item.lessWeight}g`);
+
+                payload += `  ${_t('gross_wt_label')}: ${item.grossWeight.toFixed(3)}g\x0a`;
+                payload += `  ${_t('less_label')}: ${lessStr}\x0a`;
+                payload += `  ${_t('net_wt_label')}: ${item.netWeight.toFixed(3)}g | @Rs.${item.rate}\x0a`;
+                payload += DASH;
             });
-            payload += DASH;
-            if (paperWidth === '58mm') {
-                const purTotalPrefix = _t('purchase_total');
-                const purTotalWidth = charWidth - purTotalPrefix.length;
-                payload += `${thermalCommands.boldOn}${purTotalPrefix}${padL(formatCurrency(totalPurchaseAmount), purTotalWidth)}${thermalCommands.boldOff}\x0a`;
-            } else {
-                payload += `${thermalCommands.boldOn}${padR(_t('purchase_total'), charWidth - 18)}${padR(totalPurWeight.toFixed(3), 8)}${padL(formatCurrency(totalPurchaseAmount), 10)}${thermalCommands.boldOff}\x0a`;
-            }
+            const purTotalPrefix = _t('purchase_total');
+            const purTotalWidth = charWidth - purTotalPrefix.length;
+            payload += `${thermalCommands.boldOn}${purTotalPrefix}${padL(formatCurrency(totalPurchaseAmount), purTotalWidth)}${thermalCommands.boldOff}\x0a`;
         }
     }
 
@@ -716,9 +772,6 @@ export const getEstimationReceiptThermalPayload = async (
         payload += `\x0a${_t('employee_name')}: ${employeeName} \x0a`;
     }
 
-    if (!config || config.showFooter) payload += `${thermalCommands.center}${_t('thank_you_visit_again')}\x0a`;
-    payload += `\x0a\x0a\x0a\x0a`;
-
     return payload;
 };
 
@@ -745,6 +798,13 @@ export const printEstimationReceipt = async (
             );
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
             BLEPrinter.printText(payload);
+            // if (estimationNumber) {
+            //     await printQRCodeImage(estimationNumber.toString(), type);
+            // }
+            let footer = '';
+            if (!config || config.showFooter) footer += `${thermalCommands.center}${_t('thank_you_visit_again')}\x0a`;
+            footer += `\x0a\x0a\x0a\x0a`;
+            BLEPrinter.printText(footer);
             return;
         }
     }
@@ -1013,3 +1073,377 @@ export const printAdvanceItem = async (
 
     await Print.printAsync({ html });
 };
+
+export const printRepairDelivery = async (
+    repair: any,
+    extraAmount: number,
+    gstAmount: number,
+    shopDetails?: any,
+    employeeName?: string,
+    config?: ReceiptConfig
+): Promise<void> => {
+    const { type, printer } = await getPrinterConfig();
+
+    if (type === 'thermal' && printer?.address) {
+        const connected = await ensureThermalConnection(printer.address);
+        if (!connected) return;
+        const { BLEPrinter } = require('react-native-thermal-receipt-printer');
+        const payload = await _getRepairDeliveryThermalPayload(repair, extraAmount, gstAmount, shopDetails, employeeName, config);
+        BLEPrinter.printText(payload.trim());
+        await new Promise(res => setTimeout(res, 120));
+        BLEPrinter.printText('\n');
+        await printQRCodeImage(repair.id, type);
+        let footer = '\n\x1b\x61\x01Thank You! Visit Again\x1b\x61\x00\n\n\n\n';
+        BLEPrinter.printText(footer);
+        return;
+    }
+
+    const html = await _getRepairDeliveryHTMLPayload(repair, extraAmount, gstAmount, shopDetails, employeeName, config);
+    await Print.printAsync({ html });
+};
+
+export const getRepairReceiptThermalPayload = async (
+    repair: any,
+    shopDetails?: any,
+    employeeName?: string,
+    config?: ReceiptConfig,
+    t?: TFunction
+): Promise<string> => {
+    const _t = t || ((key: string) => key);
+    const shopName = shopDetails?.name || await getSetting('shop_name') || 'GOLD ESTIMATION';
+    const paperWidth = config?.paperWidth || '58mm';
+    const lineWidth = paperWidth === '58mm' ? 32 : paperWidth === '80mm' ? 48 : 64;
+
+    const fmt = (val: number) => new Intl.NumberFormat('en-IN').format(Math.round(val ?? 0));
+    const fmtDate = (d: string | Date) => new Date(d).toLocaleDateString('en-IN');
+    const row = (left: string, right: string) => {
+        const space = lineWidth - left.length - right.length;
+        return left + ' '.repeat(Math.max(space, 1)) + right;
+    };
+    const center = (text: string) => {
+        const space = Math.floor((lineWidth - text.length) / 2);
+        return ' '.repeat(Math.max(space, 0)) + text;
+    };
+    const divider = '-'.repeat(lineWidth);
+    const dblDivider = '='.repeat(lineWidth);
+
+    let p = '\x1b@';
+    p += `${center(shopName)}\n${divider}\n`;
+    p += `\x1b\x45\x01${center('REPAIR RECEIPT')}\x1b\x45\x00\n${divider}\n`;
+    p += `${row('Repair No:', repair.id || '')}\n`;
+
+    if (lineWidth === 32) {
+        p += `${row('Date:', fmtDate(repair.date || new Date()))}\n`;
+        p += `${row('Due Date:', fmtDate(repair.dueDate || new Date()))}\n`;
+    } else {
+        const d1 = fmtDate(repair.date || new Date());
+        const d2 = fmtDate(repair.dueDate || new Date());
+        const c1 = Math.floor(lineWidth / 2);
+        p += `${padR(`Date: ${d1}`, c1)}${padR(`Due Date: ${d2}`, lineWidth - c1)}\n`;
+    }
+
+    p += `${divider}\n`;
+
+    if (repair.customerName) p += `${row('Customer:', repair.customerName.toUpperCase())}\n`;
+    if (repair.customerMobile) p += `${row('Phone:', repair.customerMobile)}\n`;
+
+    p += `${divider}\n`;
+
+    const issueText = repair.issue || 'N/A';
+    const totalAmount = repair.amount || (repair.advance + repair.balance);
+
+    if (lineWidth === 32) {
+        // 58mm -> Stacked (ITEM | AMOUNT)
+        p += `\x1b\x45\x01${padR('ITEM', 20)}${padL('AMOUNT', 12)}\x1b\x45\x00\n`;
+        p += `${divider}\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, 19), 20)}${padL(fmt(totalAmount), 12)}\x1b\x45\x00\n`;
+        if (repair.subProductName) p += `${repair.subProductName}\n`;
+        p += `Issue: ${issueText}\n`;
+        p += `${divider}\n`;
+        p += `${row('Advance Paid:', 'Rs. ' + fmt(repair.advance))}\n`;
+        p += `${row('Balance Due:', 'Rs. ' + fmt(repair.balance))}\n`;
+        p += `${dblDivider}\n`;
+        p += `\x1b\x45\x01${row('Total:', 'Rs. ' + fmt(totalAmount))}\x1b\x45\x00\n`;
+    } else if (lineWidth === 48) {
+        // 80mm -> 3 Columns (ITEM | ISSUE | AMOUNT) -> Max 48 chars
+        const cwItem = 18;
+        const cwIssue = 14;
+        const cwAmt = 16;
+        p += `\x1b\x45\x01${padR('ITEM', cwItem)}${padR('ISSUE', cwIssue)}${padL('AMOUNT', cwAmt)}\x1b\x45\x00\n`;
+        p += `${divider}\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(issueText.substring(0, cwIssue - 1), cwIssue)}${padL(fmt(totalAmount).substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
+        if (repair.subProductName) p += `${repair.subProductName}\n`;
+
+        p += `${divider}\n`;
+        const adv = 'Rs. ' + fmt(repair.advance);
+        const bal = 'Rs. ' + fmt(repair.balance);
+        const cw1 = Math.floor(lineWidth / 2);
+        p += `${padR(`Advance: ${adv}`, cw1)}${padR(`Balance: ${bal}`, lineWidth - cw1)}\n`;
+        p += `${dblDivider}\n`;
+        p += `\x1b\x45\x01${padL(`Total: Rs. ${fmt(totalAmount)}`, lineWidth)}\x1b\x45\x00\n`;
+    } else {
+        // 112mm -> 4 Columns (ITEM | ISSUE | ADVANCE | AMOUNT) -> Max 64 chars
+        const cwItem = 20;
+        const cwIssue = 14;
+        const cwAdv = 14;
+        const cwAmt = 16;
+        p += `\x1b\x45\x01${padR('ITEM', cwItem)}${padR('ISSUE', cwIssue)}${padR('ADVANCE', cwAdv)}${padL('AMOUNT', cwAmt)}\x1b\x45\x00\n`;
+        p += `${divider}\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(issueText.substring(0, cwIssue - 1), cwIssue)}${padR(fmt(repair.advance).substring(0, cwAdv), cwAdv)}${padL(fmt(totalAmount).substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
+        if (repair.subProductName) p += `${repair.subProductName}\n`;
+
+        p += `${divider}\n`;
+        p += `${padL(`Balance Due: Rs. ${fmt(repair.balance)}`, lineWidth)}\n`;
+        p += `${dblDivider}\n`;
+        p += `\x1b\x45\x01${padL(`Total: Rs. ${fmt(totalAmount)}`, lineWidth)}\x1b\x45\x00\n`;
+    }
+
+    p += `${dblDivider}\n`;
+
+    p += `${row('Status:', repair.status || 'PENDING')}\n`;
+    if (employeeName || repair.empId) p += `${row('Operator:', employeeName || repair.empId)}\n`;
+    return p;
+};
+
+export const printRepair = async (
+    repair: any,
+    shopDetails?: any,
+    employeeName?: string,
+    config?: ReceiptConfig,
+    t?: TFunction
+): Promise<void> => {
+    const { type, printer } = await getPrinterConfig();
+
+    if (type === 'thermal' && printer?.address) {
+        const connected = await ensureThermalConnection(printer.address);
+        if (!connected) return;
+        const { BLEPrinter } = require('react-native-thermal-receipt-printer');
+        const payload = await getRepairReceiptThermalPayload(repair, shopDetails, employeeName, config, t);
+        BLEPrinter.printText(payload.trim());
+        await new Promise(res => setTimeout(res, 120));
+        BLEPrinter.printText('\n');
+        await printQRCodeImage(repair.id, type);
+        let footer = '\n\x1b\x61\x01Thank You! Visit Again\x1b\x61\x00\n\n\n\n';
+        BLEPrinter.printText(footer);
+        return;
+    }
+
+    const _t = t || ((key: string) => key);
+    const fmt = (val: number) => new Intl.NumberFormat('en-IN').format(Math.round(val ?? 0));
+    const fmtDate = (d: string | Date) => new Date(d).toLocaleDateString('en-IN');
+    const paperWidth = config?.paperWidth || '58mm';
+    const width = paperWidth === '58mm' ? '220px' : paperWidth === '80mm' ? '300px' : '420px';
+
+    const html = `
+  <html><head><style>
+    body{font-family:monospace;width:${width};margin:0 auto;padding:5px;font-size:12px}
+    .center{text-align:center}.bold{font-weight:bold}
+    .div{border-top:1px dashed #000;margin:5px 0}.ddiv{border-top:2px solid #000;margin:5px 0}
+    .row{display:flex;justify-content:space-between;margin:2px 0}
+    .title{font-size:13px;font-weight:bold;text-align:center;margin:5px 0}
+    .footer{text-align:center;margin-top:8px;font-size:11px}
+  </style></head><body>
+    <div class="center bold">${shopDetails?.name || 'GOLD ESTIMATION'}</div>
+    ${shopDetails?.address1 ? `<div class="center">${shopDetails.address1}</div>` : ''}
+    ${shopDetails?.mobile ? `<div class="center">Mob: ${shopDetails.mobile}</div>` : ''}
+    <div class="div"></div><div class="title">REPAIR RECEIPT</div><div class="div"></div>
+    <div class="row"><span>Repair No:</span><span>${repair.id}</span></div>
+    <div class="row"><span>Date:</span><span>${fmtDate(repair.date || new Date())}</span></div>
+    <div class="row"><span>Due Date:</span><span>${fmtDate(repair.dueDate || new Date())}</span></div>
+    ${(repair.customerName || repair.customerMobile) ? `
+      <div class="div"></div>
+      ${repair.customerName ? `<div class="row"><span>Customer:</span><span>${repair.customerName.toUpperCase()}</span></div>` : ''}
+      ${repair.customerMobile ? `<div class="row"><span>Phone:</span><span>${repair.customerMobile}</span></div>` : ''}
+    ` : ''}
+    <div class="div"></div>
+    <div class="bold center">${(repair.itemName || '').toUpperCase()}</div>
+    ${repair.subProductName ? `<div class="center">${repair.subProductName}</div>` : ''}
+    <div class="div"></div>
+    ${repair.issue ? `<div class="row"><span>Issue:</span><span>${repair.issue}</span></div>` : ''}
+    <div class="row"><span>Advance Paid</span><span>Rs. ${fmt(repair.advance)}</span></div>
+    <div class="row"><span>Balance Due</span><span>Rs. ${fmt(repair.balance)}</span></div>
+    <div class="ddiv"></div>
+    <div class="row bold"><span>Total</span><span>Rs. ${fmt(repair.amount || repair.advance + repair.balance)}</span></div>
+    <div class="ddiv"></div>
+    <div class="row"><span>Status</span><span>${repair.status || 'PENDING'}</span></div>
+    ${(employeeName || repair.empId) ? `<div class="div"></div><div class="row"><span>Operator</span><span>${employeeName || repair.empId}</span></div>` : ''}
+    <div class="footer">Thank You! Visit Again.</div>
+  </body></html>`;
+
+    await Print.printAsync({ html });
+};
+
+const _getRepairDeliveryThermalPayload = async (
+    repair: any,
+    extraAmount: number,
+    gstAmount: number,
+    shopDetails?: any,
+    employeeName?: string,
+    config?: ReceiptConfig
+): Promise<string> => {
+    const shopName = shopDetails?.name || await getSetting('shop_name') || 'GOLD ESTIMATION';
+    const paperWidth = config?.paperWidth || '58mm';
+    const lineWidth = paperWidth === '58mm' ? 32 : paperWidth === '80mm' ? 48 : 64;
+    const fmt = (val: number) => new Intl.NumberFormat('en-IN').format(Math.round(val ?? 0));
+    const fmtDate = (d: string | Date) => new Date(d).toLocaleDateString('en-IN');
+    const row = (left: string, right: string) => {
+        const space = lineWidth - left.length - right.length;
+        return left + ' '.repeat(Math.max(space, 1)) + right;
+    };
+    const center = (text: string) => {
+        const space = Math.floor((lineWidth - text.length) / 2);
+        return ' '.repeat(Math.max(space, 0)) + text;
+    };
+    const divider = '-'.repeat(lineWidth);
+    const dblDivider = '='.repeat(lineWidth);
+    const totalPaid = repair.balance + extraAmount + gstAmount;
+    let p = '\x1b@';
+    p += `${center(shopName)}\n${divider}\n`;
+    p += `\x1b\x45\x01${center('DELIVERY RECEIPT')}\x1b\x45\x00\n${divider}\n`;
+
+    if (lineWidth === 32) {
+        p += `${row('Repair No:', repair.id || '')}\n`;
+        p += `${row('Date:', fmtDate(new Date()))}\n`;
+    } else {
+        const c1 = Math.floor(lineWidth / 2);
+        p += `${padR(`Repair No: ${repair.id || ''}`, c1)}${padR(`Date: ${fmtDate(new Date())}`, lineWidth - c1)}\n`;
+    }
+
+    p += `${divider}\n`;
+
+    if (repair.customerName) p += `${row('Customer:', repair.customerName.toUpperCase())}\n`;
+    if (repair.customerMobile) p += `${row('Phone:', repair.customerMobile)}\n`;
+    p += `${divider}\n`;
+
+    if (lineWidth === 32) {
+        p += `\x1b\x45\x01${padR('ITEM', 20)}${padL('AMOUNT', 12)}\x1b\x45\x00\n`;
+        p += `${divider}\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, 19), 20)}${padL(fmt(repair.balance), 12)}\x1b\x45\x00\n`;
+        if (repair.subProductName) p += `${repair.subProductName}\n`;
+        p += `${divider}\n`;
+        p += `${row('Advance Paid:', 'Rs. ' + fmt(repair.advance))}\n`;
+        p += `${row('Balance:', 'Rs. ' + fmt(repair.balance))}\n`;
+        if (extraAmount > 0) p += `${row('Extra Amount:', 'Rs. ' + fmt(extraAmount))}\n`;
+        if (gstAmount > 0) p += `${row('GST:', 'Rs. ' + fmt(gstAmount))}\n`;
+        p += `${dblDivider}\n\x1b\x45\x01${row('Total Paid:', 'Rs. ' + fmt(totalPaid))}\x1b\x45\x00\n${dblDivider}\n`;
+    } else if (lineWidth === 48) {
+        // 80mm Delivery -> 3 Col -> Max 48 chars
+        const cwItem = 18;
+        const cwIssue = 14;
+        const cwAmt = 16;
+        p += `\x1b\x45\x01${padR('ITEM', cwItem)}${padR('STATUS', cwIssue)}${padL('AMOUNT', cwAmt)}\x1b\x45\x00\n`;
+        p += `${divider}\n`;
+        const statusTxt = (repair.status || 'DELIVERED').substring(0, cwIssue - 1);
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(statusTxt, cwIssue)}${padL(fmt(repair.balance).substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
+        if (repair.subProductName) p += `${repair.subProductName}\n`;
+
+        p += `${divider}\n`;
+        const c1 = Math.floor(lineWidth / 2);
+        p += `${padR(`Advance: Rs. ${fmt(repair.advance)}`, c1)}${padR(`Balance: Rs. ${fmt(repair.balance)}`, lineWidth - c1)}\n`;
+        if (extraAmount > 0 || gstAmount > 0) {
+            p += `${padR(extraAmount > 0 ? `Extra: Rs. ${fmt(extraAmount)}` : '', c1)}${padR(gstAmount > 0 ? `GST: Rs. ${fmt(gstAmount)}` : '', lineWidth - c1)}\n`;
+        }
+        p += `${dblDivider}\n\x1b\x45\x01${padL(`Total Paid: Rs. ${fmt(totalPaid)}`, lineWidth)}\x1b\x45\x00\n${dblDivider}\n`;
+    } else {
+        // 112mm Delivery -> 4 Col -> Max 64 chars
+        const cwItem = 20;
+        const cwIssue = 14;
+        const cwAdv = 14;
+        const cwAmt = 16;
+        p += `\x1b\x45\x01${padR('ITEM', cwItem)}${padR('STATUS', cwIssue)}${padR('ADVANCE', cwAdv)}${padL('AMOUNT', cwAmt)}\x1b\x45\x00\n`;
+        p += `${divider}\n`;
+        const statusTxt = (repair.status || 'DELIVERED').substring(0, cwIssue - 1);
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(statusTxt, cwIssue)}${padR(fmt(repair.advance).substring(0, cwAdv), cwAdv)}${padL(fmt(repair.balance).substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
+        if (repair.subProductName) p += `${repair.subProductName}\n`;
+
+        p += `${divider}\n`;
+        const c1 = Math.floor(lineWidth / 2);
+        p += `${padR('Balance: Rs. ' + fmt(repair.balance), c1)}`;
+        if (extraAmount > 0) p += `${padR('Extra: Rs. ' + fmt(extraAmount), Math.floor(lineWidth / 4))}`;
+        if (gstAmount > 0) p += `${padR('GST: Rs. ' + fmt(gstAmount), Math.floor(lineWidth / 4))}`;
+        p += '\n';
+        p += `${dblDivider}\n\x1b\x45\x01${padL(`Total Paid: Rs. ${fmt(totalPaid)}`, lineWidth)}\x1b\x45\x00\n${dblDivider}\n`;
+    }
+    if (employeeName || repair.empId) p += `${row('Operator:', employeeName || repair.empId)}\n`;
+    return p;
+};
+
+const _getRepairDeliveryHTMLPayload = async (
+    repair: any,
+    extraAmount: number,
+    gstAmount: number,
+    shopDetails?: any,
+    employeeName?: string,
+    config?: ReceiptConfig
+): Promise<string> => {
+    const paperWidth = config?.paperWidth || '58mm';
+    const width = paperWidth === '58mm' ? '220px' : paperWidth === '80mm' ? '300px' : '420px';
+    const fmt = (val: number) => new Intl.NumberFormat('en-IN').format(Math.round(val ?? 0));
+    const fmtDate = (d: string | Date) => new Date(d).toLocaleDateString('en-IN');
+    const totalPaid = repair.balance + extraAmount + gstAmount;
+    return `
+  <html><head><style>
+    body{font-family:monospace;width:${width};margin:0 auto;padding:5px;font-size:12px}
+    .center{text-align:center}.bold{font-weight:bold}
+    .div{border-top:1px dashed #000;margin:5px 0}.ddiv{border-top:2px solid #000;margin:5px 0}
+    .row{display:flex;justify-content:space-between;margin:2px 0}
+    .title{font-size:13px;font-weight:bold;text-align:center;margin:5px 0}
+    .footer{text-align:center;margin-top:8px;font-size:11px}
+  </style></head><body>
+    <div class="center bold">${shopDetails?.name || 'GOLD ESTIMATION'}</div>
+    ${shopDetails?.address1 ? `<div class="center">${shopDetails.address1}</div>` : ''}
+    ${shopDetails?.mobile ? `<div class="center">Mob: ${shopDetails.mobile}</div>` : ''}
+    <div class="div"></div><div class="title">REPAIR DELIVERY RECEIPT</div><div class="div"></div>
+    <div class="row"><span>Repair No:</span><span>${repair.id}</span></div>
+    <div class="row"><span>Date:</span><span>${fmtDate(new Date())}</span></div>
+    ${(repair.customerName || repair.customerMobile) ? `
+      <div class="div"></div>
+      ${repair.customerName ? `<div class="row"><span>Customer:</span><span>${repair.customerName.toUpperCase()}</span></div>` : ''}
+      ${repair.customerMobile ? `<div class="row"><span>Phone:</span><span>${repair.customerMobile}</span></div>` : ''}
+    ` : ''}
+    <div class="div"></div>
+    <div class="bold center">${(repair.itemName || '').toUpperCase()}</div>
+    <div class="div"></div>
+    <div class="row"><span>Advance Paid</span><span>Rs. ${fmt(repair.advance)}</span></div>
+    <div class="row"><span>Balance</span><span>Rs. ${fmt(repair.balance)}</span></div>
+    ${extraAmount > 0 ? `<div class="row"><span>Extra Amount</span><span>Rs. ${fmt(extraAmount)}</span></div>` : ''}
+    ${gstAmount > 0 ? `<div class="row"><span>GST Amount</span><span>Rs. ${fmt(gstAmount)}</span></div>` : ''}
+    <div class="ddiv"></div>
+    <div class="row bold"><span>Total Due Paid</span><span>Rs. ${fmt(totalPaid)}</span></div>
+    <div class="ddiv"></div>
+    ${(employeeName || repair.empId) && config?.showOperator !== false ? `
+      <div class="div"></div>
+      <div class="row"><span>Operator</span><span>${employeeName || repair.empId}</span></div>` : ''}
+    ${config?.showFooter !== false ? `<div class="footer">${shopDetails?.footerMessage || 'Thank You! Visit Again.'}</div>` : ''}
+  </body></html>`;
+};
+
+export const printQRCodeImage = async (text: string, printerType: string = 'thermal'): Promise<boolean> => {
+    return new Promise((resolve) => {
+        try {
+            const { NativeModules } = require('react-native');
+            const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=200&margin=0`;
+            const handleResult = (err: any) => resolve(!err);
+
+            if (printerType === 'thermal' || printerType === 'bluetooth') {
+                if (NativeModules.RNBLEPrinter && NativeModules.RNBLEPrinter.printImageData) {
+                    NativeModules.RNBLEPrinter.printImageData(qrUrl, handleResult);
+                } else resolve(false);
+            } else if (printerType === 'usb') {
+                if (NativeModules.RNUSBPrinter && NativeModules.RNUSBPrinter.printImageData) {
+                    NativeModules.RNUSBPrinter.printImageData(qrUrl, handleResult);
+                } else resolve(false);
+            } else if (printerType === 'net') {
+                if (NativeModules.RNNetPrinter && NativeModules.RNNetPrinter.printImageData) {
+                    NativeModules.RNNetPrinter.printImageData(qrUrl, handleResult);
+                } else resolve(false);
+            } else {
+                resolve(false);
+            }
+        } catch (e) {
+            console.error('Failed to print QR code image:', e);
+            resolve(false);
+        }
+    });
+};
+

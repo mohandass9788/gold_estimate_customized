@@ -26,7 +26,7 @@ const Image = RNImage as any;
 
 export default function SettingsScreen() {
     const router = useRouter();
-    const { logout } = useAuth();
+    const { logout, isSuperAdmin } = useAuth();
     const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName, deviceId } = useGeneralSettings();
     const [showHelpModal, setShowHelpModal] = useState(false);
 
@@ -144,6 +144,18 @@ export default function SettingsScreen() {
                         }
                     />
                 </View>
+
+                {isSuperAdmin && (
+                    <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('super_admin')}</Text>
+                        <SettingItem
+                            icon="shield-checkmark-outline"
+                            label={t('sys_admin_menu')}
+                            onPress={() => (router as any).push('/super-admin')}
+                            color={activeColors.primary}
+                        />
+                    </View>
+                )}
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                     <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('support')}</Text>

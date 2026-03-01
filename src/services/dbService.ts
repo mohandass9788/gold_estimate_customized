@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { RepairType, RepairStatus } from '../types';
 
 const DB_NAME = 'gold_estimation.db';
 
@@ -41,6 +42,32 @@ export interface DBEstimation {
     estimationNumber?: number;
 }
 
+export interface DBRepair {
+    id: string; // Repair No
+    date: string;
+    type: RepairType;
+    dueDays: number;
+    dueDate: string;
+    itemName: string;
+    subProductName: string;
+    pcs: number;
+    grossWeight: number;
+    netWeight: number;
+    natureOfRepair: string;
+    empId: string;
+    images: string; // JSON string
+    amount: number;
+    advance: number;
+    balance: number;
+    status: RepairStatus;
+    extraAmount?: number;
+    deliveryDate?: string;
+    customerName?: string;
+    customerMobile?: string;
+    gstAmount?: number;
+    gstType?: string;
+}
+
 let db: SQLite.SQLiteDatabase | null = null;
 let initPromise: Promise<void> | null = null;
 
@@ -51,8 +78,12 @@ export const initDatabase = async () => {
         try {
             db = await SQLite.openDatabaseAsync(DB_NAME);
 
-            // Enable foreign keys
-            await db.execAsync('PRAGMA foreign_keys = ON;');
+            // Enable WAL for concurrent read/write and foreign keys
+            await db.execAsync(`
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA foreign_keys = ON;
+            `);
 
             // Create Products table
             await db.execAsync(`
@@ -168,6 +199,47 @@ export const initDatabase = async () => {
                     FOREIGN KEY (orderId) REFERENCES orders (orderId) ON DELETE CASCADE
                 );
             `);
+
+            // Create Repairs table
+            await db.execAsync(`
+                CREATE TABLE IF NOT EXISTS repairs (
+                    id TEXT PRIMARY KEY,
+                    date TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    dueDays INTEGER,
+                    dueDate TEXT,
+                    itemName TEXT NOT NULL,
+                    subProductName TEXT,
+                    pcs INTEGER,
+                    grossWeight REAL,
+                    netWeight REAL,
+                    natureOfRepair TEXT,
+                    empId TEXT,
+                    images TEXT,
+                    amount REAL,
+                    advance REAL,
+                    balance REAL,
+                    status TEXT DEFAULT 'PENDING',
+                    extraAmount REAL,
+                    deliveryDate TEXT,
+                    customerName TEXT,
+                    customerMobile TEXT,
+                    gstAmount REAL,
+                    gstType TEXT
+                );
+            `);
+
+            // Migration: Add new repair columns if missing
+            const repTableInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(repairs);');
+            const repColumnNames = repTableInfo.map(c => c.name);
+            if (!repColumnNames.includes('gstAmount')) {
+                console.log('Migrating: Adding gstAmount column to repairs table');
+                await db.execAsync('ALTER TABLE repairs ADD COLUMN gstAmount REAL;');
+            }
+            if (!repColumnNames.includes('gstType')) {
+                console.log('Migrating: Adding gstType column to repairs table');
+                await db.execAsync('ALTER TABLE repairs ADD COLUMN gstType TEXT;');
+            }
 
             // Migration: Add purchaseItems column if missing
             const estTableInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(estimations);');
@@ -556,6 +628,11 @@ export const updateUserCredentials = async (username: string, newPassword?: stri
     }
 };
 
+export const getUsers = async (): Promise<{ username: string }[]> => {
+    if (!db) await initDatabase();
+    return await db!.getAllAsync<{ username: string }>('SELECT username FROM users;');
+};
+
 export const getCurrentUser = async (): Promise<{ username: string } | null> => {
     if (!db) await initDatabase();
     const result = await db!.getFirstAsync<{ username: string }>('SELECT username FROM users LIMIT 1;');
@@ -704,4 +781,87 @@ export const getEstimationsForRecentDays = async (days: number = 2): Promise<DBE
         'SELECT * FROM estimations WHERE date >= ? ORDER BY date DESC;',
         [dateStr]
     );
+};
+
+// Repair Management
+export const saveRepair = async (repair: DBRepair): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync(
+        `INSERT OR REPLACE INTO repairs (
+            id, date, type, dueDays, dueDate, itemName, subProductName, pcs, 
+            grossWeight, netWeight, natureOfRepair, empId, images, amount, 
+            advance, balance, status, extraAmount, deliveryDate, customerName, customerMobile, gstAmount, gstType
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+            repair.id, repair.date, repair.type, repair.dueDays, repair.dueDate,
+            repair.itemName, repair.subProductName, repair.pcs, repair.grossWeight,
+            repair.netWeight, repair.natureOfRepair, repair.empId, repair.images || '[]',
+            repair.amount, repair.advance, repair.balance, repair.status,
+            repair.extraAmount || 0, repair.deliveryDate || null,
+            repair.customerName || null, repair.customerMobile || null,
+            repair.gstAmount || 0, repair.gstType || 'none'
+        ]
+    );
+};
+
+export const getRepairs = async (limit: number = 50, status?: string): Promise<DBRepair[]> => {
+    if (!db) await initDatabase();
+    if (status) {
+        return await db!.getAllAsync<DBRepair>('SELECT * FROM repairs WHERE status = ? ORDER BY date DESC LIMIT ?;', [status, limit]);
+    }
+    return await db!.getAllAsync<DBRepair>('SELECT * FROM repairs ORDER BY date DESC LIMIT ?;', [limit]);
+};
+
+export const getFilteredRepairs = async (startDate: string, endDate: string, status?: string): Promise<DBRepair[]> => {
+    if (!db) await initDatabase();
+    let query = 'SELECT * FROM repairs WHERE date >= ? AND date <= ?';
+    const params: any[] = [startDate, endDate];
+
+    if (status) {
+        query += ' AND status = ?';
+        params.push(status);
+    }
+
+    query += ' ORDER BY date DESC;';
+    return await db!.getAllAsync<DBRepair>(query, params);
+};
+
+export const getRepairById = async (id: string): Promise<DBRepair | null> => {
+    if (!db) await initDatabase();
+    return await db!.getFirstAsync<DBRepair>('SELECT * FROM repairs WHERE id = ?;', [id]);
+};
+
+export const deleteRepair = async (id: string): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync('DELETE FROM repairs WHERE id = ?;', [id]);
+};
+
+export const updateRepairStatus = async (
+    id: string,
+    status: string,
+    extraAmount: number = 0,
+    deliveryDate?: string,
+    gstAmount?: number,
+    gstType?: string
+): Promise<void> => {
+    if (!db) await initDatabase();
+
+    if (gstAmount !== undefined && gstType !== undefined) {
+        await db!.runAsync(
+            'UPDATE repairs SET status = ?, extraAmount = ?, deliveryDate = ?, gstAmount = ?, gstType = ? WHERE id = ?;',
+            [status, extraAmount, deliveryDate || new Date().toISOString(), gstAmount, gstType, id]
+        );
+    } else {
+        await db!.runAsync(
+            'UPDATE repairs SET status = ?, extraAmount = ?, deliveryDate = ? WHERE id = ?;',
+            [status, extraAmount, deliveryDate || new Date().toISOString(), id]
+        );
+    }
+};
+
+export const getNextRepairId = async (): Promise<string> => {
+    if (!db) await initDatabase();
+    const result = await db!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM repairs;');
+    const nextNum = (result?.count || 0) + 1;
+    return `REP-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(nextNum).padStart(4, '0')}`;
 };
