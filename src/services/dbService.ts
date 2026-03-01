@@ -28,6 +28,22 @@ export interface DBSettings {
     value: string;
 }
 
+export interface DBEmployee {
+    id: number;
+    empId: string;
+    name: string;
+    phone: string;
+    role: string;
+    isActive: number;
+}
+
+export interface DBCustomer {
+    id: number;
+    name: string;
+    mobile: string;
+    address1?: string;
+}
+
 export interface DBEstimation {
     id: string;
     customerName: string;
@@ -197,6 +213,28 @@ export const initDatabase = async () => {
                     type TEXT NOT NULL, -- 'PRODUCT', 'PURCHASE', 'CHIT', 'ADVANCE'
                     itemData TEXT NOT NULL, -- JSON string
                     FOREIGN KEY (orderId) REFERENCES orders (orderId) ON DELETE CASCADE
+                );
+            `);
+
+            // Create Employees table
+            await db.execAsync(`
+                CREATE TABLE IF NOT EXISTS employees (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empId TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    phone TEXT,
+                    role TEXT,
+                    isActive INTEGER DEFAULT 1
+                );
+            `);
+
+            // Create Customers table
+            await db.execAsync(`
+                CREATE TABLE IF NOT EXISTS customers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    mobile TEXT NOT NULL UNIQUE,
+                    address1 TEXT
                 );
             `);
 
@@ -865,3 +903,50 @@ export const getNextRepairId = async (): Promise<string> => {
     const nextNum = (result?.count || 0) + 1;
     return `REP-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(nextNum).padStart(4, '0')}`;
 };
+
+// Employee Management
+export const getEmployees = async (activeOnly: boolean = false): Promise<DBEmployee[]> => {
+    if (!db) await initDatabase();
+    if (activeOnly) {
+        return await db!.getAllAsync<DBEmployee>('SELECT * FROM employees WHERE isActive = 1 ORDER BY name ASC;');
+    }
+    return await db!.getAllAsync<DBEmployee>('SELECT * FROM employees ORDER BY name ASC;');
+};
+
+export const addEmployee = async (employee: Omit<DBEmployee, 'id'>): Promise<number> => {
+    if (!db) await initDatabase();
+    const result = await db!.runAsync(
+        'INSERT INTO employees (empId, name, phone, role, isActive) VALUES (?, ?, ?, ?, ?);',
+        [employee.empId, employee.name, employee.phone, employee.role, employee.isActive]
+    );
+    return result.lastInsertRowId;
+};
+
+export const updateEmployee = async (id: number, employee: Omit<DBEmployee, 'id'>): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync(
+        'UPDATE employees SET empId = ?, name = ?, phone = ?, role = ?, isActive = ? WHERE id = ?;',
+        [employee.empId, employee.name, employee.phone, employee.role, employee.isActive, id]
+    );
+};
+
+export const deleteEmployee = async (id: number): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync('DELETE FROM employees WHERE id = ?;', [id]);
+};
+
+// Customer Database Logic
+export const saveCustomer = async (name: string, mobile: string, address1?: string): Promise<void> => {
+    if (!db) await initDatabase();
+    // Use INSERT OR REPLACE since mobile is UNIQUE. If it exists, it updates the record.
+    await db!.runAsync(
+        'INSERT OR REPLACE INTO customers (id, name, mobile, address1) VALUES ((SELECT id FROM customers WHERE mobile = ?), ?, ?, ?);',
+        [mobile, name, mobile, address1 || null]
+    );
+};
+
+export const getCustomerByMobile = async (mobile: string): Promise<DBCustomer | null> => {
+    if (!db) await initDatabase();
+    return await db!.getFirstAsync<DBCustomer>('SELECT * FROM customers WHERE mobile = ?;', [mobile]);
+};
+

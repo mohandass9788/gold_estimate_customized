@@ -29,6 +29,7 @@ export interface EstimationItem extends Product {
   gstValue: number;
   totalValue: number;
   metal: 'GOLD' | 'SILVER';
+  customerName?: string;
 }
 
 export type LessWeightType = 'grams' | 'percentage' | 'amount';

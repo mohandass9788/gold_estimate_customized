@@ -27,8 +27,10 @@ const Image = RNImage as any;
 export default function SettingsScreen() {
     const router = useRouter();
     const { logout, isSuperAdmin } = useAuth();
-    const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName, deviceId } = useGeneralSettings();
+    const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName, deviceId, updateDeviceId } = useGeneralSettings();
     const [showHelpModal, setShowHelpModal] = useState(false);
+    const [showEditIdModal, setShowEditIdModal] = useState(false);
+    const [tempDeviceId, setTempDeviceId] = useState('');
 
 
 
@@ -73,7 +75,10 @@ export default function SettingsScreen() {
                     <View>
                         <Text style={[styles.shopNameDisplay, { color: activeColors.text }]}>{shopDetails.name || 'Admin'}</Text>
                         <Text style={[styles.profileSub, { color: activeColors.textLight }]}>{deviceName ? `ID: ${deviceName}` : t('account_settings')}</Text>
-                        <Text style={[styles.profileSub, { color: activeColors.textLight, marginTop: 4, opacity: 0.8 }]}>{t('device_id')}: {deviceId || '...'}</Text>
+                        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }} onPress={() => { setTempDeviceId(deviceId); setShowEditIdModal(true); }}>
+                            <Text style={[styles.profileSub, { color: activeColors.textLight, opacity: 0.8, marginRight: 8 }]}>{t('device_id')}: {deviceId || '...'}</Text>
+                            <Icon name="pencil-outline" size={14} color={activeColors.primary} />
+                        </TouchableOpacity>
                     </View>
                 </View>
 
@@ -90,18 +95,18 @@ export default function SettingsScreen() {
                     <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('business_branding')}</Text>
                     <SettingItem
                         icon="business-outline"
-                        label={t('business_info')}
+                        label={t('shop_business_settings') || 'Shop & Business Settings'}
                         onPress={() => (router as any).push('/settings/shop-info')}
-                    />
-                    <SettingItem
-                        icon="image-outline"
-                        label={t('shop_info')}
-                        onPress={() => (router as any).push('/settings/general')}
                     />
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                     <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('app_configuration')}</Text>
+                    <SettingItem
+                        icon="people-outline"
+                        label={t('manage_employees') || 'Manage Employees'}
+                        onPress={() => (router as any).push('/settings/employees')}
+                    />
                     <SettingItem
                         icon="list-outline"
                         label={t('manage_products')}
@@ -156,6 +161,15 @@ export default function SettingsScreen() {
                         />
                     </View>
                 )}
+
+                <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('data_management') || 'Data Management'}</Text>
+                    <SettingItem
+                        icon="cloud-upload-outline"
+                        label={t('backup_restore') || 'Backup & Restore'}
+                        onPress={() => (router as any).push('/settings/backup-restore')}
+                    />
+                </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                     <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('support')}</Text>
@@ -229,6 +243,56 @@ export default function SettingsScreen() {
                             </View>
                             <Icon name="chevron-forward" size={20} color={activeColors.textLight} />
                         </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                visible={showEditIdModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowEditIdModal(false)}
+            >
+                <View style={styles.modalOverlayCen}>
+                    <View style={[styles.modalCard, { backgroundColor: activeColors.cardBg }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>{t('edit_device_id') || 'Edit Device ID'}</Text>
+                            <TouchableOpacity onPress={() => setShowEditIdModal(false)}>
+                                <Icon name="close" size={24} color={activeColors.text} />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={[styles.modalSubtitle, { color: activeColors.textLight }]}>
+                            {t('edit_device_id_desc') || 'Manually set a custom Device ID for tracking.'}
+                        </Text>
+                        <TextInput
+                            style={[
+                                styles.textInput,
+                                {
+                                    backgroundColor: activeColors.background,
+                                    borderColor: activeColors.border,
+                                    color: activeColors.text,
+                                }
+                            ]}
+                            value={tempDeviceId}
+                            onChangeText={setTempDeviceId}
+                            placeholder="Enter Device ID"
+                            placeholderTextColor={activeColors.textLight}
+                        />
+                        <View style={styles.modalActions}>
+                            <PrimaryButton
+                                title={t('cancel')}
+                                onPress={() => setShowEditIdModal(false)}
+                                style={{ ...styles.modalBtn, backgroundColor: activeColors.border } as any}
+                            />
+                            <PrimaryButton
+                                title={t('save')}
+                                onPress={() => {
+                                    updateDeviceId(tempDeviceId || '');
+                                    setShowEditIdModal(false);
+                                }}
+                                style={styles.modalBtn as any}
+                            />
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -397,5 +461,36 @@ const styles = StyleSheet.create({
     contactValue: {
         fontSize: FONT_SIZES.md,
         fontWeight: 'bold',
+    },
+    modalOverlayCen: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        padding: SPACING.lg,
+    },
+    modalCard: {
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.lg,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    textInput: {
+        borderWidth: 1,
+        borderRadius: BORDER_RADIUS.md,
+        padding: SPACING.md,
+        fontSize: FONT_SIZES.md,
+        marginBottom: SPACING.lg,
+    },
+    modalActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: SPACING.sm,
+    },
+    modalBtn: {
+        flex: 1,
+        marginHorizontal: SPACING.xs,
     }
 });

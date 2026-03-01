@@ -13,8 +13,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import InputField from '../components/InputField';
+import DropdownField from '../components/DropdownField';
 import PrimaryButton from '../components/PrimaryButton';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
+import { getEmployees, DBEmployee, getCustomerByMobile } from '../services/dbService';
 
 const View = RNView as any;
 const Text = RNText as any;
@@ -54,6 +56,16 @@ export default function PrintDetailsModal({ visible, onClose, onSubmit, initialD
 
     const { showAlert: globalShowAlert } = useGeneralSettings();
 
+    const [employees, setEmployees] = useState<DBEmployee[]>([]);
+
+    useEffect(() => {
+        const fetchEmps = async () => {
+            const emps = await getEmployees(true);
+            setEmployees(emps);
+        };
+        fetchEmps();
+    }, []);
+
     useEffect(() => {
         if (visible) {
             if (initialData) {
@@ -66,6 +78,20 @@ export default function PrintDetailsModal({ visible, onClose, onSubmit, initialD
             }
         }
     }, [visible, initialData, currentEmployeeName]);
+
+    const handleMobileChange = async (text: string) => {
+        setMobile(text);
+        if (errors.mobile) setErrors(prev => ({ ...prev, mobile: '' }));
+
+        // Auto-fill logic
+        if (text.length === 10 && !customerName) {
+            const customer = await getCustomerByMobile(text);
+            if (customer) {
+                setCustomerName(customer.name);
+                if (customer.address1) setPlace(customer.address1);
+            }
+        }
+    };
 
     const handleSubmit = () => {
         const newErrors: Record<string, string> = {};
@@ -99,7 +125,12 @@ export default function PrintDetailsModal({ visible, onClose, onSubmit, initialD
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.formContainer}>
+                        <ScrollView
+                            style={styles.formContainer}
+                            contentContainerStyle={styles.scrollContent}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
+                        >
                             <View style={styles.section}>
                                 <Text style={[styles.sectionTitle, { color: activeColors.textLight }]}>{t('customer_info')}</Text>
                                 <InputField
@@ -114,10 +145,11 @@ export default function PrintDetailsModal({ visible, onClose, onSubmit, initialD
                                     label={t('phone_number')}
                                     required
                                     value={mobile}
-                                    onChangeText={(text) => { setMobile(text); if (errors.mobile) setErrors(prev => ({ ...prev, mobile: '' })); }}
+                                    onChangeText={handleMobileChange}
                                     placeholder={t('enter_mobile') || "Enter Mobile"}
                                     keyboardType="phone-pad"
                                     error={errors.mobile}
+                                    maxLength={10}
                                 />
                                 <InputField
                                     label={t('address') || "Place"}
@@ -129,16 +161,17 @@ export default function PrintDetailsModal({ visible, onClose, onSubmit, initialD
 
                             <View style={[styles.section, { borderTopWidth: 1, borderTopColor: activeColors.border + '20', paddingTop: SPACING.md }]}>
                                 <Text style={[styles.sectionTitle, { color: activeColors.textLight }]}>{t('employee_identification')}</Text>
-                                <InputField
+                                <DropdownField
                                     label={t('employee_name')}
-                                    required
                                     value={employeeName}
-                                    onChangeText={(text) => { setEmployeeName(text); if (errors.employeeName) setErrors(prev => ({ ...prev, employeeName: '' })); }}
-                                    placeholder={t('enter_operator_msg')}
-                                    error={errors.employeeName}
+                                    onSelect={(val) => { setEmployeeName(val); if (errors.employeeName) setErrors(prev => ({ ...prev, employeeName: '' })); }}
+                                    options={employees.map(e => ({ label: e.name, value: e.name }))}
                                 />
+                                {errors.employeeName && (
+                                    <Text style={{ color: COLORS.error, fontSize: FONT_SIZES.xs, marginTop: -4 }}>{errors.employeeName}</Text>
+                                )}
                             </View>
-                        </View>
+                        </ScrollView>
 
                         <View style={styles.buttonRow}>
                             <PrimaryButton
@@ -170,6 +203,9 @@ const styles = StyleSheet.create({
         maxHeight: '95%',
     },
     formContainer: {
+        flexGrow: 0,
+    },
+    scrollContent: {
         paddingBottom: SPACING.md,
     },
     header: {

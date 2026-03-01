@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableWithoutFeedback as RNRTouchableWithoutFeedback, Keyboard, Platform, Image as RNImage, TouchableOpacity as RNRTouchableOpacity } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
 import InputField from '../components/InputField';
@@ -8,6 +9,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { useRouter } from 'expo-router';
+import CategoryManagementModal from '../modals/CategoryManagementModal';
 
 // Fix for React 19 type mismatch
 const View = RNView as any;
@@ -31,6 +33,8 @@ export default function ShopInfoScreen() {
     const [logoUri, setLogoUri] = useState(shopDetails.appLogo);
     const [iconUri, setIconUri] = useState(shopDetails.appIcon);
     const [splashUri, setSplashUri] = useState(shopDetails.splashImage);
+    const [gstPercentage, setGstPercentage] = useState(shopDetails.gstPercentage);
+    const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
 
     const pickImage = async (type: 'logo' | 'icon' | 'splash') => {
         let aspect: [number, number] = [1, 1];
@@ -62,6 +66,7 @@ export default function ShopInfoScreen() {
             phone: shopPhone,
             gstNumber: shopGst,
             footerMessage: footerMsg,
+            gstPercentage: gstPercentage,
             appLogo: logoUri,
             appIcon: iconUri,
             splashImage: splashUri
@@ -143,6 +148,26 @@ export default function ShopInfoScreen() {
                     </View>
 
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('tax_inventory') || 'Tax & Inventory'}</Text>
+                        <InputField
+                            label={t('default_gst') || 'Default GST (%)'}
+                            placeholder="3"
+                            value={gstPercentage}
+                            onChangeText={setGstPercentage}
+                            keyboardType="numeric"
+                        />
+                        <TouchableOpacity
+                            style={[styles.manageButton, { borderColor: activeColors.primary }]}
+                            onPress={() => setIsCategoryModalVisible(true)}
+                        >
+                            <Ionicons name="list-outline" size={20} color={activeColors.primary} />
+                            <Text style={[styles.manageButtonText, { color: activeColors.primary }]}>
+                                {t('manage_purchase_categories') || 'Manage Purchase Categories'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                         <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('contact_tax') || 'Contact & Tax'}</Text>
                         <InputField
                             label={t('phone_number')}
@@ -176,14 +201,20 @@ export default function ShopInfoScreen() {
                         />
                     </View>
 
+
                     <PrimaryButton
                         title={t('save')}
                         onPress={handleSave}
                         style={styles.saveButton}
                     />
                 </ScrollView>
-            </TouchableWithoutFeedback>
-        </ScreenContainer>
+            </TouchableWithoutFeedback >
+
+            <CategoryManagementModal
+                visible={isCategoryModalVisible}
+                onClose={() => setIsCategoryModalVisible(false)}
+            />
+        </ScreenContainer >
     );
 }
 
@@ -246,5 +277,19 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: COLORS.textLight,
         marginTop: 4,
+    },
+    manageButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.md,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        gap: SPACING.sm,
+    },
+    manageButtonText: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: '600',
     }
 });

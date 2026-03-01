@@ -11,6 +11,7 @@ import {
     KeyboardAvoidingView as RNKeyboardAvoidingView,
     Platform,
     ActivityIndicator as RNActivityIndicator,
+    ScrollView as RNScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
@@ -37,6 +38,7 @@ const TextInput = RNTextInput as any;
 const ActivityIndicator = RNActivityIndicator as any;
 const KeyboardAvoidingView = RNKeyboardAvoidingView as any;
 const FlatList = RNFlatList as any;
+const ScrollView = RNScrollView as any;
 
 interface CategoryManagementModalProps {
     visible: boolean;
@@ -157,132 +159,137 @@ export default function CategoryManagementModal({ visible, onClose }: CategoryMa
             <View style={styles.modalOverlay}>
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}
+                    style={styles.keyboardView}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
                 >
-                    <View style={styles.header}>
-                        <Text style={[styles.title, { color: activeColors.text }]}>{t('manage_purchase_categories')}</Text>
-                        <TouchableOpacity onPress={onClose}>
-                            <Icon name="close" size={24} color={activeColors.text} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.body}>
-                        {/* Categories Section */}
-                        <View style={styles.section}>
-                            <Text style={[styles.sectionTitle, { color: activeColors.textLight }]}>{t('categories')}</Text>
-                            <View style={styles.inputRow}>
-                                <TextInput
-                                    style={[styles.input, { color: activeColors.text, borderColor: activeColors.border }]}
-                                    placeholder={t('new_category')}
-                                    placeholderTextColor={activeColors.textLight}
-                                    value={newCategoryName}
-                                    onChangeText={setNewCategoryName}
-                                />
-                                <TouchableOpacity
-                                    style={[styles.metalToggle, { backgroundColor: newCategoryMetal === 'GOLD' ? '#FFD700' : '#C0C0C0', marginRight: SPACING.sm }]}
-                                    onPress={() => setNewCategoryMetal(prev => prev === 'GOLD' ? 'SILVER' : 'GOLD')}
-                                >
-                                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#000' }}>{newCategoryMetal}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.addButton, { backgroundColor: COLORS.primary }]} onPress={handleAddCategory}>
-                                    <Icon name="add" size={24} color={COLORS.white} />
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={[styles.inputRow, { marginBottom: SPACING.sm }]}>
-                                <Text style={[styles.filterLabel, { color: activeColors.textLight }]}>{t('filter_by_metal') || 'Filter:'}</Text>
-                                {(['ALL', 'GOLD', 'SILVER'] as const).map((m) => (
-                                    <TouchableOpacity
-                                        key={m}
-                                        onPress={() => setFilterMetal(m)}
-                                        style={[
-                                            styles.filterChip,
-                                            { backgroundColor: filterMetal === m ? COLORS.primary : 'transparent', borderColor: activeColors.border }
-                                        ]}
-                                    >
-                                        <Text style={[styles.filterChipText, { color: filterMetal === m ? COLORS.white : activeColors.text }]}>{m}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-
-                            <FlatList
-                                data={categories}
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                keyExtractor={(item: any) => item.id.toString()}
-                                style={styles.catList}
-                                renderItem={({ item }: any) => (
-                                    <View style={styles.catItemContainer}>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.catItem,
-                                                { borderColor: activeColors.border },
-                                                selectedCategory?.id === item.id && { backgroundColor: COLORS.primary, borderColor: COLORS.primary }
-                                            ]}
-                                            onPress={() => setSelectedCategory(item)}
-                                        >
-                                            <Text style={[
-                                                styles.catText,
-                                                { color: activeColors.text },
-                                                selectedCategory?.id === item.id && { color: COLORS.white }
-                                            ]}>
-                                                {item.name}
-                                            </Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.deleteIconSmall}
-                                            onPress={() => handleDeleteCategory(item)}
-                                        >
-                                            <Icon name="close-circle" size={16} color={activeColors.error} />
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-                            />
+                    <View style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}>
+                        <View style={styles.header}>
+                            <Text style={[styles.title, { color: activeColors.text }]}>{t('manage_purchase_categories')}</Text>
+                            <TouchableOpacity onPress={onClose}>
+                                <Icon name="close" size={24} color={activeColors.text} />
+                            </TouchableOpacity>
                         </View>
 
-                        {/* Sub-Categories Section */}
-                        {selectedCategory && (
+                        <ScrollView
+                            style={styles.body}
+                            contentContainerStyle={styles.scrollContent}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            {/* Categories Section */}
                             <View style={styles.section}>
-                                <Text style={[styles.sectionTitle, { color: activeColors.textLight }]}>
-                                    {t('sub_categories_for')} {selectedCategory.name}
-                                </Text>
+                                <Text style={[styles.sectionTitle, { color: activeColors.textLight }]}>{t('categories')}</Text>
                                 <View style={styles.inputRow}>
                                     <TextInput
                                         style={[styles.input, { color: activeColors.text, borderColor: activeColors.border }]}
-                                        placeholder={t('new_sub_category')}
+                                        placeholder={t('new_category')}
                                         placeholderTextColor={activeColors.textLight}
-                                        value={newSubCategoryName}
-                                        onChangeText={setNewSubCategoryName}
+                                        value={newCategoryName}
+                                        onChangeText={setNewCategoryName}
                                     />
-                                    <TouchableOpacity style={[styles.addButton, { backgroundColor: COLORS.success }]} onPress={handleAddSubCategory}>
+                                    <TouchableOpacity
+                                        style={[styles.metalToggle, { backgroundColor: newCategoryMetal === 'GOLD' ? '#FFD700' : '#C0C0C0', marginRight: SPACING.sm }]}
+                                        onPress={() => setNewCategoryMetal(prev => prev === 'GOLD' ? 'SILVER' : 'GOLD')}
+                                    >
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#000' }}>{newCategoryMetal}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={[styles.addButton, { backgroundColor: COLORS.primary }]} onPress={handleAddCategory}>
                                         <Icon name="add" size={24} color={COLORS.white} />
                                     </TouchableOpacity>
                                 </View>
 
-                                {loading ? (
-                                    <ActivityIndicator size="large" color={COLORS.primary} />
-                                ) : (
-                                    <FlatList
-                                        data={subCategories}
-                                        keyExtractor={(item: any) => item.id.toString()}
-                                        renderItem={({ item }: { item: DBPurchaseSubCategory }) => (
-                                            <View style={[styles.subCatItem, { borderBottomColor: activeColors.border }]}>
-                                                <Text style={[styles.subCatText, { color: activeColors.text }]}>{item.name}</Text>
-                                                <TouchableOpacity onPress={() => handleDeleteSubCategory(item.id)}>
-                                                    <Icon name="trash-outline" size={20} color={activeColors.error} />
-                                                </TouchableOpacity>
-                                            </View>
-                                        )}
-                                        ListEmptyComponent={
-                                            <Text style={[styles.emptyText, { color: activeColors.textLight }]}>{t('no_sub_categories')}</Text>
-                                        }
-                                    />
-                                )}
-                            </View>
-                        )}
-                    </View>
+                                <View style={[styles.inputRow, { marginBottom: SPACING.sm }]}>
+                                    <Text style={[styles.filterLabel, { color: activeColors.textLight }]}>{t('filter_by_metal') || 'Filter:'}</Text>
+                                    {(['ALL', 'GOLD', 'SILVER'] as const).map((m) => (
+                                        <TouchableOpacity
+                                            key={m}
+                                            onPress={() => setFilterMetal(m)}
+                                            style={[
+                                                styles.filterChip,
+                                                { backgroundColor: filterMetal === m ? COLORS.primary : 'transparent', borderColor: activeColors.border }
+                                            ]}
+                                        >
+                                            <Text style={[styles.filterChipText, { color: filterMetal === m ? COLORS.white : activeColors.text }]}>{m}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
 
-                    <PrimaryButton title={t('done')} onPress={onClose} style={styles.doneButton} />
+                                <FlatList
+                                    data={categories}
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    keyExtractor={(item: any) => item.id.toString()}
+                                    style={styles.catList}
+                                    renderItem={({ item }: any) => (
+                                        <View style={styles.catItemContainer}>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.catItem,
+                                                    { borderColor: activeColors.border },
+                                                    selectedCategory?.id === item.id && { backgroundColor: COLORS.primary, borderColor: COLORS.primary }
+                                                ]}
+                                                onPress={() => setSelectedCategory(item)}
+                                            >
+                                                <Text style={[
+                                                    styles.catText,
+                                                    { color: activeColors.text },
+                                                    selectedCategory?.id === item.id && { color: COLORS.white }
+                                                ]}>
+                                                    {item.name}
+                                                </Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={styles.deleteIconSmall}
+                                                onPress={() => handleDeleteCategory(item)}
+                                            >
+                                                <Icon name="close-circle" size={16} color={activeColors.error} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+                                />
+                            </View>
+
+                            {/* Sub-Categories Section */}
+                            {selectedCategory && (
+                                <View style={styles.section}>
+                                    <Text style={[styles.sectionTitle, { color: activeColors.textLight }]}>
+                                        {t('sub_categories_for')} {selectedCategory.name}
+                                    </Text>
+                                    <View style={styles.inputRow}>
+                                        <TextInput
+                                            style={[styles.input, { color: activeColors.text, borderColor: activeColors.border }]}
+                                            placeholder={t('new_sub_category')}
+                                            placeholderTextColor={activeColors.textLight}
+                                            value={newSubCategoryName}
+                                            onChangeText={setNewSubCategoryName}
+                                        />
+                                        <TouchableOpacity style={[styles.addButton, { backgroundColor: COLORS.success }]} onPress={handleAddSubCategory}>
+                                            <Icon name="add" size={24} color={COLORS.white} />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {loading ? (
+                                        <ActivityIndicator size="large" color={COLORS.primary} />
+                                    ) : (
+                                        <View>
+                                            {subCategories.map((item: DBPurchaseSubCategory) => (
+                                                <View key={item.id.toString()} style={[styles.subCatItem, { borderBottomColor: activeColors.border }]}>
+                                                    <Text style={[styles.subCatText, { color: activeColors.text }]}>{item.name}</Text>
+                                                    <TouchableOpacity onPress={() => handleDeleteSubCategory(item.id)}>
+                                                        <Icon name="trash-outline" size={20} color={activeColors.error} />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ))}
+                                            {subCategories.length === 0 && (
+                                                <Text style={[styles.emptyText, { color: activeColors.textLight }]}>{t('no_sub_categories')}</Text>
+                                            )}
+                                        </View>
+                                    )}
+                                </View>
+                            )}
+                        </ScrollView>
+
+                        <PrimaryButton title={t('done')} onPress={onClose} style={styles.doneButton} />
+                    </View>
                 </KeyboardAvoidingView>
             </View>
         </Modal>
@@ -295,11 +302,17 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'flex-end',
     },
+    keyboardView: {
+        width: '100%',
+        height: '100%',
+        justifyContent: 'flex-end',
+    },
     modalContent: {
         borderTopLeftRadius: BORDER_RADIUS.lg,
         borderTopRightRadius: BORDER_RADIUS.lg,
         padding: SPACING.lg,
-        height: '80%',
+        height: '85%',
+        width: '100%',
     },
     header: {
         flexDirection: 'row',
@@ -313,6 +326,9 @@ const styles = StyleSheet.create({
     },
     body: {
         flex: 1,
+    },
+    scrollContent: {
+        paddingBottom: SPACING.xl,
     },
     section: {
         marginBottom: SPACING.xl,

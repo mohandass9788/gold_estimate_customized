@@ -4,6 +4,9 @@ export const calculateNetWeight = (gross: number, loss: number, type: LessWeight
     if (type === 'percentage') {
         return gross - (gross * loss) / 100;
     }
+    if (type === 'amount') {
+        return gross; // Amount is deducted from total value, not weight
+    }
     return Math.max(0, gross - loss);
 };
 

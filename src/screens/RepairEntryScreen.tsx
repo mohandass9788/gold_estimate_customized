@@ -7,7 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
-import { saveRepair, getNextRepairId, getRepairById, DBRepair, getProducts, getSubProducts, DBProduct, DBSubProduct } from '../services/dbService';
+import { saveRepair, getNextRepairId, getRepairById, DBRepair, getProducts, getSubProducts, DBProduct, DBSubProduct, getEmployees, DBEmployee, getCustomerByMobile, saveCustomer } from '../services/dbService';
 import { printRepair, getRepairReceiptThermalPayload } from '../services/printService';
 import ScreenContainer from '../components/ScreenContainer';
 import DropdownField from '../components/DropdownField';
@@ -54,6 +54,8 @@ export default function RepairEntryScreen() {
 
     const repairIdParam = useLocalSearchParams().id as string;
 
+    const [employees, setEmployees] = useState<DBEmployee[]>([]);
+
     useEffect(() => {
         if (repairIdParam) {
             loadRepairData(repairIdParam);
@@ -61,7 +63,23 @@ export default function RepairEntryScreen() {
             generateRepairId();
         }
         loadProducts();
+        loadEmployees();
     }, [repairIdParam]);
+
+    const loadEmployees = async () => {
+        const emps = await getEmployees(true);
+        setEmployees(emps);
+    };
+
+    const handleMobileChange = async (text: string) => {
+        setCustomerMobile(text);
+        if (text.length === 10 && !customerName) {
+            const customer = await getCustomerByMobile(text);
+            if (customer) {
+                setCustomerName(customer.name);
+            }
+        }
+    };
 
     const loadRepairData = async (id: string) => {
         setLoading(true);
@@ -211,6 +229,10 @@ export default function RepairEntryScreen() {
             await saveRepair(repairData);
             setSavedRepairData(repairData);
 
+            if (customerMobile && customerName) {
+                await saveCustomer(customerName, customerMobile, '');
+            }
+
             // Generate thermal payload for preview
             const payload = await getRepairReceiptThermalPayload(repairData, shopDetails, empId, receiptConfig, t);
             setPreviewPayload(payload);
@@ -332,10 +354,11 @@ export default function RepairEntryScreen() {
                     <TextInput
                         style={[styles.input, { color: activeColors.text }]}
                         value={customerMobile}
-                        onChangeText={setCustomerMobile}
+                        onChangeText={handleMobileChange}
                         placeholder={t('enter_mobile')}
                         placeholderTextColor={activeColors.textLight}
                         keyboardType="phone-pad"
+                        maxLength={10}
                     />
                 </View>
 
@@ -415,13 +438,12 @@ export default function RepairEntryScreen() {
                         placeholderTextColor={activeColors.textLight}
                     />
 
-                    <Label>{t('employee_name')}</Label>
-                    <TextInput
-                        style={[styles.input, { color: activeColors.text }]}
+                    <DropdownField
+                        label={t('employee_name')}
                         value={empId}
-                        onChangeText={setEmpId}
+                        options={employees.map(e => ({ label: e.name, value: e.name }))}
+                        onSelect={setEmpId}
                         placeholder={t('operator_name')}
-                        placeholderTextColor={activeColors.textLight}
                     />
                 </View>
 

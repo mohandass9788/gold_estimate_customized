@@ -69,6 +69,7 @@ interface GeneralSettingsContextType {
     isBluetoothEnabled: boolean;
     setIsBluetoothEnabled: (status: boolean) => void;
     deviceId: string;
+    updateDeviceId: (id: string) => void;
     alertConfig: {
         visible: boolean;
         title: string;
@@ -85,6 +86,7 @@ interface GeneralSettingsContextType {
         gstNumber: string;
         email: string;
         footerMessage: string;
+        gstPercentage: string;
         appLogo?: string;
         appIcon?: string;
         splashImage?: string;
@@ -96,6 +98,7 @@ interface GeneralSettingsContextType {
         gstNumber: string;
         email: string;
         footerMessage: string;
+        gstPercentage: string;
         appLogo?: string;
         appIcon?: string;
         splashImage?: string;
@@ -136,6 +139,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         gstNumber: '',
         email: '',
         footerMessage: 'Thank You! Visit Again.',
+        gstPercentage: '3',
         appLogo: '',
         appIcon: '',
         splashImage: '',
@@ -238,6 +242,13 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     useEffect(() => {
         const fetchDeviceId = async () => {
             try {
+                // Try fetching stored device ID first
+                const storedId = await getSetting('custom_device_id');
+                if (storedId) {
+                    setDeviceId(storedId);
+                    return;
+                }
+
                 if (Platform.OS === 'android') {
                     setDeviceId((Application as any).androidId || '');
                 } else if (Platform.OS === 'ios') {
@@ -261,7 +272,8 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                     getSetting('shop_footer'),
                     getSetting('app_logo'),
                     getSetting('app_icon'),
-                    getSetting('splash_image')
+                    getSetting('splash_image'),
+                    getSetting('gst_percentage')
                 ]);
 
                 if (savedShopDetails[0]) setShopDetails(prev => ({ ...prev, name: savedShopDetails[0]! }));
@@ -273,6 +285,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 if (savedShopDetails[6]) setShopDetails(prev => ({ ...prev, appLogo: savedShopDetails[6]! }));
                 if (savedShopDetails[7]) setShopDetails(prev => ({ ...prev, appIcon: savedShopDetails[7]! }));
                 if (savedShopDetails[8]) setShopDetails(prev => ({ ...prev, splashImage: savedShopDetails[8]! }));
+                if (savedShopDetails[9]) setShopDetails(prev => ({ ...prev, gstPercentage: savedShopDetails[9]! }));
 
                 const savedPin = await getSetting('admin_pin');
                 if (savedPin) setAdminPin(savedPin);
@@ -297,7 +310,26 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 }
 
                 const savedDeviceName = await getSetting('device_name');
-                if (savedDeviceName) setDeviceNameState(savedDeviceName);
+                if (savedDeviceName) {
+                    setDeviceNameState(savedDeviceName);
+                } else {
+                    let defaultName = 'DEVICE';
+                    try {
+                        let uniqueId = '';
+                        if (Platform.OS === 'android') {
+                            uniqueId = (Application as any).androidId || '';
+                        } else if (Platform.OS === 'ios') {
+                            uniqueId = await Application.getIosIdForVendorAsync() || '';
+                        }
+                        if (uniqueId) {
+                            defaultName = `DEV-${uniqueId.substring(0, 6).toUpperCase()}`;
+                        } else {
+                            defaultName = `DEV-${Math.floor(Math.random() * 1000000)}`;
+                        }
+                    } catch (e) { }
+                    setDeviceNameState(defaultName);
+                    setSetting('device_name', defaultName); // Save the generated default
+                }
 
                 const savedFeatureFlags = await getSetting('feature_flags');
                 if (savedFeatureFlags) {
@@ -368,6 +400,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         if (details.gstNumber) await setSetting('shop_gst', details.gstNumber);
         if (details.email) await setSetting('shop_email', details.email);
         if (details.footerMessage) await setSetting('shop_footer', details.footerMessage);
+        if (details.gstPercentage) await setSetting('gst_percentage', details.gstPercentage);
         if (details.appLogo !== undefined) await setSetting('app_logo', details.appLogo);
         if (details.appIcon !== undefined) await setSetting('app_icon', details.appIcon);
         if (details.splashImage !== undefined) await setSetting('splash_image', details.splashImage);
@@ -401,6 +434,11 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     const updateDeviceName = async (name: string) => {
         setDeviceNameState(name);
         await setSetting('device_name', name);
+    };
+
+    const updateDeviceId = async (id: string) => {
+        setDeviceId(id);
+        await setSetting('custom_device_id', id);
     };
 
     const updateReceiptConfig = async (config: Partial<ReceiptConfig>) => {
@@ -467,6 +505,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             featureFlags,
             updateFeatureFlags,
             deviceId,
+            updateDeviceId,
             alertConfig,
             showAlert,
             hideAlert,

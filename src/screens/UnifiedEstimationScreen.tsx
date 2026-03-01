@@ -324,7 +324,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     const advanceTotal = advanceItemsToPrint.reduce((sum, i) => sum + i.amount, 0);
                     const netPayable = totalGross - (purchaseTotal + chitTotal + advanceTotal);
 
-                    const { saveOrder, getNextOrderId } = require('../services/dbService');
+                    const { saveOrder, getNextOrderId, saveCustomer } = require('../services/dbService');
                     // Use existing orderId if we are editing an order, otherwise generate new
                     const orderId = state.currentOrderId || await getNextOrderId();
 
@@ -348,6 +348,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     ];
 
                     await saveOrder(orderData, orderItems);
+
+                    if (printDetails?.mobile && printDetails?.customerName) {
+                        await saveCustomer(printDetails.customerName, printDetails.mobile, printDetails.place || '');
+                    }
 
                     // Also update recent activity estimation history
                     if (estimationNum) {
@@ -510,7 +514,11 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         const categoryName = categories.find(c => c.id.toString() === purchaseCategoryId)?.name || '';
         const subCategoryName = subCategories.find(s => s.id.toString() === purchaseSubCategoryId)?.name || '';
 
-        const amount = purchaseNetWeight * rateValNum;
+        const baseAmount = purchaseNetWeight * rateValNum;
+        const amount = purchaseLessType === 'amount'
+            ? Math.max(0, baseAmount - (parseFloat(purchaseLess) || 0))
+            : baseAmount;
+
         const item: PurchaseItem = {
             id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             category: categoryName,
@@ -1071,7 +1079,9 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         </View>
                         <View style={[styles.purchaseSummary, { borderTopWidth: 1, borderTopColor: activeColors.border, paddingTop: SPACING.sm }]}>
                             <Text style={[styles.purchaseSummaryLabel, { color: activeColors.text }]}>{t('total_purchase_amount')}</Text>
-                            <Text style={[styles.purchaseSummaryTotal, { color: activeColors.primary }]}>₹ {(purchaseNetWeight * (parseFloat(purchaseRate) || 0)).toLocaleString()}</Text>
+                            <Text style={[styles.purchaseSummaryTotal, { color: activeColors.primary }]}>₹ {
+                                Math.max(0, (purchaseNetWeight * (parseFloat(purchaseRate) || 0)) - (purchaseLessType === 'amount' ? (parseFloat(purchaseLess) || 0) : 0)).toLocaleString()
+                            }</Text>
                         </View>
                         <PrimaryButton
                             title={t('add_purchase')}
