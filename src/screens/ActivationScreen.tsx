@@ -64,15 +64,31 @@ export default function ActivationScreen() {
         }
     };
 
-    const openLink = (url: string) => {
-        Alert.alert(t('error'), t('could_not_open_link'));
+    const openLink = async (url: string) => {
+        try {
+            // For phone and email, we try to open directly first
+            // canOpenURL is often unreliable on newer Android/iOS for these schemes
+            if (url.startsWith('tel:') || url.startsWith('mailto:') || url.startsWith('https://wa.me')) {
+                await Linking.openURL(url);
+                return;
+            }
+
+            const supported = await Linking.canOpenURL(url);
+            if (supported) {
+                await Linking.openURL(url);
+            } else {
+                Alert.alert(t('error'), t('could_not_open_link'));
+            }
+        } catch (error) {
+            console.error('Error opening link:', error);
+            Alert.alert(t('error'), t('could_not_open_link'));
+        }
     };
 
     const contactMethods = [
-        { icon: 'call', label: t('call'), url: `tel:+919788339566`, color: '#007AFF' },
-        { icon: 'logo-whatsapp', label: t('whatsapp'), url: `whatsapp://send?phone=+919788339566`, color: '#25D366' },
-        { icon: 'mail', label: t('email'), url: `mailto:nexooai@gmail.com`, color: '#EA4335' },
-        { icon: 'logo-facebook', label: 'Facebook', url: `fb://profile/mohandass.shanthi`, color: '#1877F2' },
+        { icon: 'call', value: '+91 9788339566', url: `tel:+919788339566`, color: '#007AFF' },
+        { icon: 'logo-whatsapp', value: '+91 9788339566 (WhatsApp)', url: `https://wa.me/919788339566`, color: '#25D366' },
+        { icon: 'mail', value: 'nexooai@gmail.com', url: `mailto:nexooai@gmail.com`, color: '#EA4335' },
     ];
 
     return (
@@ -137,8 +153,8 @@ export default function ActivationScreen() {
                                     style={[styles.contactItem, { backgroundColor: activeColors.cardBg }]}
                                     onPress={() => openLink(method.url)}
                                 >
-                                    <Icon name={method.icon} size={28} color={method.color} />
-                                    <Text style={[styles.contactLabel, { color: activeColors.text }]}>{method.label}</Text>
+                                    <Icon name={method.icon} size={24} color={method.color} />
+                                    <Text style={[styles.contactLabel, { color: activeColors.text }]}>{method.value}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -226,39 +242,37 @@ const styles = StyleSheet.create({
     },
     supportSection: {
         marginTop: SPACING.xl,
-        alignItems: 'center',
+        paddingHorizontal: SPACING.md,
     },
     supportTitle: {
         fontSize: FONT_SIZES.xl,
         fontWeight: 'bold',
         marginBottom: SPACING.sm,
+        textAlign: 'center',
     },
     supportDesc: {
         fontSize: FONT_SIZES.sm,
         textAlign: 'center',
         marginBottom: SPACING.xl,
-        paddingHorizontal: SPACING.md,
     },
     contactGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
         width: '100%',
     },
     contactItem: {
-        width: (width - SPACING.lg * 2 - SPACING.md * 3) / 2, // 2 items per row
+        flexDirection: 'row',
+        alignItems: 'center',
         padding: SPACING.md,
         borderRadius: BORDER_RADIUS.md,
-        alignItems: 'center',
         marginBottom: SPACING.md,
         elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1, shadowRadius: 2,
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
     },
     contactLabel: {
-        fontSize: FONT_SIZES.xs,
-        marginTop: SPACING.xs,
+        fontSize: FONT_SIZES.sm,
+        marginLeft: SPACING.md,
         fontWeight: '600',
     },
 });
