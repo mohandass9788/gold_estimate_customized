@@ -163,7 +163,7 @@ const ensureThermalConnection = async (macAddress: string) => {
         console.log('Successfully connected to thermal printer');
         return true;
     } catch (e: any) {
-        console.error('Printer connection failed:', e);
+        console.log('Printer connection failed:', e.message || 'Printer offline');
         return false;
     }
 };
@@ -397,8 +397,8 @@ export const printPurchaseItem = async (
             if ((!config || config.showOperator) && employeeName) payload += `${_t('employee_name')}: ${employeeName}\x0a`;
 
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
-            BLEPrinter.printText(payload);
-            await printQRCodeImage(item.id, type);
+            // Print QR Code if requested
+            await printQRCodeImage(item.id, type, config?.qrEndpointUrl);
             let footer = '';
             if (!config || config.showFooter) footer += `${thermalCommands.center}${_t('thank_you_visit_again')}\x0a`;
             footer += `\x0a\x0a\x0a\x0a`;
@@ -517,7 +517,7 @@ export const getEstimationReceiptThermalPayload = async (
     }
 
     if (estimationNumber) {
-        payload += `${thermalCommands.center}Est #: ${estimationNumber} \x0a`;
+        payload += `${thermalCommands.center}${_t('est_hash')}: ${estimationNumber} \x0a`;
     }
 
     payload += `${thermalCommands.right}Date: ${dateStr}${thermalCommands.left}\x0a`;
@@ -667,7 +667,7 @@ export const getEstimationReceiptThermalPayload = async (
         }
         // Grand Total Highlight and Shift
         payload += `${thermalCommands.divider(charWidth)}`;
-        const grandTotalStr = _t('est_hash') + ': ' + formatCurrency(estimationAmt);
+        const grandTotalStr = (_t('est_total_label') || 'Grand Total') + ': ' + formatCurrency(estimationAmt);
         if (paperWidth === '58mm') {
             payload += `${thermalCommands.boldOn}${padR(grandTotalStr, charWidth)}${thermalCommands.boldOff}\x0a`;
         } else {
@@ -703,7 +703,7 @@ export const getEstimationReceiptThermalPayload = async (
                 payload += `${padR(catName, pCol.name)}${padL(item.netWeight.toFixed(3), pCol.wt)}${padL(lessStr.substring(0, pCol.less), pCol.less)}${padL(item.rate.toString().substring(0, pCol.rate), pCol.rate)}${padL(formatCurrency(item.amount).substring(0, pCol.amt), pCol.amt)}\x0a`;
             });
             payload += DASH;
-            payload += `${thermalCommands.boldOn}${padR(_t('purchase_total'), pCol.name)}${padL(totalPurWeight.toFixed(3), pCol.wt)}${padR('', pCol.less)}${padR('', pCol.rate)}${padL(formatCurrency(totalPurchaseAmount).substring(0, pCol.amt), pCol.amt)}${thermalCommands.boldOff}\x0a`;
+            payload += `${thermalCommands.boldOn}${padR(_t('total_purchase_amount'), pCol.name)}${padL(totalPurWeight.toFixed(3), pCol.wt)}${padR('', pCol.less)}${padR('', pCol.rate)}${padL(formatCurrency(totalPurchaseAmount).substring(0, pCol.amt), pCol.amt)}${thermalCommands.boldOff}\x0a`;
         } else {
             // 58mm Purchase Layout (Max 32 chars)
             // Header: ITEM (16 chars)  AMOUNT (16 chars)
@@ -728,7 +728,7 @@ export const getEstimationReceiptThermalPayload = async (
                 payload += `  ${_t('net_wt_label')}: ${item.netWeight.toFixed(3)}g | @Rs.${item.rate}\x0a`;
                 payload += DASH;
             });
-            const purTotalPrefix = _t('purchase_total');
+            const purTotalPrefix = _t('total_purchase_amount');
             const purTotalWidth = charWidth - purTotalPrefix.length;
             payload += `${thermalCommands.boldOn}${purTotalPrefix}${padL(formatCurrency(totalPurchaseAmount), purTotalWidth)}${thermalCommands.boldOff}\x0a`;
         }
@@ -798,9 +798,9 @@ export const printEstimationReceipt = async (
             );
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
             BLEPrinter.printText(payload);
-            // if (estimationNumber) {
-            //     await printQRCodeImage(estimationNumber.toString(), type);
-            // }
+            // if (config?.showBarcode !== false) {
+            //     //     await printQRCodeImage(estimationNumber.toString(), type, config?.qrEndpointUrl);
+            // }   // }
             let footer = '';
             if (!config || config.showFooter) footer += `${thermalCommands.center}${_t('thank_you_visit_again')}\x0a`;
             footer += `\x0a\x0a\x0a\x0a`;
@@ -1092,8 +1092,10 @@ export const printRepairDelivery = async (
         BLEPrinter.printText(payload.trim());
         await new Promise(res => setTimeout(res, 120));
         BLEPrinter.printText('\n');
-        await printQRCodeImage(repair.id, type);
-        let footer = '\n\x1b\x61\x01Thank You! Visit Again\x1b\x61\x00\n\n\n\n';
+        await printQRCodeImage(repair.id, type, config?.qrEndpointUrl);
+        let footer = '';
+        if (!config || config.showFooter) footer += `\n\x1b\x61\x01${shopDetails?.footerMessage || 'Thank You! Visit Again'}\x1b\x61\x00\n`;
+        footer += '\n\n\n\n';
         BLEPrinter.printText(footer);
         return;
     }
@@ -1150,16 +1152,19 @@ export const getRepairReceiptThermalPayload = async (
     p += `${divider}\n`;
 
     const issueText = repair.issue || 'N/A';
-    const totalAmount = repair.amount || (repair.advance + repair.balance);
+    const gstAmt = repair.gstAmount || 0;
+    const itemAmountStr = fmt(repair.amount || (repair.advance + repair.balance - gstAmt));
+    const totalAmount = (repair.amount || (repair.advance + repair.balance - gstAmt)) + gstAmt;
 
     if (lineWidth === 32) {
         // 58mm -> Stacked (ITEM | AMOUNT)
         p += `\x1b\x45\x01${padR('ITEM', 20)}${padL('AMOUNT', 12)}\x1b\x45\x00\n`;
         p += `${divider}\n`;
-        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, 19), 20)}${padL(fmt(totalAmount), 12)}\x1b\x45\x00\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, 19), 20)}${padL(itemAmountStr, 12)}\x1b\x45\x00\n`;
         if (repair.subProductName) p += `${repair.subProductName}\n`;
         p += `Issue: ${issueText}\n`;
         p += `${divider}\n`;
+        if (gstAmt > 0) p += `${row('GST:', 'Rs. ' + fmt(gstAmt))}\n`;
         p += `${row('Advance Paid:', 'Rs. ' + fmt(repair.advance))}\n`;
         p += `${row('Balance Due:', 'Rs. ' + fmt(repair.balance))}\n`;
         p += `${dblDivider}\n`;
@@ -1171,14 +1176,13 @@ export const getRepairReceiptThermalPayload = async (
         const cwAmt = 16;
         p += `\x1b\x45\x01${padR('ITEM', cwItem)}${padR('ISSUE', cwIssue)}${padL('AMOUNT', cwAmt)}\x1b\x45\x00\n`;
         p += `${divider}\n`;
-        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(issueText.substring(0, cwIssue - 1), cwIssue)}${padL(fmt(totalAmount).substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(issueText.substring(0, cwIssue - 1), cwIssue)}${padL(itemAmountStr.substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
         if (repair.subProductName) p += `${repair.subProductName}\n`;
 
         p += `${divider}\n`;
-        const adv = 'Rs. ' + fmt(repair.advance);
-        const bal = 'Rs. ' + fmt(repair.balance);
-        const cw1 = Math.floor(lineWidth / 2);
-        p += `${padR(`Advance: ${adv}`, cw1)}${padR(`Balance: ${bal}`, lineWidth - cw1)}\n`;
+        const c1 = Math.floor(lineWidth / 2);
+        p += `${padR(`Advance: Rs. ${fmt(repair.advance)}`, c1)}${padR(`Balance: Rs. ${fmt(repair.balance)}`, lineWidth - c1)}\n`;
+        if (gstAmt > 0) p += `${padR(`GST: Rs. ${fmt(gstAmt)}`, c1)}\n`;
         p += `${dblDivider}\n`;
         p += `\x1b\x45\x01${padL(`Total: Rs. ${fmt(totalAmount)}`, lineWidth)}\x1b\x45\x00\n`;
     } else {
@@ -1189,10 +1193,11 @@ export const getRepairReceiptThermalPayload = async (
         const cwAmt = 16;
         p += `\x1b\x45\x01${padR('ITEM', cwItem)}${padR('ISSUE', cwIssue)}${padR('ADVANCE', cwAdv)}${padL('AMOUNT', cwAmt)}\x1b\x45\x00\n`;
         p += `${divider}\n`;
-        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(issueText.substring(0, cwIssue - 1), cwIssue)}${padR(fmt(repair.advance).substring(0, cwAdv), cwAdv)}${padL(fmt(totalAmount).substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(issueText.substring(0, cwIssue - 1), cwIssue)}${padR(fmt(repair.advance).substring(0, cwAdv), cwAdv)}${padL(itemAmountStr.substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
         if (repair.subProductName) p += `${repair.subProductName}\n`;
 
         p += `${divider}\n`;
+        if (gstAmt > 0) p += `${padL(`GST: Rs. ${fmt(gstAmt)}`, lineWidth)}\n`;
         p += `${padL(`Balance Due: Rs. ${fmt(repair.balance)}`, lineWidth)}\n`;
         p += `${dblDivider}\n`;
         p += `\x1b\x45\x01${padL(`Total: Rs. ${fmt(totalAmount)}`, lineWidth)}\x1b\x45\x00\n`;
@@ -1222,8 +1227,11 @@ export const printRepair = async (
         BLEPrinter.printText(payload.trim());
         await new Promise(res => setTimeout(res, 120));
         BLEPrinter.printText('\n');
-        await printQRCodeImage(repair.id, type);
-        let footer = '\n\x1b\x61\x01Thank You! Visit Again\x1b\x61\x00\n\n\n\n';
+        await printQRCodeImage(repair.id, type, config?.qrEndpointUrl);
+        let footer = '';
+        const _t = t || ((key: string) => key);
+        if (!config || config.showFooter) footer += `\n\x1b\x61\x01${shopDetails?.footerMessage || _t('thank_you_visit_again')}\x1b\x61\x00\n`;
+        footer += '\n\n\n\n';
         BLEPrinter.printText(footer);
         return;
     }
@@ -1297,6 +1305,7 @@ const _getRepairDeliveryThermalPayload = async (
     const divider = '-'.repeat(lineWidth);
     const dblDivider = '='.repeat(lineWidth);
     const totalPaid = repair.balance + extraAmount + gstAmount;
+    const itemAmountStr = fmt(repair.amount || (repair.advance + repair.balance - (repair.gstAmount || 0)));
     let p = '\x1b@';
     p += `${center(shopName)}\n${divider}\n`;
     p += `\x1b\x45\x01${center('DELIVERY RECEIPT')}\x1b\x45\x00\n${divider}\n`;
@@ -1318,7 +1327,7 @@ const _getRepairDeliveryThermalPayload = async (
     if (lineWidth === 32) {
         p += `\x1b\x45\x01${padR('ITEM', 20)}${padL('AMOUNT', 12)}\x1b\x45\x00\n`;
         p += `${divider}\n`;
-        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, 19), 20)}${padL(fmt(repair.balance), 12)}\x1b\x45\x00\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, 19), 20)}${padL(itemAmountStr, 12)}\x1b\x45\x00\n`;
         if (repair.subProductName) p += `${repair.subProductName}\n`;
         p += `${divider}\n`;
         p += `${row('Advance Paid:', 'Rs. ' + fmt(repair.advance))}\n`;
@@ -1334,7 +1343,7 @@ const _getRepairDeliveryThermalPayload = async (
         p += `\x1b\x45\x01${padR('ITEM', cwItem)}${padR('STATUS', cwIssue)}${padL('AMOUNT', cwAmt)}\x1b\x45\x00\n`;
         p += `${divider}\n`;
         const statusTxt = (repair.status || 'DELIVERED').substring(0, cwIssue - 1);
-        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(statusTxt, cwIssue)}${padL(fmt(repair.balance).substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(statusTxt, cwIssue)}${padL(itemAmountStr.substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
         if (repair.subProductName) p += `${repair.subProductName}\n`;
 
         p += `${divider}\n`;
@@ -1353,7 +1362,7 @@ const _getRepairDeliveryThermalPayload = async (
         p += `\x1b\x45\x01${padR('ITEM', cwItem)}${padR('STATUS', cwIssue)}${padR('ADVANCE', cwAdv)}${padL('AMOUNT', cwAmt)}\x1b\x45\x00\n`;
         p += `${divider}\n`;
         const statusTxt = (repair.status || 'DELIVERED').substring(0, cwIssue - 1);
-        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(statusTxt, cwIssue)}${padR(fmt(repair.advance).substring(0, cwAdv), cwAdv)}${padL(fmt(repair.balance).substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
+        p += `\x1b\x45\x01${padR((repair.itemName || '').toUpperCase().substring(0, cwItem - 1), cwItem)}${padR(statusTxt, cwIssue)}${padR(fmt(repair.advance).substring(0, cwAdv), cwAdv)}${padL(itemAmountStr.substring(0, cwAmt), cwAmt)}\x1b\x45\x00\n`;
         if (repair.subProductName) p += `${repair.subProductName}\n`;
 
         p += `${divider}\n`;
@@ -1402,7 +1411,10 @@ const _getRepairDeliveryHTMLPayload = async (
       ${repair.customerMobile ? `<div class="row"><span>Phone:</span><span>${repair.customerMobile}</span></div>` : ''}
     ` : ''}
     <div class="div"></div>
-    <div class="bold center">${(repair.itemName || '').toUpperCase()}</div>
+    <div class="row">
+      <span class="bold">${(repair.itemName || '').toUpperCase()}</span>
+      <span class="bold">Rs. ${fmt(repair.amount || (repair.advance + repair.balance - (repair.gstAmount || 0)))}</span>
+    </div>
     <div class="div"></div>
     <div class="row"><span>Advance Paid</span><span>Rs. ${fmt(repair.advance)}</span></div>
     <div class="row"><span>Balance</span><span>Rs. ${fmt(repair.balance)}</span></div>
@@ -1418,30 +1430,37 @@ const _getRepairDeliveryHTMLPayload = async (
   </body></html>`;
 };
 
-export const printQRCodeImage = async (text: string, printerType: string = 'thermal'): Promise<boolean> => {
+export const printQRCodeImage = async (text: string, printerType: string = 'thermal', qrEndpointUrl?: string): Promise<boolean> => {
     return new Promise((resolve) => {
+        const timeout = setTimeout(() => resolve(false), 3000);
         try {
             const { NativeModules } = require('react-native');
-            const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=200&margin=0`;
-            const handleResult = (err: any) => resolve(!err);
+            const qrContent = qrEndpointUrl ? `${qrEndpointUrl}${encodeURIComponent(text)}` : encodeURIComponent(text);
+            const qrUrl = `https://quickchart.io/qr?text=${qrContent}&size=200&margin=0`;
+            const handleResult = (err: any) => {
+                clearTimeout(timeout);
+                resolve(!err);
+            };
 
             if (printerType === 'thermal' || printerType === 'bluetooth') {
                 if (NativeModules.RNBLEPrinter && NativeModules.RNBLEPrinter.printImageData) {
                     NativeModules.RNBLEPrinter.printImageData(qrUrl, handleResult);
-                } else resolve(false);
+                } else { clearTimeout(timeout); resolve(false); }
             } else if (printerType === 'usb') {
                 if (NativeModules.RNUSBPrinter && NativeModules.RNUSBPrinter.printImageData) {
                     NativeModules.RNUSBPrinter.printImageData(qrUrl, handleResult);
-                } else resolve(false);
+                } else { clearTimeout(timeout); resolve(false); }
             } else if (printerType === 'net') {
                 if (NativeModules.RNNetPrinter && NativeModules.RNNetPrinter.printImageData) {
                     NativeModules.RNNetPrinter.printImageData(qrUrl, handleResult);
-                } else resolve(false);
+                } else { clearTimeout(timeout); resolve(false); }
             } else {
+                clearTimeout(timeout);
                 resolve(false);
             }
         } catch (e) {
             console.error('Failed to print QR code image:', e);
+            clearTimeout(timeout);
             resolve(false);
         }
     });

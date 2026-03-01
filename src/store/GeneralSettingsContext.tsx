@@ -33,6 +33,7 @@ export interface ReceiptConfig {
     makingChargeDisplayType: 'percentage' | 'grams' | 'fixed';
     paperWidth: '58mm' | '80mm' | '112mm';
     mergePrint: boolean;
+    qrEndpointUrl: string;
 }
 
 export interface FeatureFlags {
@@ -109,7 +110,7 @@ interface GeneralSettingsContextType {
     showPrintDetailsModal: boolean;
     setShowPrintDetailsModal: (show: boolean) => void;
     handlePrintConfirm: (details: PrintDetails) => Promise<void>;
-    requestPrint: (callback: (details: PrintDetails) => Promise<void>, bypassDetails?: boolean, initialData?: PrintDetails) => void;
+    requestPrint: (callback: (details: PrintDetails) => Promise<void>, bypassDetails?: boolean, initialData?: PrintDetails, cachedDetails?: PrintDetails) => void;
     receiptConfig: ReceiptConfig;
     updateReceiptConfig: (config: Partial<ReceiptConfig>) => void;
     featureFlags: FeatureFlags;
@@ -192,6 +193,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         makingChargeDisplayType: 'fixed',
         paperWidth: '58mm',
         mergePrint: true,
+        qrEndpointUrl: '',
     });
 
     const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({
@@ -202,9 +204,13 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     });
     const printCallbackRef = useRef<((details: PrintDetails) => Promise<void>) | null>(null);
 
-    const requestPrint = (callback: (details: PrintDetails) => Promise<void>, bypassDetails = false, initialData?: PrintDetails) => {
+    const requestPrint = (callback: (details: PrintDetails) => Promise<void>, bypassDetails = false, initialData?: PrintDetails, cachedDetails?: PrintDetails) => {
         printCallbackRef.current = callback;
-        if (bypassDetails) {
+        if (cachedDetails) {
+            callback(cachedDetails).then(() => {
+                printCallbackRef.current = null;
+            });
+        } else if (bypassDetails) {
             callback({
                 customerName: '',
                 mobile: '',
@@ -308,9 +314,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 const printer = JSON.parse(savedPrinter);
                 if (printer && printer.address) {
                     setConnectionStatus('connecting');
-                    const backoff = [10, 20, 30, 40];
+                    const backoff = [5, 10];
 
-                    for (let i = 0; i < 5; i++) {
+                    for (let i = 0; i < 3; i++) {
                         setRetryAttempt(i + 1);
                         console.log(`Auto-connect attempt ${i + 1} to ${printer.address}`);
 
@@ -324,7 +330,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                             return;
                         }
 
-                        if (i < 4) {
+                        if (i < 2) {
                             let timeLeft = backoff[i];
                             setCountdown(timeLeft);
 

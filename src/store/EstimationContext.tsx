@@ -15,6 +15,7 @@ interface EstimationState {
     currentId: string | null;
     currentEstimationNumber: number | null;
     currentOrderId: string | null; // Track if this is specifically from an order
+    printDetails?: { customerName: string; mobile: string; place: string; employeeName: string };
 }
 
 type Action =
@@ -29,8 +30,9 @@ type Action =
     | { type: 'SET_HISTORY'; payload: DBEstimation[] }
     | { type: 'ADD_MULTIPLE_TAG_ITEMS'; payload: EstimationItem[] }
     | { type: 'CLEAR_FORM' }
-    | { type: 'LOAD_ESTIMATION'; payload: { items: EstimationItem[], purchaseItems: PurchaseItem[], chitItems: ChitItem[], advanceItems: AdvanceItem[], customer: Customer | null, id: string, estimationNumber: number, orderId?: string | null } }
-    | { type: 'CLEAR_ESTIMATION' };
+    | { type: 'LOAD_ESTIMATION'; payload: { items: EstimationItem[], purchaseItems: PurchaseItem[], chitItems: ChitItem[], advanceItems: AdvanceItem[], customer: Customer | null, id: string, estimationNumber: number, orderId?: string | null, printDetails?: { customerName: string; mobile: string; place: string; employeeName: string } } }
+    | { type: 'CLEAR_ESTIMATION' }
+    | { type: 'SET_PRINT_DETAILS'; payload: { customerName: string; mobile: string; place: string; employeeName: string } };
 
 const initialState: EstimationState = {
     items: [],
@@ -61,6 +63,7 @@ const initialState: EstimationState = {
     currentId: null,
     currentEstimationNumber: null,
     currentOrderId: null,
+    printDetails: undefined,
 };
 
 const estimationReducer = (state: EstimationState, action: Action): EstimationState => {
@@ -159,7 +162,7 @@ const estimationReducer = (state: EstimationState, action: Action): EstimationSt
             // Logic to clear working form state could be here or managed in the component
             return state;
         case 'LOAD_ESTIMATION': {
-            const { items, purchaseItems, chitItems, advanceItems, customer, id, estimationNumber, orderId } = action.payload;
+            const { items, purchaseItems, chitItems, advanceItems, customer, id, estimationNumber, orderId, printDetails } = action.payload;
             return {
                 ...state,
                 items,
@@ -170,6 +173,7 @@ const estimationReducer = (state: EstimationState, action: Action): EstimationSt
                 currentId: id,
                 currentEstimationNumber: estimationNumber,
                 currentOrderId: orderId || null,
+                printDetails: printDetails || undefined,
                 totals: calculateEstimationTotals(items, purchaseItems, chitItems, advanceItems),
             };
         }
@@ -177,6 +181,11 @@ const estimationReducer = (state: EstimationState, action: Action): EstimationSt
             return {
                 ...initialState,
                 goldRate: state.goldRate,
+            };
+        case 'SET_PRINT_DETAILS':
+            return {
+                ...state,
+                printDetails: action.payload
             };
         default:
             return state;
@@ -199,6 +208,7 @@ interface EstimationContextType {
     clearEstimation: () => void;
     saveCurrentEstimation: (estimationNumber: number) => Promise<void>;
     loadEstimationIntoContext: (estimation: DBEstimation, orderId?: string) => void;
+    setPrintDetails: (details: { customerName: string; mobile: string; place: string; employeeName: string }) => void;
 }
 
 const EstimationContext = createContext<EstimationContextType>({} as EstimationContextType);
@@ -265,6 +275,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
     const setCustomer = (customer: Customer) => dispatch({ type: 'SET_CUSTOMER', payload: customer });
     const clearForm = () => dispatch({ type: 'CLEAR_FORM' });
     const resetEstimation = () => dispatch({ type: 'CLEAR_ESTIMATION' });
+    const setPrintDetails = (details: { customerName: string; mobile: string; place: string; employeeName: string }) => dispatch({ type: 'SET_PRINT_DETAILS', payload: details });
 
     const clearEstimation = async () => {
         if (state.items.length > 0) {
@@ -333,7 +344,13 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                 customer,
                 id: estimation.id,
                 estimationNumber: (estimation.estimationNumber !== null && estimation.estimationNumber !== undefined) ? estimation.estimationNumber : 0,
-                orderId
+                orderId,
+                printDetails: estimation.customerName ? {
+                    customerName: customer ? customer.name : estimation.customerName,
+                    mobile: customer ? customer.mobile : estimation.customerMobile || '',
+                    place: '',
+                    employeeName: ''
+                } : undefined
             }
         });
     };
@@ -356,6 +373,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                 clearEstimation,
                 saveCurrentEstimation,
                 loadEstimationIntoContext,
+                setPrintDetails,
             }}
         >
             {children}

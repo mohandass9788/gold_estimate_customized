@@ -141,7 +141,7 @@ export default function DashboardScreen() {
                     <View style={styles.statusTextContainer}>
                         <Text style={styles.statusBannerText}>
                             {connectionStatus === 'connecting'
-                                ? t('printer_connection_attempt', { attempt: retryAttempt.toString(), total: '5' })
+                                ? t('printer_connection_attempt', { attempt: retryAttempt.toString(), total: '3' })
                                 : t('printer_not_connected_check')
                             }
                         </Text>

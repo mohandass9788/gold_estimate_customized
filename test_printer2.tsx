@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator, Platform, PermissionsAndroid, NativeModules, Switch, TextInput } from 'react-native';
+﻿import React, { useState, useEffect } from 'react';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator, Platform, PermissionsAndroid, NativeModules, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 // import * as IntentLauncher from 'expo-intent-launcher'; // Moved to dynamic require for safety
@@ -18,18 +18,6 @@ const ScrollView = RNScrollView as any;
 const TouchableOpacity = RNRTouchableOpacity as any;
 const ActivityIndicator = RNActivityIndicator as any;
 const Icon = Ionicons as any;
-
-const InputBlock = ({ value, onChangeText, placeholder, activeColors }: any) => (
-    <TextInput
-        style={[styles.textInput, { color: activeColors.text, borderColor: activeColors.border, backgroundColor: activeColors.background }]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={activeColors.textLight}
-        autoCapitalize="none"
-        keyboardType="url"
-    />
-);
 
 export default function PrinterSettingsScreen() {
     const {
@@ -528,24 +516,6 @@ export default function PrinterSettingsScreen() {
 
                         <View style={styles.divider} />
 
-                        {/* QR Endpoint Configuration */}
-                        <View style={styles.configItem}>
-                            <View style={styles.configTextLabel}>
-                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('qr_endpoint_url')}</Text>
-                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('qr_endpoint_desc')}</Text>
-                            </View>
-                        </View>
-                        <View style={styles.inputContainer}>
-                            <InputBlock
-                                value={receiptConfig.qrEndpointUrl || ''}
-                                onChangeText={(val: string) => updateReceiptConfig({ qrEndpointUrl: val })}
-                                placeholder={t('enter_qr_endpoint_url')}
-                                activeColors={activeColors}
-                            />
-                        </View>
-
-                        <View style={styles.divider} />
-
                         <View style={styles.configItem}>
                             <View style={styles.configTextLabel}>
                                 <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('paper_width') || 'Paper Width'}</Text>
@@ -629,44 +599,11 @@ const styles = StyleSheet.create({
     infoTitle: {
         fontSize: FONT_SIZES.md,
         fontWeight: 'bold',
-        marginBottom: 4,
+        marginBottom: SPACING.xs,
     },
     infoText: {
         fontSize: FONT_SIZES.sm,
         lineHeight: 20,
-    },
-    statusBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: SPACING.md,
-        borderRadius: BORDER_RADIUS.md,
-        marginBottom: SPACING.lg,
-    },
-    statusText: {
-        fontSize: FONT_SIZES.sm,
-        fontWeight: 'bold',
-        marginLeft: SPACING.sm,
-    },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    inlineButton: {
-        paddingHorizontal: SPACING.md,
-        paddingVertical: 6,
-        backgroundColor: '#fff',
-        borderRadius: BORDER_RADIUS.sm,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 1,
-        elevation: 1,
-    },
-    inlineButtonText: {
-        fontSize: FONT_SIZES.xs,
-        fontWeight: 'bold',
-        color: '#333',
     },
     section: {
         marginBottom: SPACING.xl,
@@ -675,26 +612,23 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: SPACING.md,
+        marginBottom: SPACING.sm,
     },
     sectionHeader: {
-        fontSize: FONT_SIZES.xs,
+        fontSize: FONT_SIZES.sm,
         fontWeight: 'bold',
         textTransform: 'uppercase',
-        letterSpacing: 1,
-    },
-    refreshButton: {
-        padding: 4,
     },
     deviceList: {
-        gap: SPACING.sm,
+        marginTop: SPACING.sm,
     },
     deviceItem: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
         padding: SPACING.md,
-        borderRadius: BORDER_RADIUS.lg,
+        borderRadius: BORDER_RADIUS.md,
+        borderWidth: 1,
+        marginBottom: SPACING.sm,
     },
     deviceInfo: {
         flex: 1,
@@ -702,116 +636,76 @@ const styles = StyleSheet.create({
     deviceName: {
         fontSize: FONT_SIZES.md,
         fontWeight: 'bold',
-        marginBottom: 2,
     },
     deviceAddress: {
-        fontSize: 10,
-        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    },
-    connectedBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.primary + '15',
-        paddingHorizontal: SPACING.sm,
-        paddingVertical: 4,
-        borderRadius: 999,
-    },
-    connectedText: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        marginLeft: 4,
+        fontSize: FONT_SIZES.xs,
     },
     emptyState: {
         padding: SPACING.xl,
-        borderRadius: BORDER_RADIUS.lg,
-        alignItems: 'center',
+        borderRadius: BORDER_RADIUS.md,
         borderWidth: 1,
+        alignItems: 'center',
         borderStyle: 'dashed',
     },
     emptyText: {
         fontSize: FONT_SIZES.sm,
-        textAlign: 'center',
-        marginBottom: SPACING.md,
-    },
-    retryButton: {
-        backgroundColor: COLORS.primary,
-        paddingHorizontal: SPACING.lg,
-        paddingVertical: 8,
-        borderRadius: 999,
-    },
-    retryButtonText: {
-        color: '#FFF',
-        fontSize: FONT_SIZES.xs,
-        fontWeight: 'bold',
     },
     actionContainer: {
         marginTop: SPACING.sm,
     },
-    configCard: {
-        borderRadius: BORDER_RADIUS.lg,
-        borderWidth: 1,
-        overflow: 'hidden',
-    },
-    configItem: {
+    statusBar: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: SPACING.md,
-    },
-    configTextLabel: {
-        flex: 1,
-        paddingRight: SPACING.md,
-    },
-    configLabel: {
-        fontSize: FONT_SIZES.md,
-        fontWeight: '600',
-        marginBottom: 2,
-    },
-    configDesc: {
-        fontSize: 11,
-        lineHeight: 16,
-    },
-    divider: {
-        height: 1,
-        backgroundColor: COLORS.border,
-        opacity: 0.5,
-    },
-    subConfigRow: {
-        flexDirection: 'row',
-        padding: SPACING.md,
-        paddingTop: 0,
-        gap: SPACING.sm,
-    },
-    subConfigOption: {
-        flex: 1,
-        paddingVertical: 8,
-        alignItems: 'center',
         borderRadius: BORDER_RADIUS.md,
-        borderWidth: 1,
-        borderColor: 'transparent',
+        marginBottom: SPACING.lg,
     },
-    subConfigText: {
+    statusText: {
         fontSize: FONT_SIZES.sm,
+        fontWeight: '600',
+        marginLeft: SPACING.sm,
+    },
+    inlineButton: {
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: SPACING.md,
+        paddingVertical: 6,
+        borderRadius: BORDER_RADIUS.sm,
+    },
+    inlineButtonText: {
+        color: COLORS.white,
+        fontSize: FONT_SIZES.xs,
         fontWeight: 'bold',
     },
-    subConfigColumn: {
-        marginBottom: SPACING.md,
+    refreshButton: {
+        padding: 4,
     },
-    configItemSmall: {
+    connectedBadge: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: SPACING.xs,
     },
-    configLabelSmall: {
+    connectedText: {
+        fontSize: FONT_SIZES.xs,
+        fontWeight: 'bold',
+        marginLeft: 4,
+    },
+    retryButton: {
+        marginTop: SPACING.md,
+        paddingHorizontal: SPACING.xl,
+        paddingVertical: SPACING.sm,
+        backgroundColor: COLORS.primary + '20',
+        borderRadius: BORDER_RADIUS.md,
+    },
+    retryButtonText: {
+        color: COLORS.primary,
+        fontWeight: 'bold',
         fontSize: FONT_SIZES.sm,
     },
     helpSection: {
         marginTop: SPACING.xl,
         padding: SPACING.lg,
-        backgroundColor: COLORS.primary + '10',
-        borderRadius: BORDER_RADIUS.lg,
-        alignItems: 'center',
+        backgroundColor: COLORS.primary + '05',
+        borderRadius: BORDER_RADIUS.md,
     },
     helpTitle: {
         fontSize: FONT_SIZES.md,
@@ -820,18 +714,71 @@ const styles = StyleSheet.create({
     },
     helpText: {
         fontSize: FONT_SIZES.sm,
-        textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: 22,
     },
-    inputContainer: {
-        paddingHorizontal: SPACING.md,
-        paddingBottom: SPACING.md,
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
-    textInput: {
+    configCard: {
+        borderRadius: BORDER_RADIUS.lg,
         borderWidth: 1,
-        borderRadius: BORDER_RADIUS.md,
-        paddingHorizontal: SPACING.md,
-        paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+        marginTop: SPACING.sm,
+        padding: SPACING.md,
+    },
+    configItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: SPACING.sm,
+    },
+    configTextLabel: {
+        flex: 1,
+        paddingRight: SPACING.md,
+    },
+    configLabel: {
         fontSize: FONT_SIZES.md,
+        fontWeight: '600',
+    },
+    configDesc: {
+        fontSize: FONT_SIZES.xs,
+        marginTop: 2,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: COLORS.border,
+        opacity: 0.1,
+        marginVertical: 4,
+    },
+    subConfigRow: {
+        flexDirection: 'row',
+        paddingLeft: SPACING.md,
+        paddingBottom: SPACING.sm,
+        marginTop: -4,
+    },
+    subConfigOption: {
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: COLORS.border + '30',
+    },
+    subConfigText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    subConfigColumn: {
+        paddingVertical: 4,
+    },
+    configItemSmall: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 4,
+    },
+    configLabelSmall: {
+        fontSize: FONT_SIZES.sm,
+        fontWeight: '500',
     }
 });

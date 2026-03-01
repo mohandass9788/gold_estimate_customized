@@ -26,7 +26,7 @@ const Icon = Ionicons as any;
 
 export default function EstimationSummaryScreen() {
     const router = useRouter();
-    const { state, removeItem, clearEstimation, setCustomer } = useEstimation();
+    const { state, removeItem, clearEstimation, setCustomer, setPrintDetails } = useEstimation();
     const { theme, t, showAlert, shopDetails, requestPrint, currentEmployeeName, receiptConfig, updateReceiptConfig } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
@@ -37,7 +37,7 @@ export default function EstimationSummaryScreen() {
     const [selectedItemType, setSelectedItemType] = React.useState<'estimation' | 'purchase' | 'chit' | 'advance'>('estimation');
     const [previewPayload, setPreviewPayload] = React.useState('');
     const [isPrinting, setIsPrinting] = React.useState(false);
-    const [printDetails, setPrintDetails] = React.useState<any>(null);
+    const [printDetailsState, setPrintDetailsState] = React.useState<any>(null);
 
     // Selection State
     const [selectedItemIds, setSelectedItemIds] = React.useState<string[]>([]);
@@ -84,7 +84,10 @@ export default function EstimationSummaryScreen() {
         }
 
         requestPrint(async (details) => {
-            setPrintDetails(details);
+            if (!state.printDetails) {
+                setPrintDetails(details);
+            }
+            setPrintDetailsState(details); // rename local state slightly to avoid conflict
             try {
                 if (isSeparate) {
                     showAlert(t('printing') || 'Printing', t('printing_separately') || 'Printing items separately...', 'info');
@@ -152,7 +155,7 @@ export default function EstimationSummaryScreen() {
             } catch (error: any) {
                 showAlert(t('error') || 'Error', error.message || t('print_failed') || 'Failed to print', 'error');
             }
-        }, false);
+        }, false, undefined, state.printDetails);
     };
 
     const handleWidthChange = async (width: '58mm' | '80mm' | '112mm') => {
@@ -171,7 +174,7 @@ export default function EstimationSummaryScreen() {
                 selectedAdvances,
                 shopDetails,
                 state.customer?.name,
-                printDetails?.employeeName || currentEmployeeName,
+                printDetailsState?.employeeName || currentEmployeeName,
                 newConfig,
                 undefined,
                 t
@@ -198,11 +201,11 @@ export default function EstimationSummaryScreen() {
                 selectedAdvances,
                 {
                     ...shopDetails,
-                    customerAddress: printDetails?.place || state.customer?.address || '',
-                    customerMobile: printDetails?.mobile || state.customer?.mobile || ''
+                    customerAddress: printDetailsState?.place || state.customer?.address || '',
+                    customerMobile: printDetailsState?.mobile || state.customer?.mobile || ''
                 },
-                printDetails?.customerName || '',
-                printDetails?.employeeName || currentEmployeeName,
+                printDetailsState?.customerName || '',
+                printDetailsState?.employeeName || currentEmployeeName,
                 receiptConfig,
                 undefined,
                 t

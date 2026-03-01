@@ -69,8 +69,6 @@
     "scanned": "Scanned",
     "confirmed": "Confirmed",
     "processing": "Processing...",
-    "customer_name": "Customer Name",
-    "phone_number": "Phone Number",
     "item_details": "Item Details",
     "select_product": "Select Product",
     "product_name": "Product Name",
@@ -392,7 +390,7 @@
     "est_hash": "Est #",
     "by_label": "By",
     "cust_label": "Cust",
-    "deductions_capital": "DEDUCTIONS: OLD GOLD",
+    "deductions_capital": "DEDUCTIONS",
     "chit_adjustments": "CHIT ADJUSTMENTS",
     "advance_adjustments": "ADVANCE ADJUSTMENTS",
     "estimation_details": "ESTIMATION DETAILS",
@@ -513,5 +511,11 @@
     "emp_id": "Emp ID",
     "amount": "Amount",
     "customer_mobile": "Customer Mobile",
-    "add_gst": "Add GST"
+    "add_gst": "Add GST",
+    "qr_endpoint_url": "QR Endpoint URL",
+    "qr_endpoint_desc": "Base URL for QR Code (e.g., https://example.com/check?id=)",
+    "enter_qr_endpoint_url": "Enter URL",
+    "total_purchase_amount": "Purchase Total",
+    "est_total_label": "Grand Total",
+    "total_due": "Total Due"
 }

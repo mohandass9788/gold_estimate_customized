@@ -362,7 +362,19 @@ export default function RepairEntryScreen() {
                                 placeholder={t('select_sub_product')}
                             />
                         </View>
-                        <View style={{ flex: 1 }}>
+                        {/* <View style={{ flex: 1 }}>
+                            <Label>{t('pcs')}</Label>
+                            <TextInput
+                                style={[styles.input, { color: activeColors.text }]}
+                                value={pcs}
+                                onChangeText={setPcs}
+                                keyboardType="numeric"
+                            />
+                        </View> */}
+                    </View>
+
+                    <View style={styles.row}>
+                        <View style={{ flex: 1, marginRight: SPACING.sm }}>
                             <Label>{t('pcs')}</Label>
                             <TextInput
                                 style={[styles.input, { color: activeColors.text }]}
@@ -371,9 +383,6 @@ export default function RepairEntryScreen() {
                                 keyboardType="numeric"
                             />
                         </View>
-                    </View>
-
-                    <View style={styles.row}>
                         <View style={{ flex: 1, marginRight: SPACING.sm }}>
                             <Label>{t('gross_weight')}</Label>
                             <TextInput
@@ -579,7 +588,7 @@ export default function RepairEntryScreen() {
                     onPrint={async () => {
                         if (savedRepairData) {
                             try {
-                                await printRepair(savedRepairData, shopDetails, empId, undefined, t);
+                                await printRepair(savedRepairData, shopDetails, empId, receiptConfig, t);
                                 setShowPreview(false);
                                 router.replace('/(tabs)/repairs');
                             } catch (printError: any) {
@@ -599,8 +608,8 @@ export default function RepairEntryScreen() {
 
 const styles = StyleSheet.create({
     header: {
-        paddingTop: 50,
-        paddingBottom: 15,
+        paddingTop: 20,
+        paddingBottom: 0,
         paddingHorizontal: SPACING.md,
         borderBottomLeftRadius: 25,
         borderBottomRightRadius: 25,

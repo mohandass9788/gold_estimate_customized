@@ -46,6 +46,10 @@ export default function PrintPreviewModal({
         return 220;
     };
 
+    const qrContent = receiptConfig?.qrEndpointUrl && qrData
+        ? `${receiptConfig.qrEndpointUrl}${encodeURIComponent(qrData)}`
+        : encodeURIComponent(qrData || '');
+
     return (
         <Modal
             visible={visible}
@@ -82,7 +86,7 @@ export default function PrintPreviewModal({
                                         <View style={{ alignItems: 'center', marginTop: 10, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10 }}>
                                             <Text style={{ fontSize: 8, color: '#666', marginBottom: 5 }}>{t('scan_to_track') || 'SCAN TO TRACK'}</Text>
                                             <Image
-                                                source={{ uri: `https://quickchart.io/qr?text=${qrData ? encodeURIComponent(qrData) : ''}&size=200` }}
+                                                source={{ uri: `https://quickchart.io/qr?text=${qrContent}&size=200&margin=0` }}
                                                 style={{ width: 140, height: 140 }}
                                             />
                                             <Text style={{ fontSize: 12, fontWeight: 'bold', marginTop: 5, letterSpacing: 1 }}>{t('id_label') || 'ID:'} {qrData}</Text>

@@ -103,22 +103,34 @@ export default function OrdersScreen() {
     };
 
     const handlePrint = async (orderId: string) => {
-        requestPrint(async (details) => {
+        try {
             setIsPrinting(true);
-            try {
-                const { order, items } = await getOrderDetails(orderId);
-                const products = items.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
-                const purchases = items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData));
-                const chits = items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData));
-                const advances = items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData));
+            const { order, items } = await getOrderDetails(orderId);
+            const cachedDetails = {
+                customerName: order.customerName === 'Walk-in' ? '' : order.customerName,
+                mobile: order.customerMobile === 'N/A' || !order.customerMobile ? '' : order.customerMobile,
+                place: '',
+                employeeName: order.employeeName || currentEmployeeName || ''
+            };
 
-                await printEstimationReceipt(products, purchases, chits, advances, shopDetails, order.customerName, details.employeeName, undefined, undefined, t);
-            } catch (error: any) {
-                showAlert('Print Error', error.message || 'Failed to print', 'error');
-            } finally {
-                setIsPrinting(false);
-            }
-        });
+            requestPrint(async (details) => {
+                try {
+                    const products = items.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
+                    const purchases = items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData));
+                    const chits = items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData));
+                    const advances = items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData));
+
+                    await printEstimationReceipt(products, purchases, chits, advances, shopDetails, order.customerName, details.employeeName, undefined, undefined, t);
+                } catch (error: any) {
+                    showAlert('Print Error', error.message || 'Failed to print', 'error');
+                } finally {
+                    setIsPrinting(false);
+                }
+            }, false, undefined, cachedDetails);
+        } catch (error) {
+            setIsPrinting(false);
+            showAlert('Error', 'Failed to fetch order details for printing', 'error');
+        }
     };
 
     const handleReload = async (orderId: string) => {

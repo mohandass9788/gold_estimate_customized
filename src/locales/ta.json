@@ -75,8 +75,6 @@
     "printer_disconnected": "பிரிண்டர் இணைக்கப்படவில்லை.",
     "printer_status": "பிரிண்டர் நிலை",
     "customer_info": "வாடிக்கையாளர் தகவல்",
-    "customer_name": "வாடிக்கையாளர் பெயர்",
-    "phone_number": "தொலைபேசி எண்",
     "item_details": "பொருள் விவரங்கள்",
     "select_product": "தயாரிப்பைத் தேர்ந்தெடுக்கவும்",
     "product_name": "தயாரிப்பு பெயர்",
@@ -391,7 +389,7 @@
     "est_hash": "மதிப்பீட்டு எண் #",
     "by_label": "மூலம்",
     "cust_label": "வாடிக்கையாளர்",
-    "deductions_capital": "கழிவுகள்: பழைய தங்கம்",
+    "deductions_capital": "கழிவுகள்",
     "chit_adjustments": "சிட் சரிசெய்தல்",
     "advance_adjustments": "முன்பண சரிசெய்தல்",
     "estimation_details": "மதிப்பீட்டு விவரங்கள்",
@@ -503,5 +501,10 @@
     "emp_id": "வெற்றி எண்",
     "amount": "தொகை",
     "customer_mobile": "வாடிக்கையாளர் மொபைல்",
-    "add_gst": "ஜிஎஸ்டி சேர்"
+    "add_gst": "ஜிஎஸ்டி சேர்",
+    "qr_endpoint_url": "QR அடிப்படை URL",
+    "qr_endpoint_desc": "QR குறியீட்டிற்கான அடிப்படை URL (எ.கா. https://example.com/check?id=)",
+    "enter_qr_endpoint_url": "URL உள்ளிடவும்",
+    "total_purchase_amount": "கொள்முதல் மொத்தம்",
+    "est_total_label": "மொத்த தொகை"
 }
