@@ -22,7 +22,7 @@ import { getEmployees, addEmployee, updateEmployee, deleteEmployee, DBEmployee }
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 
 export default function EmployeeSettingsScreen() {
-    const { theme, t, showAlert } = useGeneralSettings();
+    const { theme, t, showAlert, refreshEmployees } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [employees, setEmployees] = useState<DBEmployee[]>([]);
@@ -99,6 +99,7 @@ export default function EmployeeSettingsScreen() {
             }
             setIsModalVisible(false);
             fetchEmployees();
+            refreshEmployees(); // Trigger global update
         } catch (error: any) {
             console.error('Save failed:', error);
             if (error.message && error.message.includes('UNIQUE constraint failed')) {
@@ -123,6 +124,7 @@ export default function EmployeeSettingsScreen() {
                             await deleteEmployee(id);
                             showAlert('Success', 'Employee deleted successfully.', 'success');
                             fetchEmployees();
+                            refreshEmployees(); // Trigger global update
                         } catch (error) {
                             console.error('Delete failed:', error);
                             showAlert('Error', 'Failed to delete employee.', 'error');

@@ -15,7 +15,7 @@ import CardItemRow from '../components/CardItemRow';
 import { useEstimation } from '../store/EstimationContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { calculateNetWeight } from '../utils/calculations';
-import { getPurchaseCategories, getPurchaseSubCategories, DBPurchaseCategory, DBPurchaseSubCategory, getNextEstimationNumber } from '../services/dbService';
+import { getPurchaseCategories, DBPurchaseCategory, getNextEstimationNumber } from '../services/dbService';
 import { EstimationItem, PurchaseItem, ChitItem, AdvanceItem, LessWeightType } from '../types';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { printEstimationItem, printPurchaseItem, printEstimationReceipt, printChitItem, printAdvanceItem } from '../services/printService';
@@ -67,9 +67,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     // Purchase Panel State
     const [categories, setCategories] = useState<DBPurchaseCategory[]>([]);
-    const [subCategories, setSubCategories] = useState<DBPurchaseSubCategory[]>([]);
     const [purchaseCategoryId, setPurchaseCategoryId] = useState('');
-    const [purchaseSubCategoryId, setPurchaseSubCategoryId] = useState('');
     const [purchasePurity, setPurchasePurity] = useState('22');
     const [purchasePcs, setPurchasePcs] = useState('1');
     const [purchaseGross, setPurchaseGross] = useState('');
@@ -173,18 +171,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         }
     }, [mode, containerWidth]);
 
-    useEffect(() => {
-        if (purchaseCategoryId && !isInitialLoadPurchase.current) {
-            const loadSubCategories = async () => {
-                const subs = await getPurchaseSubCategories(parseInt(purchaseCategoryId));
-                setSubCategories(subs);
-                setPurchaseSubCategoryId(''); // Reset sub when category changes
-            };
-            loadSubCategories();
-        } else if (!purchaseCategoryId) {
-            setSubCategories([]);
-        }
-    }, [purchaseCategoryId]);
+    // Purchase Category change side-effects removed (no subcategories needed)
 
 
     // Auto-fill rate based on purity (only if NOT loading initial data)
@@ -226,6 +213,31 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             ];
             setSelectedItems(new Set(allIds));
         }
+    };
+
+    const handlePrintAllConsolidated = async () => {
+        if (state.items.length === 0 && state.purchaseItems.length === 0 && state.chitItems.length === 0 && state.advanceItems.length === 0) {
+            Alert.alert(t('no_items') || 'No items to print');
+            return;
+        }
+
+        const nextNum = await getNextEstimationNumber();
+        setEstimationNum(nextNum);
+
+        requestPrint(async (details) => {
+            setPrintDetails(details);
+            setItemsToPrint(state.items);
+            setPurchaseItemsToPrint(state.purchaseItems);
+            setChitItemsToPrint(state.chitItems);
+            setAdvanceItemsToPrint(state.advanceItems);
+            setPreviewType('merged');
+            setShowPrintPreview(true);
+        }, false, {
+            customerName: printDetails?.customerName || state.customer?.name || '',
+            mobile: printDetails?.mobile || state.customer?.mobile || '',
+            place: printDetails?.place || state.customer?.address || '',
+            employeeName: printDetails?.employeeName || currentEmployeeName || ''
+        }, printDetails);
     };
 
     const handlePrintSelected = async () => {
@@ -286,11 +298,11 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 ]
             );
         }, false, {
-            customerName: state.customer?.name || '',
-            mobile: state.customer?.mobile || '',
-            place: state.customer?.address || '',
-            employeeName: currentEmployeeName || ''
-        });
+            customerName: printDetails?.customerName || state.customer?.name || '',
+            mobile: printDetails?.mobile || state.customer?.mobile || '',
+            place: printDetails?.place || state.customer?.address || '',
+            employeeName: printDetails?.employeeName || currentEmployeeName || ''
+        }, printDetails);
     };
 
     const confirmPrint = async () => {
@@ -371,10 +383,30 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     console.error('Error saving order:', saveError);
                 }
             } else {
-                // Group Estimation items and Purchase items into one detailed bill
-                if (itemsToPrint.length > 0 || purchaseItemsToPrint.length > 0) {
+                // Print each grouping independently for separate bills
+                if (itemsToPrint.length > 0) {
                     await printEstimationReceipt(
                         itemsToPrint,
+                        [],
+                        [],
+                        [],
+                        {
+                            ...shopDetails,
+                            deviceName,
+                            customerAddress: printDetails?.place || state.customer?.address || '',
+                            customerMobile: printDetails?.mobile || state.customer?.mobile || ''
+                        },
+                        printDetails?.customerName || '',
+                        printDetails?.employeeName || currentEmployeeName,
+                        receiptConfig,
+                        estimationNum || undefined,
+                        t
+                    );
+                }
+
+                if (purchaseItemsToPrint.length > 0) {
+                    await printEstimationReceipt(
+                        [],
                         purchaseItemsToPrint,
                         [],
                         [],
@@ -441,11 +473,6 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         const cat = cats.find(c => c.name === item.category);
         if (cat) {
             setPurchaseCategoryId(cat.id.toString());
-            // Fetch and set subcategory
-            const subs = await getPurchaseSubCategories(cat.id);
-            setSubCategories(subs);
-            const sub = subs.find(s => s.name === item.subCategory);
-            if (sub) setPurchaseSubCategoryId(sub.id.toString());
         }
 
         setMode('PURCHASE');
@@ -512,7 +539,6 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         }
 
         const categoryName = categories.find(c => c.id.toString() === purchaseCategoryId)?.name || '';
-        const subCategoryName = subCategories.find(s => s.id.toString() === purchaseSubCategoryId)?.name || '';
 
         const baseAmount = purchaseNetWeight * rateValNum;
         const amount = purchaseLessType === 'amount'
@@ -522,7 +548,6 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         const item: PurchaseItem = {
             id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             category: categoryName,
-            subCategory: subCategoryName,
             purity: parseFloat(purchasePurity),
             pcs: parseInt(purchasePcs) || 1,
             grossWeight: gWeightNum,
@@ -586,7 +611,6 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         resetEstimation();
                         setPrintDetails(null);
                         setPurchaseCategoryId('');
-                        setPurchaseSubCategoryId('');
                         setPurchaseGross('');
                         setPurchaseLess('0');
                         setPurchaseRate('');
@@ -731,7 +755,6 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     const clearPurchaseForm = () => {
         setPurchaseCategoryId('');
-        setPurchaseSubCategoryId('');
         setPurchaseGross('');
         setPurchaseLess('0');
         setPurchaseLessType('grams');
@@ -861,7 +884,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             </View>
 
                             <Text style={{ textAlign: 'center', marginTop: 20, fontSize: 11, fontWeight: 'bold', fontStyle: 'italic' }}>
-                                THANK YOU VISIT AGAIN
+                                {shopDetails.footerMessage || '*** THANK YOU VISIT AGAIN ***'}
                             </Text>
                         </View>
                     </ScrollView>
@@ -1009,14 +1032,6 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             onSelect={setPurchaseCategoryId}
                             options={categories.map(c => ({ label: c.name, value: c.id.toString() }))}
                         />
-                        {subCategories.length > 0 && (
-                            <DropdownField
-                                label={t('sub_category')}
-                                value={purchaseSubCategoryId}
-                                onSelect={setPurchaseSubCategoryId}
-                                options={subCategories.map(s => ({ label: s.name, value: s.id.toString() }))}
-                            />
-                        )}
                         <DropdownField
                             label={purchaseMetal === 'GOLD' ? t('purity') : 'Silver Type'}
                             value={purchasePurity}
@@ -1110,7 +1125,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             </TouchableOpacity>
                         )}
                     </View>
-                    {selectedItems.size > 0 && (
+                    {selectedItems.size > 0 ? (
                         <TouchableOpacity
                             style={[styles.printButton, { backgroundColor: activeColors.primary }]}
                             onPress={handlePrintSelected}
@@ -1125,6 +1140,23 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                 </>
                             )}
                         </TouchableOpacity>
+                    ) : (
+                        (state.items.length > 0 || state.purchaseItems.length > 0 || state.chitItems.length > 0 || state.advanceItems.length > 0) && (
+                            <TouchableOpacity
+                                style={[styles.printButton, { backgroundColor: activeColors.primary }]}
+                                onPress={handlePrintAllConsolidated}
+                                disabled={isPrinting}
+                            >
+                                {isPrinting ? (
+                                    <ActivityIndicator color={COLORS.white} size="small" />
+                                ) : (
+                                    <>
+                                        <Icon name="receipt-outline" size={18} color={COLORS.white} />
+                                        <Text style={styles.printButtonText}>{t('print_consolidated') || 'Print All'}</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )
                     )}
                 </View>
 

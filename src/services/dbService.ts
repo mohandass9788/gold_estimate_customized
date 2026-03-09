@@ -44,6 +44,13 @@ export interface DBCustomer {
     address1?: string;
 }
 
+export interface DBCompany {
+    id: number;
+    name: string;
+    mobile: string;
+    address1?: string;
+}
+
 export interface DBEstimation {
     id: string;
     customerName: string;
@@ -80,6 +87,7 @@ export interface DBRepair {
     deliveryDate?: string;
     customerName?: string;
     customerMobile?: string;
+    customerAddress?: string;
     gstAmount?: number;
     gstType?: string;
 }
@@ -238,6 +246,16 @@ export const initDatabase = async () => {
                 );
             `);
 
+            // Create Companies table
+            await db.execAsync(`
+                CREATE TABLE IF NOT EXISTS companies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    mobile TEXT NOT NULL UNIQUE,
+                    address1 TEXT
+                );
+            `);
+
             // Create Repairs table
             await db.execAsync(`
                 CREATE TABLE IF NOT EXISTS repairs (
@@ -262,6 +280,7 @@ export const initDatabase = async () => {
                     deliveryDate TEXT,
                     customerName TEXT,
                     customerMobile TEXT,
+                    customerAddress TEXT,
                     gstAmount REAL,
                     gstType TEXT
                 );
@@ -270,6 +289,10 @@ export const initDatabase = async () => {
             // Migration: Add new repair columns if missing
             const repTableInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(repairs);');
             const repColumnNames = repTableInfo.map(c => c.name);
+            if (!repColumnNames.includes('customerAddress')) {
+                console.log('Migrating: Adding customerAddress column to repairs table');
+                await db.execAsync('ALTER TABLE repairs ADD COLUMN customerAddress TEXT;');
+            }
             if (!repColumnNames.includes('gstAmount')) {
                 console.log('Migrating: Adding gstAmount column to repairs table');
                 await db.execAsync('ALTER TABLE repairs ADD COLUMN gstAmount REAL;');
@@ -828,15 +851,15 @@ export const saveRepair = async (repair: DBRepair): Promise<void> => {
         `INSERT OR REPLACE INTO repairs (
             id, date, type, dueDays, dueDate, itemName, subProductName, pcs, 
             grossWeight, netWeight, natureOfRepair, empId, images, amount, 
-            advance, balance, status, extraAmount, deliveryDate, customerName, customerMobile, gstAmount, gstType
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            advance, balance, status, extraAmount, deliveryDate, customerName, customerMobile, customerAddress, gstAmount, gstType
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
             repair.id, repair.date, repair.type, repair.dueDays, repair.dueDate,
             repair.itemName, repair.subProductName, repair.pcs, repair.grossWeight,
             repair.netWeight, repair.natureOfRepair, repair.empId, repair.images || '[]',
             repair.amount, repair.advance, repair.balance, repair.status,
             repair.extraAmount || 0, repair.deliveryDate || null,
-            repair.customerName || null, repair.customerMobile || null,
+            repair.customerName || null, repair.customerMobile || null, repair.customerAddress || null,
             repair.gstAmount || 0, repair.gstType || 'none'
         ]
     );
@@ -948,5 +971,68 @@ export const saveCustomer = async (name: string, mobile: string, address1?: stri
 export const getCustomerByMobile = async (mobile: string): Promise<DBCustomer | null> => {
     if (!db) await initDatabase();
     return await db!.getFirstAsync<DBCustomer>('SELECT * FROM customers WHERE mobile = ?;', [mobile]);
+};
+
+export const getCustomers = async (search: string = ''): Promise<DBCustomer[]> => {
+    if (!db) await initDatabase();
+    if (search) {
+        return await db!.getAllAsync<DBCustomer>(
+            'SELECT * FROM customers WHERE name LIKE ? OR mobile LIKE ? ORDER BY name ASC;',
+            [`%${search}%`, `%${search}%`]
+        );
+    }
+    return await db!.getAllAsync<DBCustomer>('SELECT * FROM customers ORDER BY name ASC;');
+};
+
+export const deleteCustomer = async (id: number): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync('DELETE FROM customers WHERE id = ?;', [id]);
+};
+
+export const updateCustomer = async (id: number, name: string, mobile: string, address1?: string): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync(
+        'UPDATE customers SET name = ?, mobile = ?, address1 = ? WHERE id = ?;',
+        [name, mobile, address1 || null, id]
+    );
+};
+
+// Company Database Logic
+export const saveCompany = async (name: string, mobile: string, address1?: string): Promise<void> => {
+    if (!db) await initDatabase();
+    // Use INSERT OR REPLACE since mobile is UNIQUE. If it exists, it updates the record.
+    await db!.runAsync(
+        'INSERT OR REPLACE INTO companies (id, name, mobile, address1) VALUES ((SELECT id FROM companies WHERE mobile = ?), ?, ?, ?);',
+        [mobile, name, mobile, address1 || null]
+    );
+};
+
+export const getCompanyByMobile = async (mobile: string): Promise<DBCompany | null> => {
+    if (!db) await initDatabase();
+    return await db!.getFirstAsync<DBCompany>('SELECT * FROM companies WHERE mobile = ?;', [mobile]);
+};
+
+export const getCompanies = async (search: string = ''): Promise<DBCompany[]> => {
+    if (!db) await initDatabase();
+    if (search) {
+        return await db!.getAllAsync<DBCompany>(
+            'SELECT * FROM companies WHERE name LIKE ? OR mobile LIKE ? ORDER BY name ASC;',
+            [`%${search}%`, `%${search}%`]
+        );
+    }
+    return await db!.getAllAsync<DBCompany>('SELECT * FROM companies ORDER BY name ASC;');
+};
+
+export const deleteCompany = async (id: number): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync('DELETE FROM companies WHERE id = ?;', [id]);
+};
+
+export const updateCompany = async (id: number, name: string, mobile: string, address1?: string): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync(
+        'UPDATE companies SET name = ?, mobile = ?, address1 = ? WHERE id = ?;',
+        [name, mobile, address1 || null, id]
+    );
 };
 

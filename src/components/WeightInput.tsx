@@ -30,13 +30,13 @@ export default function WeightInput({
 
     return (
         <View style={styles.container}>
-            <View style={styles.row}>
+            <View style={styles.inputsColumn}>
                 <InputField
                     label={t('gross_weight')}
                     value={grossWeight}
                     onChangeText={onGrossChange}
                     keyboardType="numeric"
-                    style={{ flex: 1, marginRight: SPACING.xs }}
+                    style={{ marginBottom: SPACING.sm }}
                     error={error}
                 />
                 <InputField
@@ -44,10 +44,9 @@ export default function WeightInput({
                     value={stoneWeight}
                     onChangeText={onStoneChange}
                     keyboardType="numeric"
-                    style={{ flex: 1 }}
                 />
             </View>
-            <View style={[styles.netWeightContainer, { backgroundColor: activeColors.background, borderColor: activeColors.border }]}>
+            <View style={[styles.netWeightContainer, { backgroundColor: activeColors.primary + '10', borderColor: activeColors.primary }]}>
                 <Text style={[styles.netWeightLabel, { color: activeColors.textLight }]}>{t('net_weight')}:</Text>
                 <Text style={[styles.netWeightValue, { color: activeColors.primary }]}>{netWeight} g</Text>
             </View>
@@ -59,8 +58,8 @@ const styles = StyleSheet.create({
     container: {
         marginBottom: SPACING.md,
     },
-    row: {
-        flexDirection: 'row',
+    inputsColumn: {
+        marginBottom: SPACING.sm,
     },
     netWeightContainer: {
         padding: SPACING.md,
@@ -68,7 +67,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: -SPACING.sm, // Bring closer to inputs
         borderWidth: 1,
         borderStyle: 'dashed',
     },

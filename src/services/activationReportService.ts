@@ -43,9 +43,9 @@ export const reportActivation = async (customDeviceName: string): Promise<boolea
         });
 
         return response.status === 200 || response.status === 201;
-    } catch (error) {
-        console.error('Activation reporting error:', error);
-        // We don't want to block the user if reporting fails, but we log it
+    } catch (error: any) {
+        // We only want to log a minimal message, not crash the debug trace for offline users
+        console.warn('Activation reporting failed (Network offline or API unreachable):', error?.message || 'Unknown error');
         return false;
     }
 };

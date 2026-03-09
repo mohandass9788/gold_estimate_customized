@@ -44,6 +44,7 @@ export default {
     },
 
     plugins: [
+      "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-router",
       "expo-web-browser",

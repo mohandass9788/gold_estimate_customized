@@ -19,6 +19,7 @@ interface DropdownFieldProps {
     placeholder?: string;
     error?: string;
     style?: ViewStyle;
+    allowCustom?: boolean;
 }
 
 export default function DropdownField({
@@ -29,6 +30,7 @@ export default function DropdownField({
     placeholder = 'Select Option',
     error,
     style,
+    allowCustom,
 }: DropdownFieldProps) {
     const { theme } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
@@ -58,7 +60,7 @@ export default function DropdownField({
                 onPress={() => setVisible(true)}
             >
                 <Text style={[styles.valueText, { color: activeColors.text }, !value && { color: activeColors.textLight }]}>
-                    {selectedOption ? selectedOption.label : placeholder}
+                    {selectedOption ? selectedOption.label : (allowCustom && value ? value : placeholder)}
                 </Text>
                 <Icon name="chevron-down" size={20} color={activeColors.textLight} />
             </TouchableOpacity>
@@ -109,6 +111,14 @@ export default function DropdownField({
                             ListEmptyComponent={() => (
                                 <View style={{ padding: SPACING.lg, alignItems: 'center' }}>
                                     <Text style={{ color: activeColors.textLight }}>No results found</Text>
+                                    {allowCustom && searchQuery.trim().length > 0 && (
+                                        <TouchableOpacity
+                                            onPress={() => handleSelect(searchQuery.trim())}
+                                            style={{ marginTop: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, backgroundColor: activeColors.primary, borderRadius: BORDER_RADIUS.md }}
+                                        >
+                                            <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Add "{searchQuery.trim()}"</Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             )}
                         />

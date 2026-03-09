@@ -11,7 +11,8 @@ import PrimaryButton from '../components/PrimaryButton';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { useEstimation } from '../store/EstimationContext';
 import { getFilteredOrders, getOrderDetails, deleteOrder, DBOrder, DBOrderItem } from '../services/dbService';
-import { printEstimationReceipt } from '../services/printService';
+import { printEstimationReceipt, getEstimationReceiptThermalPayload } from '../services/printService';
+import PrintPreviewModal from '../modals/PrintPreviewModal';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 
 const View = RNView as any;
@@ -23,10 +24,12 @@ const ActivityIndicator = RNActivityIndicator as any;
 const Modal = RNModal as any;
 const ScrollView = RNScrollView as any;
 const RNFlatListAny = RNFlatList as any;
+import { TextInput } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function OrdersScreen() {
     const router = useRouter();
-    const { theme, t, showAlert, shopDetails, requestPrint, currentEmployeeName } = useGeneralSettings();
+    const { theme, t, showAlert, shopDetails, requestPrint, currentEmployeeName, receiptConfig } = useGeneralSettings();
     const { clearEstimation, loadEstimationIntoContext } = useEstimation();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
@@ -38,9 +41,29 @@ export default function OrdersScreen() {
     const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | '7days' | '30days' | 'custom'>('today');
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
+    const [showStartPicker, setShowStartPicker] = useState(false);
+    const [showEndPicker, setShowEndPicker] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<DBOrder | null>(null);
     const [selectedOrderItems, setSelectedOrderItems] = useState<DBOrderItem[]>([]);
     const [showOrderDetails, setShowOrderDetails] = useState(false);
+    const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+    const [previewPayload, setPreviewPayload] = useState('');
+    const [previewData, setPreviewData] = useState<any>(null);
+
+    const onDateChange = (event: any, selectedDate?: Date, type: 'start' | 'end' = 'start') => {
+        if (type === 'start') {
+            setShowStartPicker(false);
+            if (selectedDate) {
+                setCustomStart(format(selectedDate, 'yyyy-MM-dd'));
+            }
+        } else {
+            setShowEndPicker(false);
+            if (selectedDate) {
+                setCustomEnd(format(selectedDate, 'yyyy-MM-dd'));
+            }
+        }
+    };
+
 
     const loadOrders = useCallback(async () => {
         setIsLoading(true);
@@ -106,30 +129,43 @@ export default function OrdersScreen() {
         try {
             setIsPrinting(true);
             const { order, items } = await getOrderDetails(orderId);
-            const cachedDetails = {
-                customerName: order.customerName === 'Walk-in' ? '' : order.customerName,
-                mobile: order.customerMobile === 'N/A' || !order.customerMobile ? '' : order.customerMobile,
-                place: '',
-                employeeName: order.employeeName || currentEmployeeName || ''
-            };
 
-            requestPrint(async (details) => {
-                try {
-                    const products = items.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
-                    const purchases = items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData));
-                    const chits = items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData));
-                    const advances = items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData));
+            const products = items.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
+            const purchases = items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData));
+            const chits = items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData));
+            const advances = items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData));
 
-                    await printEstimationReceipt(products, purchases, chits, advances, shopDetails, order.customerName, details.employeeName, undefined, undefined, t);
-                } catch (error: any) {
-                    showAlert('Print Error', error.message || 'Failed to print', 'error');
-                } finally {
-                    setIsPrinting(false);
-                }
-            }, false, undefined, cachedDetails);
-        } catch (error) {
+            const payload = await getEstimationReceiptThermalPayload(
+                products,
+                purchases,
+                chits,
+                advances,
+                shopDetails,
+                order.customerName,
+                order.employeeName || currentEmployeeName || '',
+                receiptConfig,
+                order.estimationNumber,
+                t
+            );
+
+            setPreviewPayload(payload);
+            setSelectedOrder(order);
+            setPreviewData({
+                ...order,
+                items: products,
+                purchaseItems: purchases,
+                chitItems: chits,
+                advanceItems: advances,
+                grandTotal: order.netPayable,
+                totalWeight: products.reduce((s, i) => s + (i.netWeight || 0), 0)
+            });
+            setIsPreviewVisible(true);
+
+        } catch (error: any) {
+            console.error('Print Error:', error);
+            showAlert('Print Error', error.message || 'Failed to generate print preview', 'error');
+        } finally {
             setIsPrinting(false);
-            showAlert('Error', 'Failed to fetch order details for printing', 'error');
         }
     };
 
@@ -215,7 +251,7 @@ export default function OrdersScreen() {
                 if (selectedIds.size > 0) {
                     toggleSelection(item.orderId);
                 } else {
-                    handleViewDetails(item);
+                    handlePrint(item.orderId);
                 }
             }}
             onLongPress={() => toggleSelection(item.orderId)}
@@ -375,10 +411,17 @@ export default function OrdersScreen() {
 
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
-            <HeaderBar title={t('orders_history')} />
+            <HeaderBar
+                title={t('orders_history')}
+                rightAction={
+                    <TouchableOpacity onPress={() => loadOrders()} style={{ paddingHorizontal: SPACING.sm }}>
+                        <Icon name="refresh" size={22} color={activeColors.primary} />
+                    </TouchableOpacity>
+                }
+            />
 
             <View style={styles.filterScrollWrapper}>
-                <RNFlatList
+                <FlatList
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     data={[
@@ -406,6 +449,57 @@ export default function OrdersScreen() {
                 />
             </View>
 
+            {dateFilter === 'custom' && (
+                <View style={styles.customDateContainer}>
+                    <TouchableOpacity
+                        style={styles.dateInputWrapper}
+                        onPress={() => setShowStartPicker(true)}
+                    >
+                        <Text style={[styles.dateLabel, { color: activeColors.textLight }]}>{t('from_date') || 'From'}</Text>
+                        <View style={[styles.dateInput, { borderColor: activeColors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                            <Text style={{ color: activeColors.text, fontSize: 12 }}>{customStart}</Text>
+                            <Icon name="calendar-outline" size={16} color={activeColors.primary} />
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.dateInputWrapper}
+                        onPress={() => setShowEndPicker(true)}
+                    >
+                        <Text style={[styles.dateLabel, { color: activeColors.textLight }]}>{t('to_date') || 'To'}</Text>
+                        <View style={[styles.dateInput, { borderColor: activeColors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                            <Text style={{ color: activeColors.text, fontSize: 12 }}>{customEnd}</Text>
+                            <Icon name="calendar-outline" size={16} color={activeColors.primary} />
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.applyBtn, { backgroundColor: activeColors.primary }]}
+                        onPress={() => loadOrders()}
+                    >
+                        <Icon name="checkmark" size={20} color={COLORS.white} />
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {showStartPicker && (
+                <DateTimePicker
+                    value={new Date(customStart)}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(e, date) => onDateChange(e, date, 'start')}
+                />
+            )}
+
+            {showEndPicker && (
+                <DateTimePicker
+                    value={new Date(customEnd)}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(e, date) => onDateChange(e, date, 'end')}
+                />
+            )}
+
             {isLoading ? (
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color={activeColors.primary} />
@@ -423,6 +517,26 @@ export default function OrdersScreen() {
                     renderItem={renderItem}
                 />
             )}
+
+            <PrintPreviewModal
+                visible={isPreviewVisible}
+                onClose={() => setIsPreviewVisible(false)}
+                onPrint={async () => {
+                    try {
+                        const { BLEPrinter } = require('react-native-thermal-receipt-printer');
+                        await BLEPrinter.printText(previewPayload);
+                        setIsPreviewVisible(false);
+                        showAlert('Success', t('printed_success') || 'Printed successfully', 'success');
+                    } catch (error) {
+                        showAlert('Print Error', 'Failed to send data to printer', 'error');
+                    }
+                }}
+                thermalPayload={previewPayload}
+                title={(t('estimation_slip') || 'Estimation Slip') + " #" + selectedOrder?.estimationNumber}
+                data={previewData}
+
+            />
+
 
             <OrderDetailsModal />
         </ScreenContainer>
@@ -476,6 +590,37 @@ const styles = StyleSheet.create({
     totalAmount: {
         fontSize: FONT_SIZES.lg,
         fontWeight: 'bold',
+    },
+    customDateContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: SPACING.md,
+        paddingVertical: SPACING.sm,
+        alignItems: 'flex-end',
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+        gap: 8,
+    },
+    dateInputWrapper: {
+        flex: 1,
+    },
+    applyBtn: {
+        width: 44,
+        height: 38,
+        borderRadius: BORDER_RADIUS.sm,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    dateLabel: {
+        fontSize: 11,
+        marginBottom: 4,
+        fontWeight: '600',
+    },
+    dateInput: {
+        borderWidth: 1,
+        borderRadius: BORDER_RADIUS.sm,
+        paddingHorizontal: 10,
+        height: 38,
+        fontSize: FONT_SIZES.sm,
     },
     filterScrollWrapper: {
         paddingVertical: SPACING.sm,

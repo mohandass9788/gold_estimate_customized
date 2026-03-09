@@ -127,7 +127,7 @@ export default function DashboardScreen() {
             </SafeLinearGradient>
 
             {/* Connection Status Banner */}
-            {connectionStatus !== 'idle' && connectionStatus !== 'connected' && (
+            {connectionStatus !== 'idle' && connectionStatus !== 'connected' && !isPrinterConnected && (
                 <View style={[
                     styles.statusBanner,
                     { backgroundColor: connectionStatus === 'failed' ? activeColors.error : '#FF9500' }

@@ -18,6 +18,7 @@ import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
 import { Customer } from '../types';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
+import { getCustomerByMobile } from '../services/dbService';
 
 const View = RNView as any;
 const Text = RNText as any;
@@ -45,6 +46,17 @@ export default function CustomerDetailsModal({ visible, onClose, onSubmit, initi
     const [email, setEmail] = useState(initialData?.email || '');
     const [address, setAddress] = useState(initialData?.address || '');
 
+    const handleMobileChange = async (text: string) => {
+        setMobile(text);
+        if (text.length === 10 && !name) {
+            const customer = await getCustomerByMobile(text);
+            if (customer) {
+                setName(customer.name);
+                if (customer.address1) setAddress(customer.address1);
+            }
+        }
+    };
+
     const handleSubmit = () => {
         if (!name || !mobile) {
             Alert.alert(t('error') || 'Error', t('field_required'));
@@ -62,17 +74,18 @@ export default function CustomerDetailsModal({ visible, onClose, onSubmit, initi
 
                     <ScrollView>
                         <InputField
+                            label={t('phone_number') + " *"}
+                            value={mobile}
+                            onChangeText={handleMobileChange}
+                            placeholder={t('enter_mobile') || "Enter Mobile"}
+                            keyboardType="phone-pad"
+                            maxLength={10}
+                        />
+                        <InputField
                             label={t('customer_name') + " *"}
                             value={name}
                             onChangeText={setName}
                             placeholder={t('enter_name') || "Enter Name"}
-                        />
-                        <InputField
-                            label={t('phone_number') + " *"}
-                            value={mobile}
-                            onChangeText={setMobile}
-                            placeholder={t('enter_mobile') || "Enter Mobile"}
-                            keyboardType="phone-pad"
                         />
                         <InputField
                             label={t('email') + " (" + (t('optional') || 'Optional') + ")"}

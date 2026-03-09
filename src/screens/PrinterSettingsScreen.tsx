@@ -137,6 +137,17 @@ export default function PrinterSettingsScreen() {
                 setConnectedPrinter(printerData);
                 setIsPrinterConnected(true);
                 showAlert('Printer Connected', `${printerData.name} is ready for use.`, 'success');
+
+                // Prompt user to select paper size
+                Alert.alert(
+                    t('select_paper_size') || 'Select Paper Size',
+                    t('choose_paper_size_desc') || 'Please select the paper width for this printer:',
+                    [
+                        { text: '58mm', onPress: () => updateReceiptConfig({ paperWidth: '58mm' }) },
+                        { text: '80mm', onPress: () => updateReceiptConfig({ paperWidth: '80mm' }) },
+                        { text: '112mm', onPress: () => updateReceiptConfig({ paperWidth: '112mm' }) }
+                    ]
+                );
             } else {
                 throw new Error('Connection failed');
             }

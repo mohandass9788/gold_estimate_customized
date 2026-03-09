@@ -43,6 +43,14 @@ export default function TabsLayout() {
                 }}
             />
             <Tabs.Screen
+                name="customers"
+                options={{
+                    href: null,
+                    title: t('customers') || 'Customers',
+                    tabBarIcon: ({ color, size }) => <Icon name="people-outline" color={color} size={size} />,
+                }}
+            />
+            <Tabs.Screen
                 name="scan"
                 options={{
                     title: '',

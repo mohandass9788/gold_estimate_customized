@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { setSetting, getSetting } from '../services/dbService';
+import { setSetting, getSetting, getEmployees, DBEmployee } from '../services/dbService';
 import { initAutoConnect, PrinterData } from '../services/printService';
 import { Platform, NativeModules } from 'react-native';
 import * as Application from 'expo-application';
@@ -121,6 +121,8 @@ interface GeneralSettingsContextType {
     printDetailsModalInitialData: PrintDetails | null;
     serverApiUrl: string;
     updateServerApiUrl: (url: string) => void;
+    employees: DBEmployee[];
+    refreshEmployees: () => Promise<void>;
 }
 
 const GeneralSettingsContext = createContext<GeneralSettingsContextType | undefined>(undefined);
@@ -176,6 +178,16 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     });
 
     const [serverApiUrl, setServerApiUrlState] = useState<string>('https://school.agnisofterp.com/maha/agni');
+    const [employees, setEmployees] = useState<DBEmployee[]>([]);
+
+    const refreshEmployees = async () => {
+        try {
+            const emps = await getEmployees(true);
+            setEmployees(emps);
+        } catch (e) {
+            console.error('Failed to refresh employees:', e);
+        }
+    };
 
     const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons: AlertButton[] = []) => {
         setAlertConfig({ visible: true, title, message, type, buttons });
@@ -402,6 +414,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
         loadSettings().then(() => {
             performAutoConnect();
+            refreshEmployees();
         });
     }, []);
 
@@ -496,7 +509,10 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             printerType,
             setConnectedPrinter: async (printer: ConnectedPrinter | null) => {
                 setConnectedPrinter(printer);
-                if (!printer) {
+                if (printer) {
+                    setIsPrinterConnected(true);
+                    setConnectionStatus('connected');
+                } else {
                     setIsPrinterConnected(false);
                     setConnectionStatus('idle');
                 }
@@ -533,7 +549,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             hideAlert,
             printDetailsModalInitialData,
             serverApiUrl,
-            updateServerApiUrl
+            updateServerApiUrl,
+            employees,
+            refreshEmployees
         }}>
             {children}
         </GeneralSettingsContext.Provider>

@@ -10,7 +10,7 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS }
 import SafeLinearGradient from '../components/SafeLinearGradient';
 import { format } from 'date-fns';
 import RepairDeliveryModal from '../modals/RepairDeliveryModal';
-import PrintPreviewModal from '../modals/PrintPreviewModal';
+import RepairDetailsPreviewModal from '../modals/RepairDetailsPreviewModal';
 import { printRepair, getRepairReceiptThermalPayload } from '../services/printService';
 
 export default function RepairListScreen() {
@@ -68,7 +68,11 @@ export default function RepairListScreen() {
             if (repair) {
                 if (repair.status === 'PENDING') {
                     setSelectedRepair(repair);
-                    setIsDeliveryModalVisible(true);
+                    // Add a delay to allow the Scanner Modal to fully close 
+                    // before opening the Delivery Modal to prevent state locks
+                    setTimeout(() => {
+                        setIsDeliveryModalVisible(true);
+                    }, 500);
                 } else {
                     Alert.alert(t('info'), t('repair_already_delivered'));
                 }
@@ -94,9 +98,10 @@ export default function RepairListScreen() {
         today.setHours(0, 0, 0, 0);
         const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (diffDays > 0) return `(- ${diffDays} Days)`;
-        if (diffDays < 0) return `(+ ${Math.abs(diffDays)} Days)`;
-        return `(0 Days)`;
+        if (diffDays > 0) return `(- ${diffDays} ${t('days') || 'Days'})`;
+        if (diffDays < 0) return `(+ ${Math.abs(diffDays)} ${t('days') || 'Days'})`;
+        return `(0 ${t('days') || 'Days'})`;
+
     };
 
     const renderRepairItem = ({ item }: { item: DBRepair }) => (
@@ -299,7 +304,7 @@ export default function RepairListScreen() {
                 }}
             />
 
-            <PrintPreviewModal
+            <RepairDetailsPreviewModal
                 visible={isPreviewVisible}
                 onClose={() => setIsPreviewVisible(false)}
                 onPrint={() => {
@@ -307,10 +312,8 @@ export default function RepairListScreen() {
                         printRepair(previewData as any);
                     }
                 }}
-                thermalPayload={previewPayload}
+                repairData={previewData as any}
                 qrData={previewData?.id}
-                title={t('repair_receipt')}
-                onWidthChange={handleWidthChange}
             />
 
             <Modal

@@ -14,7 +14,7 @@ import { SPACING, COLORS, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS }
 import CustomerDetailsModal from '../modals/CustomerDetailsModal';
 import PrintPreviewModal from '../modals/PrintPreviewModal';
 import ItemDetailModal from '../modals/ItemDetailModal';
-import { printEstimationReceipt, getEstimationReceiptThermalPayload } from '../services/printService';
+import { printEstimationReceipt, getEstimationReceiptThermalPayload, printPurchaseItem, printChitItem, printAdvanceItem } from '../services/printService';
 import { Ionicons } from '@expo/vector-icons';
 
 // Fix for React 19 type mismatch
@@ -101,15 +101,19 @@ export default function EstimationSummaryScreen() {
                     // Direct thermal print for each individual item
                     for (const item of selectedItems) {
                         await printEstimationReceipt([item], [], [], [], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
                     }
                     for (const item of selectedPurchases) {
-                        await printEstimationReceipt([], [item], [], [], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t);
+                        await printPurchaseItem(item, sharedShop, details.employeeName, receiptConfig, t, details.customerName, details.mobile, details.place);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
                     }
                     for (const item of selectedChits) {
-                        await printEstimationReceipt([], [], [item], [], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t);
+                        await printChitItem(item, sharedShop, details.employeeName, receiptConfig, t, details.customerName, details.mobile, details.place);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
                     }
                     for (const item of selectedAdvances) {
-                        await printEstimationReceipt([], [], [], [item], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t);
+                        await printAdvanceItem(item, sharedShop, details.employeeName, receiptConfig, t, details.customerName, details.mobile, details.place);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
                     }
                     return;
                 }
@@ -259,7 +263,20 @@ export default function EstimationSummaryScreen() {
                 onPrint={handleActualPrint}
                 thermalPayload={previewPayload}
                 onWidthChange={handleWidthChange}
+                data={{
+                    ...state,
+                    items: state.items.filter(i => selectedItemIds.includes(i.id)),
+                    purchaseItems: state.purchaseItems.filter(i => selectedPurchaseIds.includes(i.id)),
+                    chitItems: state.chitItems.filter(i => selectedChitIds.includes(i.id)),
+                    advanceItems: state.advanceItems.filter(i => selectedAdvanceIds.includes(i.id)),
+                    grandTotal: state.items.filter(i => selectedItemIds.includes(i.id)).reduce((s, i) => s + i.totalValue, 0) -
+                        (state.purchaseItems.filter(i => selectedPurchaseIds.includes(i.id)).reduce((s, i) => s + i.amount, 0) +
+                            state.chitItems.filter(i => selectedChitIds.includes(i.id)).reduce((s, i) => s + i.amount, 0) +
+                            state.advanceItems.filter(i => selectedAdvanceIds.includes(i.id)).reduce((s, i) => s + i.amount, 0)),
+                    totalWeight: state.items.filter(i => selectedItemIds.includes(i.id)).reduce((s, i) => s + i.netWeight, 0)
+                }}
             />
+
 
             <ItemDetailModal
                 visible={showItemModal}

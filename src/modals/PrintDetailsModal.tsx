@@ -45,7 +45,7 @@ interface PrintDetailsModalProps {
 }
 
 export default function PrintDetailsModal({ visible, onClose, onSubmit, initialData }: PrintDetailsModalProps) {
-    const { theme, t, currentEmployeeName } = useGeneralSettings();
+    const { theme, t, currentEmployeeName, employees } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [customerName, setCustomerName] = useState(initialData?.customerName || '');
@@ -55,16 +55,6 @@ export default function PrintDetailsModal({ visible, onClose, onSubmit, initialD
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const { showAlert: globalShowAlert } = useGeneralSettings();
-
-    const [employees, setEmployees] = useState<DBEmployee[]>([]);
-
-    useEffect(() => {
-        const fetchEmps = async () => {
-            const emps = await getEmployees(true);
-            setEmployees(emps);
-        };
-        fetchEmps();
-    }, []);
 
     useEffect(() => {
         if (visible) {
@@ -134,14 +124,6 @@ export default function PrintDetailsModal({ visible, onClose, onSubmit, initialD
                             <View style={styles.section}>
                                 <Text style={[styles.sectionTitle, { color: activeColors.textLight }]}>{t('customer_info')}</Text>
                                 <InputField
-                                    label={t('customer_name')}
-                                    required
-                                    value={customerName}
-                                    onChangeText={(text) => { setCustomerName(text); if (errors.customerName) setErrors(prev => ({ ...prev, customerName: '' })); }}
-                                    placeholder={t('enter_name') || "Enter Name"}
-                                    error={errors.customerName}
-                                />
-                                <InputField
                                     label={t('phone_number')}
                                     required
                                     value={mobile}
@@ -150,6 +132,14 @@ export default function PrintDetailsModal({ visible, onClose, onSubmit, initialD
                                     keyboardType="phone-pad"
                                     error={errors.mobile}
                                     maxLength={10}
+                                />
+                                <InputField
+                                    label={t('customer_name')}
+                                    required
+                                    value={customerName}
+                                    onChangeText={(text) => { setCustomerName(text); if (errors.customerName) setErrors(prev => ({ ...prev, customerName: '' })); }}
+                                    placeholder={t('enter_name') || "Enter Name"}
+                                    error={errors.customerName}
                                 />
                                 <InputField
                                     label={t('address') || "Place"}

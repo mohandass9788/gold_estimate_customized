@@ -126,6 +126,8 @@ export default function CustomAlertModal({
                                             btn.style === 'cancel' && { color: subTextColor },
                                             btn.style === 'destructive' && { color: '#FFF' }
                                         ]}
+                                        numberOfLines={1}
+                                        adjustsFontSizeToFit
                                     >
                                         {btn.text}
                                     </Text>
@@ -191,6 +193,7 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.primary + '15',
         borderRadius: BORDER_RADIUS.md,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     buttonMargin: {
         marginRight: SPACING.sm,

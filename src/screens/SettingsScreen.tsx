@@ -191,6 +191,11 @@ export default function SettingsScreen() {
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                     <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('data_management') || 'Data Management'}</Text>
                     <SettingItem
+                        icon="people-outline"
+                        label={t('customers') || 'Customer Database'}
+                        onPress={() => (router as any).push('/customers')}
+                    />
+                    <SettingItem
                         icon="cloud-upload-outline"
                         label={t('backup_restore') || 'Backup & Restore'}
                         onPress={() => (router as any).push('/settings/backup-restore')}

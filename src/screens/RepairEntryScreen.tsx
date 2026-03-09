@@ -1,24 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, Alert, Image, ActivityIndicator
+    TextInput, Alert, Image, ActivityIndicator, Platform
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
-import { saveRepair, getNextRepairId, getRepairById, DBRepair, getProducts, getSubProducts, DBProduct, DBSubProduct, getEmployees, DBEmployee, getCustomerByMobile, saveCustomer } from '../services/dbService';
+import { saveRepair, getNextRepairId, getRepairById, DBRepair, getProducts, getSubProducts, DBProduct, DBSubProduct, getEmployees, DBEmployee, getCustomerByMobile, saveCustomer, getSetting, setSetting, saveCompany, getCompanyByMobile } from '../services/dbService';
 import { printRepair, getRepairReceiptThermalPayload } from '../services/printService';
 import ScreenContainer from '../components/ScreenContainer';
 import DropdownField from '../components/DropdownField';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import SafeLinearGradient from '../components/SafeLinearGradient';
-import { addDays, format } from 'date-fns';
-import PrintPreviewModal from '../modals/PrintPreviewModal';
+import { addDays, format, differenceInDays } from 'date-fns';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import RepairDetailsPreviewModal from '../modals/RepairDetailsPreviewModal';
 
 export default function RepairEntryScreen() {
     const router = useRouter();
-    const { theme, t, shopDetails, receiptConfig, updateReceiptConfig } = useGeneralSettings();
+    const { theme, t, shopDetails, receiptConfig, updateReceiptConfig, employees } = useGeneralSettings();
     const [loading, setLoading] = useState(false);
     const [repairNo, setRepairNo] = useState('');
 
@@ -31,6 +32,7 @@ export default function RepairEntryScreen() {
     const [selectedProductId, setSelectedProductId] = useState<string>('');
     const [pcs, setPcs] = useState('1');
     const [grossWeight, setGrossWeight] = useState('');
+    const [stoneWeight, setStoneWeight] = useState('');
     const [netWeight, setNetWeight] = useState('');
     const [natureOfRepair, setNatureOfRepair] = useState('');
     const [dueDays, setDueDays] = useState('7');
@@ -39,22 +41,22 @@ export default function RepairEntryScreen() {
     const [amount, setAmount] = useState('');
     const [advance, setAdvance] = useState('');
     const [images, setImages] = useState<string[]>([]);
+    const [showDatePicker, setShowDatePicker] = useState(false);
     const [customerName, setCustomerName] = useState('');
     const [customerMobile, setCustomerMobile] = useState('');
+    const [customerAddress, setCustomerAddress] = useState('');
     const [gstType, setGstType] = useState<'none' | 'amount' | 'percentage'>('none');
     const [gstValue, setGstValue] = useState('');
+    const [repairTypes, setRepairTypes] = useState<string[]>([]);
 
     // Print Preview State
     const [showPreview, setShowPreview] = useState(false);
-    const [previewPayload, setPreviewPayload] = useState('');
     const [savedRepairData, setSavedRepairData] = useState<DBRepair | null>(null);
     const [originalData, setOriginalData] = useState<DBRepair | null>(null);
 
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const repairIdParam = useLocalSearchParams().id as string;
-
-    const [employees, setEmployees] = useState<DBEmployee[]>([]);
 
     useEffect(() => {
         if (repairIdParam) {
@@ -63,20 +65,56 @@ export default function RepairEntryScreen() {
             generateRepairId();
         }
         loadProducts();
-        loadEmployees();
+        loadRepairTypes();
     }, [repairIdParam]);
 
-    const loadEmployees = async () => {
-        const emps = await getEmployees(true);
-        setEmployees(emps);
+    const loadRepairTypes = async () => {
+        try {
+            const typesStr = await getSetting('repairTypes');
+            if (typesStr) {
+                setRepairTypes(JSON.parse(typesStr));
+            } else {
+                setRepairTypes(['Soldering', 'Polishing', 'Resizing', 'Cleaning']);
+            }
+        } catch (error) {
+            setRepairTypes(['Soldering', 'Polishing', 'Resizing', 'Cleaning']);
+        }
     };
+
+    const handleRepairTypeSelect = async (val: string) => {
+        setNatureOfRepair(val);
+        if (val && !repairTypes.includes(val)) {
+            const newTypes = [...repairTypes, val];
+            setRepairTypes(newTypes);
+            await setSetting('repairTypes', JSON.stringify(newTypes));
+        }
+    };
+
+    // Auto-compute Net Weight
+    useEffect(() => {
+        const g = parseFloat(grossWeight) || 0;
+        const s = parseFloat(stoneWeight) || 0;
+        if (g >= 0 && s >= 0) {
+            const n = Math.max(0, g - s);
+            setNetWeight(n > 0 ? n.toFixed(3) : '');
+        }
+    }, [grossWeight, stoneWeight]);
 
     const handleMobileChange = async (text: string) => {
         setCustomerMobile(text);
         if (text.length === 10 && !customerName) {
-            const customer = await getCustomerByMobile(text);
-            if (customer) {
-                setCustomerName(customer.name);
+            if (type === 'COMPANY') {
+                const company = await getCompanyByMobile(text);
+                if (company) {
+                    setCustomerName(company.name);
+                    if (company.address1) setCustomerAddress(company.address1);
+                }
+            } else {
+                const customer = await getCustomerByMobile(text);
+                if (customer) {
+                    setCustomerName(customer.name);
+                    if (customer.address1) setCustomerAddress(customer.address1);
+                }
             }
         }
     };
@@ -101,9 +139,17 @@ export default function RepairEntryScreen() {
                 setAdvance(String(repair.advance));
                 setCustomerName(repair.customerName || '');
                 setCustomerMobile(repair.customerMobile || '');
+                setCustomerAddress(repair.customerAddress || '');
                 setImages(JSON.parse(repair.images || '[]'));
                 setGstType((repair.gstType as 'none' | 'amount' | 'percentage') || 'none');
                 setGstValue(repair.gstType === 'none' ? '' : String(repair.gstAmount));
+
+                // Infer stone weight from history
+                const gw = parseFloat(String(repair.grossWeight)) || 0;
+                const nw = parseFloat(String(repair.netWeight)) || 0;
+                if (gw > 0 && nw > 0 && gw >= nw) {
+                    setStoneWeight((gw - nw).toFixed(3));
+                }
 
                 setOriginalData(repair);
             }
@@ -146,10 +192,24 @@ export default function RepairEntryScreen() {
         }
     }, [selectedProductId]);
 
-    useEffect(() => {
-        const days = parseInt(dueDays) || 0;
+    const onDatePickerChange = (event: any, selectedDate?: Date) => {
+        setShowDatePicker(false);
+        if (selectedDate) {
+            setDueDate(selectedDate);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const sel = new Date(selectedDate);
+            sel.setHours(0, 0, 0, 0);
+            const days = differenceInDays(sel, today);
+            setDueDays(days.toString());
+        }
+    };
+
+    const handleDueDaysChange = (text: string) => {
+        setDueDays(text);
+        const days = parseInt(text) || 0;
         setDueDate(addDays(new Date(), days));
-    }, [dueDays]);
+    };
 
     const generateRepairId = async () => {
         const id = await getNextRepairId();
@@ -222,20 +282,25 @@ export default function RepairEntryScreen() {
                 status: originalData ? originalData.status : 'PENDING',
                 customerName,
                 customerMobile,
+                customerAddress,
                 extraAmount: originalData ? originalData.extraAmount : 0,
-                deliveryDate: originalData ? (originalData.deliveryDate as string | undefined) : undefined
+                deliveryDate: originalData ? (originalData.deliveryDate as string | undefined) : undefined,
+                gstAmount,
+                gstType
             };
 
             await saveRepair(repairData);
             setSavedRepairData(repairData);
 
             if (customerMobile && customerName) {
-                await saveCustomer(customerName, customerMobile, '');
+                if (type === 'COMPANY') {
+                    await saveCompany(customerName, customerMobile, customerAddress);
+                } else {
+                    await saveCustomer(customerName, customerMobile, customerAddress);
+                }
             }
 
-            // Generate thermal payload for preview
-            const payload = await getRepairReceiptThermalPayload(repairData, shopDetails, empId, receiptConfig, t);
-            setPreviewPayload(payload);
+            // Flag preview open on successful repair save
             setShowPreview(true);
 
         } catch (error) {
@@ -246,23 +311,6 @@ export default function RepairEntryScreen() {
         }
     };
 
-    const handleWidthChange = async (width: '58mm' | '80mm' | '112mm') => {
-        try {
-            await updateReceiptConfig({ paperWidth: width });
-            if (savedRepairData) {
-                const payload = await getRepairReceiptThermalPayload(
-                    savedRepairData as any,
-                    shopDetails,
-                    empId,
-                    { ...receiptConfig, paperWidth: width },
-                    t
-                );
-                setPreviewPayload(payload);
-            }
-        } catch (error) {
-            console.error('Failed to change width:', error);
-        }
-    };
 
     const removeImage = (index: number) => {
         const newImages = [...images];
@@ -325,40 +373,61 @@ export default function RepairEntryScreen() {
                             <TextInput
                                 style={[styles.input, { color: activeColors.text }]}
                                 value={dueDays}
-                                onChangeText={setDueDays}
+                                onChangeText={handleDueDaysChange}
                                 keyboardType="numeric"
                             />
                         </View>
-                        <View style={{ flex: 1 }}>
+                        <TouchableOpacity
+                            style={{ flex: 1 }}
+                            onPress={() => setShowDatePicker(true)}
+                        >
                             <Label>{t('due_date')}</Label>
-                            <TextInput
-                                style={[styles.input, { color: activeColors.text, opacity: 0.7 }]}
-                                value={format(dueDate, 'dd/MM/yyyy')}
-                                editable={false}
-                            />
-                        </View>
+                            <View style={[styles.input, { borderColor: activeColors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', opacity: 0.9 }]}>
+                                <Text style={{ color: activeColors.text }}>{format(dueDate, 'dd/MM/yyyy')}</Text>
+                                <Ionicons name="calendar-outline" size={18} color={activeColors.primary} />
+                            </View>
+                        </TouchableOpacity>
                     </View>
+
+                    {showDatePicker && (
+                        <DateTimePicker
+                            value={dueDate}
+                            mode="date"
+                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                            onChange={onDatePickerChange}
+                            minimumDate={new Date()}
+                        />
+                    )}
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
-                    <Label>{t('customer_name')}</Label>
-                    <TextInput
-                        style={[styles.input, { color: activeColors.text }]}
-                        value={customerName}
-                        onChangeText={setCustomerName}
-                        placeholder={t('enter_name')}
-                        placeholderTextColor={activeColors.textLight}
-                    />
-
-                    <Label>{t('phone_number')}</Label>
+                    <Label>{type === 'COMPANY' ? t('company_phone') : t('phone_number')}</Label>
                     <TextInput
                         style={[styles.input, { color: activeColors.text }]}
                         value={customerMobile}
                         onChangeText={handleMobileChange}
-                        placeholder={t('enter_mobile')}
+                        placeholder={type === 'COMPANY' ? t('enter_company_phone') : t('enter_mobile')}
                         placeholderTextColor={activeColors.textLight}
                         keyboardType="phone-pad"
                         maxLength={10}
+                    />
+
+                    <Label>{type === 'COMPANY' ? t('company_name') : t('customer_name')}</Label>
+                    <TextInput
+                        style={[styles.input, { color: activeColors.text }]}
+                        value={customerName}
+                        onChangeText={setCustomerName}
+                        placeholder={type === 'COMPANY' ? t('enter_company_name') : t('enter_name')}
+                        placeholderTextColor={activeColors.textLight}
+                    />
+
+                    <Label>{type === 'COMPANY' ? t('company_address') : t('customer_address')}</Label>
+                    <TextInput
+                        style={[styles.input, { color: activeColors.text }]}
+                        value={customerAddress}
+                        onChangeText={setCustomerAddress}
+                        placeholder={type === 'COMPANY' ? t('enter_company_address') : t('enter_address')}
+                        placeholderTextColor={activeColors.textLight}
                     />
                 </View>
 
@@ -385,19 +454,7 @@ export default function RepairEntryScreen() {
                                 placeholder={t('select_sub_product')}
                             />
                         </View>
-                        {/* <View style={{ flex: 1 }}>
-                            <Label>{t('pcs')}</Label>
-                            <TextInput
-                                style={[styles.input, { color: activeColors.text }]}
-                                value={pcs}
-                                onChangeText={setPcs}
-                                keyboardType="numeric"
-                            />
-                        </View> */}
-                    </View>
-
-                    <View style={styles.row}>
-                        <View style={{ flex: 1, marginRight: SPACING.sm }}>
+                        <View style={{ flex: 1 }}>
                             <Label>{t('pcs')}</Label>
                             <TextInput
                                 style={[styles.input, { color: activeColors.text }]}
@@ -406,6 +463,9 @@ export default function RepairEntryScreen() {
                                 keyboardType="numeric"
                             />
                         </View>
+                    </View>
+
+                    <View style={styles.row}>
                         <View style={{ flex: 1, marginRight: SPACING.sm }}>
                             <Label>{t('gross_weight')}</Label>
                             <TextInput
@@ -416,26 +476,34 @@ export default function RepairEntryScreen() {
                                 placeholder="0.000"
                             />
                         </View>
+                        <View style={{ flex: 1, marginRight: SPACING.sm }}>
+                            <Label>{t('stone_weight')}</Label>
+                            <TextInput
+                                style={[styles.input, { color: activeColors.text }]}
+                                value={stoneWeight}
+                                onChangeText={setStoneWeight}
+                                keyboardType="numeric"
+                                placeholder="0.000"
+                            />
+                        </View>
                         <View style={{ flex: 1 }}>
                             <Label>{t('net_weight')}</Label>
                             <TextInput
-                                style={[styles.input, { color: activeColors.text }]}
+                                style={[styles.input, { color: activeColors.text, opacity: 0.7, backgroundColor: 'rgba(0,0,0,0.02)' }]}
                                 value={netWeight}
-                                onChangeText={setNetWeight}
-                                keyboardType="numeric"
+                                editable={false}
                                 placeholder="0.000"
                             />
                         </View>
                     </View>
 
-                    <Label>{t('nature_of_repair')}</Label>
-                    <TextInput
-                        style={[styles.input, { color: activeColors.text, height: 60 }]}
+                    <DropdownField
+                        label={t('nature_of_repair')}
                         value={natureOfRepair}
-                        onChangeText={setNatureOfRepair}
-                        multiline
-                        placeholder={t('describe_repair')}
-                        placeholderTextColor={activeColors.textLight}
+                        options={repairTypes.map(r => ({ label: r, value: r }))}
+                        onSelect={handleRepairTypeSelect}
+                        placeholder={t('select_repair_type')}
+                        allowCustom
                     />
 
                     <DropdownField
@@ -515,7 +583,7 @@ export default function RepairEntryScreen() {
                                     style={[styles.gstToggle, gstType === 'none' && styles.gstToggleActive]}
                                     onPress={() => { setGstType('none'); setGstValue(''); }}
                                 >
-                                    <Text style={[styles.gstToggleText, gstType === 'none' && styles.gstToggleTextActive]}>None</Text>
+                                    <Text style={[styles.gstToggleText, gstType === 'none' && styles.gstToggleTextActive]}>{t('none') || 'None'}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.gstToggle, gstType === 'percentage' && styles.gstToggleActive]}
@@ -552,7 +620,7 @@ export default function RepairEntryScreen() {
                             if (gVal > 0) {
                                 return (
                                     <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10 }}>
-                                        <Text style={{ fontSize: 13, color: activeColors.textLight, marginRight: 8 }}>GST Amount:</Text>
+                                        <Text style={{ fontSize: 13, color: activeColors.textLight, marginRight: 8 }}>{t('gst_amount') || 'GST Amount'}:</Text>
                                         <Text style={{ fontSize: 13, fontWeight: 'bold', color: activeColors.text }}>₹{Math.round(gVal).toLocaleString()}</Text>
                                     </View>
                                 )
@@ -601,7 +669,7 @@ export default function RepairEntryScreen() {
                     <Text style={[styles.clearBtnText, { color: activeColors.textLight }]}>{t('cancel')}</Text>
                 </TouchableOpacity>
 
-                <PrintPreviewModal
+                <RepairDetailsPreviewModal
                     visible={showPreview}
                     onClose={() => {
                         setShowPreview(false);
@@ -618,9 +686,8 @@ export default function RepairEntryScreen() {
                             }
                         }
                     }}
-                    thermalPayload={previewPayload}
+                    repairData={savedRepairData}
                     qrData={savedRepairData?.id}
-                    onWidthChange={handleWidthChange}
                 />
 
             </ScrollView>

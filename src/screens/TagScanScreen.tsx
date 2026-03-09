@@ -97,7 +97,7 @@ export default function TagScanScreen() {
                     facing="back"
                     onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
                     barcodeScannerSettings={{
-                        barcodeTypes: ["qr"],
+                        barcodeTypes: ["qr", "ean13", "ean8", "pdf417", "aztec", "datamatrix", "code128", "code39", "upc_e", "upc_a"],
                     }}
                 />
                 <View style={styles.overlay} pointerEvents="none">
