@@ -28,25 +28,19 @@ export const getPurchase58mmPayload = (
 
     // Header (Small Font)
     payload += thermalCommands.smallOn;
-    payload += `${padR('ITEM', 14)}${padR('N.WT', 9)}${padR('RATE', 8)}${padL('AMOUNT', 11)}\x0a`;
+    payload += `${padR('ITEM', 12)}${padR('G.WT', 9)}${padR('RATE', 9)}${padL('AMOUNT', 12)}\x0a`;
     payload += thermalCommands.smallOff;
     payload += divider;
 
     // Item Row
     payload += thermalCommands.smallOn;
     const amountStr = formatCurrency(item.amount);
-    const weightStr = `${item.netWeight.toFixed(3)}g`;
+    const weightStr = `${item.grossWeight.toFixed(3)}g`;
     const rateStr = `${item.rate}`;
-    const itemName = item.category.toUpperCase().substring(0, 13);
+    const itemName = item.category.toUpperCase().substring(0, 11);
 
-    payload += `${thermalCommands.boldOn}${padR(itemName, 14)}${thermalCommands.boldOff}${padR(weightStr, 9)}${padR(rateStr, 8)}${padL(amountStr, 11)}\x0a`;
+    payload += `${thermalCommands.boldOn}${padR(itemName, 12)}${thermalCommands.boldOff}${padR(weightStr, 9)}${padR(rateStr, 9)}${padL(amountStr, 12)}\x0a`;
 
-    // Sub-details (Compact)
-    if (item.lessWeightType === 'grams' && item.lessWeight > 0) {
-        payload += `  Net Wt: ${item.netWeight.toFixed(3)}g | Less: ${item.lessWeight}g\x0a`;
-    } else {
-        payload += `  Net Wt: ${item.netWeight.toFixed(3)}g\x0a`;
-    }
     payload += thermalCommands.smallOff;
 
     payload += divider;

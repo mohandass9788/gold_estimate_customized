@@ -58,7 +58,7 @@ export const getRepair80mmPayload = (
     }
 
     if (!skipFooter) {
-        payload += getThermalFooter(employeeName || repair.empId, { name: repair.customerName, mobile: repair.customerMobile }, width, config, footerMessage, false);
+        payload += getThermalFooter(employeeName || repair.empId, { name: repair.customerName, mobile: repair.customerMobile }, width, config, footerMessage, false, true);
     }
 
     return payload;

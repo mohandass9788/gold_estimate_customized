@@ -66,7 +66,8 @@ export const getThermalFooter = (
     width: number,
     config?: ReceiptConfig,
     footerMessage?: string,
-    skipCustomer: boolean = false
+    skipCustomer: boolean = false,
+    skipCut: boolean = false
 ) => {
     // 1. Respect showFooter setting
     if (config && config.showFooter === false) {
@@ -111,9 +112,14 @@ export const getThermalFooter = (
     } else {
         footer += '*** THANK YOU VISIT AGAIN ***';
     }
-    footer += `${thermalCommands.boldOff}\x0a`;
+    footer += thermalCommands.boldOff;
+    if (!skipCut) {
+        footer += '\x0a';
+    }
 
     // 5. Final spacing and cut
-    footer += `\x0a\x0a\x1d\x56\x42\x00`; // GS V B 0 (Partial cut)
+    if (!skipCut) {
+        footer += `\x1d\x56\x42\x00`; // GS V B 0 (Partial cut)
+    }
     return footer;
 };

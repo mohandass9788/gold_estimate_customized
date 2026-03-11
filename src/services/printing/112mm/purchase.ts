@@ -27,20 +27,17 @@ export const getPurchase112mmPayload = (
     payload += getThermalCustomer({ name: (item as any).customerName }, width, config);
 
     // Header
-    payload += `${padR('ITEM', 24)}${padR('N.WT', 12)}${padR('RATE', 12)}${padL('AMOUNT', 16)}\x0a`;
+    payload += `${padR('ITEM', 22)}${padR('G.WT', 14)}${padR('RATE', 12)}${padL('AMOUNT', 16)}\x0a`;
     payload += divider;
 
     // Item Row
     const amountStr = formatCurrency(item.amount);
-    const weightStr = `${item.netWeight.toFixed(3)}g`;
+    const weightStr = `${item.grossWeight.toFixed(3)}g`;
     const rateStr = `${item.rate}`;
-    const itemName = item.category.toUpperCase().substring(0, 23);
-    payload += `${padR(itemName, 24)}${padR(weightStr, 12)}${padR(rateStr, 12)}${padL(amountStr, 16)}\x0a`;
+    const itemName = item.category.toUpperCase().substring(0, 21);
+    payload += `${padR(itemName, 22)}${padR(weightStr, 14)}${padR(rateStr, 12)}${padL(amountStr, 16)}\x0a`;
 
-    // Details
-    const lessStr = item.lessWeightType === 'percentage' ? `${item.lessWeight}%` : `${item.lessWeight}g`;
-    payload += `  Net WT: ${item.netWeight.toFixed(3)}g | Less: ${lessStr}\x0a`;
-
+    // Grand Total (Keeping Rs. here)
     payload += divider;
     payload += `${thermalCommands.boldOn}${thermalRow('PURCHASE AMOUNT', 'Rs. ' + amountStr, width)}${thermalCommands.boldOff}`;
 

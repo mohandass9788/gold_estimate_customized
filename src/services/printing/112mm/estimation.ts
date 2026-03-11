@@ -63,6 +63,14 @@ export const getEstimation112mmPayload = (
 
     payload += divider;
 
+    // Weight Totals
+    const gWtStr = `Gross WT: ${item.grossWeight.toFixed(3)}g`;
+    const sWtStr = item.stoneWeight > 0 ? `Stone: ${item.stoneWeight.toFixed(3)}g` : '';
+    payload += padR(gWtStr, width - sWtStr.length) + sWtStr + '\x0a';
+
+    const nWtStr = `Net WT: ${item.netWeight.toFixed(3)}g`;
+    payload += padR(nWtStr, width) + '\x0a';
+
     // Summary Section
     payload += thermalRow('Items Value', amountStr, width);
     if (config?.showGST) {

@@ -115,23 +115,19 @@ export const getConsolidated80mmPayload = (
     // 2. Purchase Items
     if (data.purchaseItems.length > 0) {
         payload += `${thermalCommands.center}${thermalCommands.boldOn}PURCHASE (OLD GOLD)${thermalCommands.boldOff}\x0a`;
-        payload += `${padR('ITEM', 16)}${padR('N.WT', 10)}${padR('RATE', 8)}${padL('AMOUNT', 14)}\x0a`;
+        payload += `${padR('ITEM', 15)}${padR('G.WT', 11)}${padR('RATE', 8)}${padL('AMOUNT', 14)}\x0a`;
         payload += divider;
 
         data.purchaseItems.forEach(item => {
-            const weightStr = `${item.netWeight.toFixed(3)}g`;
+            const weightStr = `${item.grossWeight.toFixed(3)}g`;
             const rateStr = `${item.rate}`;
             const amountStr = formatCurrency(item.amount);
-            const itemName = item.category.toUpperCase().substring(0, 15);
-            payload += `${padR(itemName, 16)}${padR(weightStr, 10)}${padR(rateStr, 8)}${padL(amountStr, 14)}\x0a`;
+            const itemName = item.category.toUpperCase().substring(0, 14);
+            payload += `${padR(itemName, 15)}${padR(weightStr, 11)}${padR(rateStr, 8)}${padL(amountStr, 14)}\x0a`;
 
-            if (item.lessWeightType === 'grams' && item.lessWeight > 0) {
-                payload += `  Net WT: ${item.netWeight.toFixed(3)}g | Less: ${item.lessWeight}g\x0a\x0a`;
-            } else {
-                payload += `  Net WT: ${item.netWeight.toFixed(3)}g\x0a\x0a`;
-            }
         });
         payload += divider;
+
         payload += thermalRow('Purchase Deduction', '-' + formatCurrency(data.totals.purchaseTotal), width);
         payload += '\x0a';
     }

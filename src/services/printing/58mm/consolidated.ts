@@ -87,6 +87,19 @@ export const getConsolidated58mmPayload = (
         });
         payload += divider;
 
+        const totalGrossWt = data.estimationItems.reduce((sum, item) => sum + item.grossWeight, 0);
+        const totalNetWt = data.estimationItems.reduce((sum, item) => sum + item.netWeight, 0);
+        const totalStoneWt = data.estimationItems.reduce((sum, item) => sum + (item.stoneWeight || 0), 0);
+
+        // Row 1: Gross WT & Stone
+        const gWtStr = `Gross WT: ${totalGrossWt.toFixed(3)}g`;
+        const sWtStr = totalStoneWt > 0 ? `Stone: ${totalStoneWt.toFixed(3)}g` : '';
+        payload += padR(gWtStr, width - sWtStr.length) + sWtStr + '\x0a';
+
+        // Row 2: Net WT & Total
+        const nWtStr = `Net WT: ${totalNetWt.toFixed(3)}g`;
+        payload += padR(nWtStr, width) + '\x0a';
+
         // Items Subtotal Section
         const subtotal = config?.showGST ? (data.totals.estimationTotal - (data.totals.cgst * 2 || 0)) : data.totals.estimationTotal;
         payload += thermalRow('Items Value', formatCurrency(subtotal), width);
@@ -104,18 +117,20 @@ export const getConsolidated58mmPayload = (
     if (data.purchaseItems.length > 0) {
         payload += `${thermalCommands.center}${thermalCommands.boldOn}PURCHASE (OLD GOLD)${thermalCommands.boldOff}\x0a`;
         payload += thermalCommands.smallOn;
-        payload += `${padR('ITEM', 12)}${padR('N.WT', 8)}${padL('AMOUNT', 12)}\x0a`;
+        payload += `${padR('ITEM', 12)}${padR('G.WT', 9)}${padR('RATE', 9)}${padL('AMOUNT', 12)}\x0a`;
         payload += divider;
 
         data.purchaseItems.forEach(item => {
-            const weightStr = `${item.netWeight.toFixed(3)}g`;
+            const weightStr = `${item.grossWeight.toFixed(3)}g`;
+            const rateStr = `${item.rate}`;
             const amountStr = formatCurrency(item.amount);
             const itemName = item.category.toUpperCase().substring(0, 11);
 
-            payload += `${thermalCommands.boldOn}${padR(itemName, 12)}${thermalCommands.boldOff}${padR(weightStr, 8)}${padL(amountStr, 12)}\n`;
+            payload += `${thermalCommands.boldOn}${padR(itemName, 12)}${thermalCommands.boldOff}${padR(weightStr, 9)}${padR(rateStr, 9)}${padL(amountStr, 12)}\n`;
         });
         payload += thermalCommands.smallOff;
         payload += divider;
+
         payload += thermalRow('Purchase Total', '-' + formatCurrency(data.totals.purchaseTotal), width);
         payload += '\x0a';
     }

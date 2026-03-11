@@ -401,9 +401,11 @@ export const printRepair = async (
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
             BLEPrinter.printText(payload);
 
-            await printQRCodeImage(repair.id, type, config?.qrEndpointUrl);
+            const paperWidth = config?.paperWidth || '58mm';
+            await printQRCodeImage(repair.id, type, config?.qrEndpointUrl, paperWidth);
             await new Promise(resolve => setTimeout(resolve, 1000));
-            BLEPrinter.printText('\x0a\x0a\x1d\x56\x42\x00'); // Final cut if needed after QR
+            // Just the cut command, no extra new lines
+            BLEPrinter.printText('\x1d\x56\x42\x00');
             return;
         }
     }
@@ -468,36 +470,34 @@ export const printRepairDelivery = async (
     }
 };
 
-export const printQRCodeImage = async (text: string, printerType: string = 'thermal', qrEndpointUrl?: string): Promise<boolean> => {
+export const printQRCodeImage = async (text: string, printerType: string = 'thermal', qrEndpointUrl?: string, paperWidth: string = '58mm'): Promise<boolean> => {
     return new Promise((resolve) => {
         try {
             const qrContent = qrEndpointUrl ? `${qrEndpointUrl}${encodeURIComponent(text)}` : encodeURIComponent(text);
-            const qrUrl = `https://quickchart.io/qr?text=${qrContent}&size=200&margin=0`;
-
-            // Fallback timeout in case the native printer module hangs during remote image download
-            const safetyTimeout = setTimeout(() => {
-                console.warn('printQRCodeImage timed out after 5000ms. Returning false to prevent UI lock.');
-                resolve(false);
-            }, 8000); // Increased to 8s for better reliability on slow networks
-
 
             const handleResult = (err: any) => {
-                clearTimeout(safetyTimeout);
+                if (err) console.log('Native QR Print error:', err);
                 resolve(!err);
             };
 
+            // Use the undocumented native 'printQrCode' method exposed by react-native-thermal-receipt-printer
+            // It natively encodes the text to a QR code image via ZXing and slices it for buffer printing.
+            const { NativeModules } = require('react-native');
+
             if (printerType === 'thermal' || printerType === 'bluetooth') {
-                if (NativeModules.RNBLEPrinter?.printImageData) NativeModules.RNBLEPrinter.printImageData(qrUrl, handleResult);
-                else { clearTimeout(safetyTimeout); resolve(false); }
+                if (NativeModules.RNBLEPrinter?.printQrCode) NativeModules.RNBLEPrinter.printQrCode(qrContent, handleResult);
+                else resolve(false);
             } else if (printerType === 'usb') {
-                if (NativeModules.RNUSBPrinter?.printImageData) NativeModules.RNUSBPrinter.printImageData(qrUrl, handleResult);
-                else { clearTimeout(safetyTimeout); resolve(false); }
+                if (NativeModules.RNUSBPrinter?.printQrCode) NativeModules.RNUSBPrinter.printQrCode(qrContent, handleResult);
+                else resolve(false);
             } else if (printerType === 'net') {
-                if (NativeModules.RNNetPrinter?.printImageData) NativeModules.RNNetPrinter.printImageData(qrUrl, handleResult);
-                else { clearTimeout(safetyTimeout); resolve(false); }
-            } else { clearTimeout(safetyTimeout); resolve(false); }
+                if (NativeModules.RNNetPrinter?.printQrCode) NativeModules.RNNetPrinter.printQrCode(qrContent, handleResult);
+                else resolve(false);
+            } else {
+                resolve(false);
+            }
         } catch (e) {
-            console.error('Failed to print QR code image:', e);
+            console.error('Failed to print QR code natively:', e);
             resolve(false);
         }
     });
