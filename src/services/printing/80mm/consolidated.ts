@@ -65,7 +65,8 @@ export const getConsolidated80mmPayload = (
         data.estimationItems.forEach(item => {
             const weightStr = `${item.grossWeight.toFixed(3)}`;
             const mcStr = formatCurrency(item.makingChargeValue);
-            const amountStr = formatCurrency(item.totalValue);
+            const itemSubtotal = config?.showGST ? (item.totalValue - (item.gstValue || 0)) : item.totalValue;
+            const amountStr = formatCurrency(itemSubtotal);
 
             const nameChunks = chunkString(item.name.toUpperCase(), 12);
             const itemNamePrimary = nameChunks[0];
@@ -99,11 +100,14 @@ export const getConsolidated80mmPayload = (
         payload += padR(nWtStr, width) + '\x0a';
 
         // Subtotal and GST
-        payload += thermalRow('Items Subtotal', formatCurrency(data.totals.estimationTotal), width);
-        if (data.totals.cgst > 0) payload += thermalRow('CGST (1.5%)', formatCurrency(data.totals.cgst), width);
-        if (data.totals.sgst > 0) payload += thermalRow('SGST (1.5%)', formatCurrency(data.totals.sgst), width);
+        const subtotal = config?.showGST ? (data.totals.estimationTotal - (data.totals.cgst * 2 || 0)) : data.totals.estimationTotal;
+        payload += thermalRow('Items Subtotal', formatCurrency(subtotal), width);
+        if (config?.showGST) {
+            if (data.totals.cgst > 0) payload += thermalRow('CGST (1.5%)', formatCurrency(data.totals.cgst), width);
+            if (data.totals.sgst > 0) payload += thermalRow('SGST (1.5%)', formatCurrency(data.totals.sgst), width);
+        }
 
-        const estWithTax = data.totals.estimationTotal + (data.totals.cgst || 0) + (data.totals.sgst || 0);
+        const estWithTax = data.totals.estimationTotal;
         payload += `${thermalCommands.boldOn}${thermalRow('ESTIMATION TOTAL', formatCurrency(estWithTax), width)}${thermalCommands.boldOff}`;
         payload += line;
     }

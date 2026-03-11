@@ -321,8 +321,8 @@ export const getEstimationReceiptThermalPayload = async (
     const chitTotal = chitItems.reduce((sum, i) => sum + i.amount, 0);
     const advanceTotal = advanceItems.reduce((sum, i) => sum + i.amount, 0);
     const gstTotal = items.reduce((sum, i) => sum + i.gstValue, 0);
-    const estimationWithGst = estimationTotal + gstTotal;
-    const grandTotal = (estimationWithGst - purchaseTotal - chitTotal - advanceTotal);
+    const estimationWithGst = estimationTotal;
+    const grandTotal = (estimationTotal - purchaseTotal - chitTotal - advanceTotal);
 
     const gRate = await getSetting('rate_22k');
     const sRate = await getSetting('rate_silver');
@@ -344,7 +344,7 @@ export const getEstimationReceiptThermalPayload = async (
             purchaseTotal,
             chitTotal,
             advanceTotal,
-            taxableAmount: estimationTotal,
+            taxableAmount: estimationTotal - gstTotal,
             cgst: gstTotal / 2,
             sgst: gstTotal / 2,
             igst: 0,

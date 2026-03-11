@@ -456,6 +456,16 @@ export const initDatabase = async () => {
     return initPromise;
 };
 
+export const checkpointDatabase = async (): Promise<void> => {
+    if (!db) await initDatabase();
+    try {
+        console.log('Executing PRAGMA wal_checkpoint(TRUNCATE)...');
+        await db!.execAsync('PRAGMA wal_checkpoint(TRUNCATE);');
+    } catch (error) {
+        console.error('Error during WAL checkpoint:', error);
+    }
+};
+
 export const getProducts = async (): Promise<DBProduct[]> => {
     if (!db) await initDatabase();
     return await db!.getAllAsync<DBProduct>(`

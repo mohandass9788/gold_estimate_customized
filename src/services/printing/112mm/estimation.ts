@@ -39,7 +39,8 @@ export const getEstimation112mmPayload = (
     payload += divider;
 
     // Item Row
-    const amountStr = formatCurrency(item.totalValue);
+    const itemSubtotal = config?.showGST ? (item.totalValue - (item.gstValue || 0)) : item.totalValue;
+    const amountStr = formatCurrency(itemSubtotal);
     const weightStr = `${item.grossWeight.toFixed(3)}`;
     const mcStr = formatCurrency(item.makingChargeValue);
 
@@ -71,7 +72,7 @@ export const getEstimation112mmPayload = (
         payload += thermalRow('SGST (1.5%)', formatCurrency(sgst), width);
     }
 
-    const grandTotal = item.totalValue + (config?.showGST ? item.gstValue : 0);
+    const grandTotal = item.totalValue;
     payload += `${thermalCommands.boldOn}${thermalRow('ESTIMATION TOTAL', 'Rs. ' + formatCurrency(grandTotal), width)}${thermalCommands.boldOff}`;
 
     payload += divider;

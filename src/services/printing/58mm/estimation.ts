@@ -36,7 +36,8 @@ export const getEstimation58mmPayload = (
 
     // Item Row
     payload += thermalCommands.smallOn;
-    const amountStr = formatCurrency(item.totalValue);
+    const itemSubtotal = config?.showGST ? (item.totalValue - (item.gstValue || 0)) : item.totalValue;
+    const amountStr = formatCurrency(itemSubtotal);
     const weightStr = `${item.grossWeight.toFixed(3)}`;
     const mcStr = formatCurrency(item.makingChargeValue);
 
@@ -70,7 +71,7 @@ export const getEstimation58mmPayload = (
         payload += thermalRow('SGST (1.5%)', formatCurrency(sgst), width);
     }
 
-    const grandTotal = item.totalValue + (config?.showGST ? item.gstValue : 0);
+    const grandTotal = item.totalValue;
     payload += `${thermalCommands.boldOn}${thermalRow('GRAND TOTAL', 'Rs. ' + formatCurrency(grandTotal), width)}${thermalCommands.boldOff}`;
 
     // Pass empty customer object because it's already at the top

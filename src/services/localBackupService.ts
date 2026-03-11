@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { Alert, Platform } from 'react-native';
 import { format } from 'date-fns';
+import { checkpointDatabase } from './dbService';
 
 const DB_NAME = 'gold_estimation.db';
 const DB_PATH = `${FileSystem.documentDirectory}SQLite/${DB_NAME}`;
@@ -14,6 +15,9 @@ export const backupDatabaseLocal = async (deviceName: string = 'device', t: (key
             Alert.alert(t('error'), t('db_not_found'));
             return false;
         }
+
+        // Checkpoint WAL files so all writes are committed to the main .db file
+        await checkpointDatabase();
 
         const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm');
         const cleanDeviceName = deviceName.replace(/[^a-z0-9_-]/gi, '_');
@@ -27,19 +31,25 @@ export const backupDatabaseLocal = async (deviceName: string = 'device', t: (key
         });
 
         if (Platform.OS === 'android') {
-            const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-            if (permissions.granted) {
-                const base64 = await FileSystem.readAsStringAsync(backupUri, { encoding: FileSystem.EncodingType.Base64 });
-                await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, backupFileName, 'application/octet-stream')
-                    .then(async (uri) => {
+            try {
+                const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+                if (permissions.granted) {
+                    try {
+                        const base64 = await FileSystem.readAsStringAsync(backupUri, { encoding: FileSystem.EncodingType.Base64 });
+                        const uri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, backupFileName, 'application/octet-stream');
                         await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
-                        Alert.alert(t('success'), t('local_backup_success_saf'));
-                    })
-                    .catch(e => {
-                        console.error('SAF error:', e);
-                        Alert.alert(t('error'), t('failed_save_folder'));
-                    });
-                return true;
+                        Alert.alert(t('success'), t('local_backup_success_saf') || 'Backup saved to folder successfully.');
+                        return true;
+                    } catch (safError) {
+                        console.log('SAF error (fallback to Sharing):', String(safError));
+                        // We do not return here, we let the code intentionally fall through to the Sharing sheet below.
+                    }
+                } else {
+                    // User explicitly cancelled directory selection
+                    return false;
+                }
+            } catch (permError) {
+                console.log('SAF permission error:', String(permError));
             }
         }
 
@@ -88,6 +98,20 @@ export const restoreDatabaseLocal = async (t: (key: string) => string = (k) => k
         const dbInfo = await FileSystem.getInfoAsync(DB_PATH);
         if (dbInfo.exists) {
             await FileSystem.deleteAsync(DB_PATH);
+        }
+
+        // Delete any existing WAL and SHM files to prevent corruption with the restored database
+        const walPath = `${DB_PATH}-wal`;
+        const shmPath = `${DB_PATH}-shm`;
+
+        const walInfo = await FileSystem.getInfoAsync(walPath);
+        if (walInfo.exists) {
+            await FileSystem.deleteAsync(walPath);
+        }
+
+        const shmInfo = await FileSystem.getInfoAsync(shmPath);
+        if (shmInfo.exists) {
+            await FileSystem.deleteAsync(shmPath);
         }
 
         // Copy new DB

@@ -165,6 +165,7 @@ export default function BackupRestoreScreen() {
         <ScreenContainer backgroundColor={activeColors.background}>
             <HeaderBar title={t('backup_restore') || 'Backup & Restore'} />
             <ScrollView contentContainerStyle={styles.container}>
+                {/* CLOUD BACKUP HIDDEN FOR NOW
                 <View style={styles.infoSection}>
                     <Icon name="cloud-upload-outline" size={60} color={activeColors.primary} />
                     <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('cloud_backup') || 'Cloud Backup'}</Text>
@@ -195,6 +196,7 @@ export default function BackupRestoreScreen() {
                     onLogin={handleMicrosoftLogin}
                     onBackup={() => handleBackup('microsoft')}
                 />
+                */}
 
                 <View style={{ marginTop: SPACING.xl, marginBottom: SPACING.md }}>
                     <Text style={{ color: activeColors.primary, fontSize: FONT_SIZES.lg, fontWeight: 'bold' }}>
