@@ -329,7 +329,7 @@ export default function RepairEntryScreen() {
                 style={styles.header}
             >
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <TouchableOpacity onPress={() => router.replace('/(tabs)/repairs')} style={styles.backButton}>
                         <Ionicons name="arrow-back" size={24} color={activeColors.text} />
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: activeColors.text }]}>{t('repair_entry')}</Text>
@@ -697,7 +697,7 @@ export default function RepairEntryScreen() {
 
 const styles = StyleSheet.create({
     header: {
-        paddingTop: 20,
+        paddingTop: 10,
         paddingBottom: 0,
         paddingHorizontal: SPACING.md,
         borderBottomLeftRadius: 25,

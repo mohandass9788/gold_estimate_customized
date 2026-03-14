@@ -973,34 +973,17 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
             <PrintPreviewModal />
 
-            <View style={[styles.modeSelectorContainer, { backgroundColor: activeColors.cardBg, borderBottomColor: activeColors.border }]}
+            <View
+                style={[styles.modeSelectorContainer, { backgroundColor: activeColors.cardBg, borderBottomColor: activeColors.border }]}
+                onLayout={(e: any) => setModeViewportWidth(e.nativeEvent.layout.width)}
             >
-                {showLeftArrow && (
-                    <TouchableOpacity style={styles.scrollArrow} onPress={() => handleTabScroll('left')}>
-                        <Icon name="chevron-back" size={20} color={activeColors.primary} />
-                    </TouchableOpacity>
-                )}
-                <ScrollView
-                    ref={modeScrollRef}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.modeSelectorScroll}
-                    onLayout={(e: any) => setModeViewportWidth(e.nativeEvent.layout.width)}
-                    onScroll={(e: any) => setScrollOffset(e.nativeEvent.contentOffset.x)}
-                    onContentSizeChange={(w: any) => setContentWidth(w)}
-                    scrollEventThrottle={16}
-                >
+                <View style={styles.modeSelectorGrid}>
                     <ModeButton label={t('scan_tag_btn')} icon="qr-code-outline" modeKey="TAG" active={mode === 'TAG'} onPress={() => setMode('TAG')} />
                     <ModeButton label={t('manual_entry_btn')} icon="create-outline" modeKey="MANUAL" active={mode === 'MANUAL'} onPress={() => setMode('MANUAL')} />
                     <ModeButton label={t('purchase_btn')} icon="bag-handle-outline" modeKey="PURCHASE" active={mode === 'PURCHASE'} onPress={() => setMode('PURCHASE')} />
                     <ModeButton label={t('chit_btn')} icon="receipt-outline" modeKey="CHIT" active={mode === 'CHIT'} onPress={() => setMode('CHIT')} />
                     <ModeButton label={t('advance_btn')} icon="wallet-outline" modeKey="ADVANCE" active={mode === 'ADVANCE'} onPress={() => setMode('ADVANCE')} />
-                </ScrollView>
-                {showRightArrow && (
-                    <TouchableOpacity style={styles.scrollArrow} onPress={() => handleTabScroll('right')}>
-                        <Icon name="chevron-forward" size={20} color={activeColors.primary} />
-                    </TouchableOpacity>
-                )}
+                </View>
             </View>
 
             <ScrollView
@@ -1401,62 +1384,49 @@ const styles = StyleSheet.create({
         paddingBottom: 220, // Adjusted padding
     },
     modeSelectorContainer: {
-        flexDirection: 'row',
-        minHeight: 84,
-        alignItems: 'center',
+        minHeight: 72,
         marginVertical: SPACING.md,
         marginHorizontal: SPACING.md,
-        paddingHorizontal: SPACING.xs,
+        paddingHorizontal: 6,
         paddingVertical: SPACING.xs,
-        borderRadius: 28,
+        borderRadius: 20,
         borderWidth: 1,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.06,
-        shadowRadius: 18,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 2,
     },
-    scrollArrow: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.8)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        zIndex: 10,
-    },
-    modeSelectorScroll: {
-        paddingHorizontal: SPACING.xs,
-        alignItems: 'center',
+    modeSelectorGrid: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        justifyContent: 'space-between',
     },
     modeButton: {
-        paddingHorizontal: SPACING.md,
-        paddingVertical: 10,
-        marginHorizontal: 5,
+        flex: 1,
+        minWidth: 0,
+        paddingHorizontal: 4,
+        paddingVertical: 8,
+        marginHorizontal: 2,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 22,
-        minWidth: 116,
+        borderRadius: 16,
         borderWidth: 1,
-        flexDirection: 'row',
-        gap: SPACING.sm,
+        gap: 4,
     },
     modeIconWrap: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
     },
     modeButtonText: {
-        fontSize: FONT_SIZES.xs,
+        fontSize: 10,
         fontWeight: '800',
-        letterSpacing: 0.3,
+        letterSpacing: 0.1,
+        textAlign: 'center',
+        lineHeight: 12,
     },
     section: {
         padding: SPACING.md,

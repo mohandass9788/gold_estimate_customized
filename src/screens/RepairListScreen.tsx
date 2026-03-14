@@ -261,20 +261,7 @@ export default function RepairListScreen() {
                         <Ionicons name="arrow-back" size={24} color={activeColors.text} />
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: activeColors.text }]}>{t('repair_list')}</Text>
-                    <View style={styles.headerRight}>
-                        <TouchableOpacity
-                            style={[styles.scanButton, { backgroundColor: COLORS.secondary }]}
-                            onPress={handleStartScan}
-                        >
-                            <Ionicons name="qr-code-outline" size={24} color="#FFF" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.addButton, { backgroundColor: COLORS.primary }]}
-                            onPress={() => router.push('/(tabs)/repairs/new')}
-                        >
-                            <Ionicons name="add" size={24} color="#FFF" />
-                        </TouchableOpacity>
-                    </View>
+                    <View style={styles.headerActionSpacer} />
                 </View>
 
                 <View style={[styles.searchBar, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
@@ -323,6 +310,22 @@ export default function RepairListScreen() {
                     </View>
                 }
             />
+
+            <TouchableOpacity
+                style={[styles.floatingButton, styles.floatingButtonLeft, { backgroundColor: COLORS.secondary }]}
+                onPress={handleStartScan}
+                activeOpacity={0.9}
+            >
+                <Ionicons name="qr-code-outline" size={24} color="#FFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={[styles.floatingButton, styles.floatingButtonRight, { backgroundColor: COLORS.primary }]}
+                onPress={() => router.push('/(tabs)/repairs/new')}
+                activeOpacity={0.9}
+            >
+                <Ionicons name="add" size={24} color="#FFF" />
+            </TouchableOpacity>
 
             <RepairDeliveryModal
                 visible={isDeliveryModalVisible}
@@ -377,7 +380,7 @@ export default function RepairListScreen() {
 
 const styles = StyleSheet.create({
     header: {
-        paddingTop: 40,
+        paddingTop: 10,
         paddingBottom: 10,
         paddingHorizontal: SPACING.md,
         borderBottomLeftRadius: 20,
@@ -394,9 +397,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: SPACING.sm,
     },
-    headerRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    headerActionSpacer: {
+        width: 40,
+        height: 40,
     },
     backButton: {
         width: 40,
@@ -409,22 +412,25 @@ const styles = StyleSheet.create({
         fontSize: FONT_SIZES.xl,
         fontWeight: 'bold',
     },
-    addButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+    floatingButton: {
+        position: 'absolute',
+        bottom: 28,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 4,
-        marginLeft: SPACING.sm,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
     },
-    scanButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 4,
+    floatingButtonLeft: {
+        left: SPACING.lg,
+    },
+    floatingButtonRight: {
+        right: SPACING.lg,
     },
     searchBar: {
         flexDirection: 'row',
