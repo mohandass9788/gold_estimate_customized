@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
 import { Alert } from 'react-native';
 import { validateUser } from '../services/dbService';
 
@@ -10,6 +11,10 @@ interface AuthContextType {
     biometricLogin: () => Promise<void>;
     isBiometricSupported: boolean;
     isSuperAdmin: boolean;
+    completeLogin: () => void;
+    validateCredentialsOnly: (username?: string, password?: string) => Promise<boolean>;
+    hasMPin: boolean;
+    setHasMPin: (value: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -20,22 +25,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [hasMPin, setHasMPin] = useState(false);
 
-
-    // Check biometric hardware support on mount
+    // Check biometric hardware support and existing mPIN on mount
     useEffect(() => {
         (async () => {
             try {
                 const compatible = await LocalAuthentication.hasHardwareAsync();
                 const enrolled = await LocalAuthentication.isEnrolledAsync();
                 setIsBiometricSupported(compatible && enrolled);
+
+                const storedPin = await SecureStore.getItemAsync('user_mpin');
+                if (storedPin) {
+                    setHasMPin(true);
+                }
             } catch {
-                console.log('Biometric check failed');
+                console.log('Biometric/SecureStore check failed');
             }
         })();
     }, []);
 
-    const login = async (username?: string, password?: string): Promise<boolean> => {
+    // Validates credentials without setting isAuthenticated
+    const validateCredentialsOnly = async (username?: string, password?: string): Promise<boolean> => {
         try {
             if (!username || !password) return false;
 
@@ -48,7 +59,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
             if (username === 'sys_admin' && password === dynamicPassword) {
                 setIsSuperAdmin(true);
-                setIsAuthenticated(true);
                 return true;
             }
 
@@ -56,14 +66,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const isValid = await validateUser(username, password);
             if (isValid) {
                 setIsSuperAdmin(false);
-                setIsAuthenticated(true);
                 return true;
             }
             return false;
         } catch (e) {
-            console.error('Login error:', e);
+            console.error('Validation error:', e);
             return false;
         }
+    };
+
+    // Original login method keeps its existing signature for backward compatibility,
+    // but ideally we rely on validateCredentialsOnly -> completeLogin now
+    const login = async (username?: string, password?: string): Promise<boolean> => {
+        const isValid = await validateCredentialsOnly(username, password);
+        if (isValid) {
+            setIsAuthenticated(true);
+            return true;
+        }
+        return false;
+    };
+
+    const completeLogin = () => {
+        setIsAuthenticated(true);
     };
 
     const biometricLogin = async () => {
@@ -74,14 +98,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         try {
             const result = await LocalAuthentication.authenticateAsync({
-                promptMessage: 'Authenticate to access Gold Estimation App',
+                promptMessage: 'Authenticate to access Estimation',
                 fallbackLabel: 'Use Passcode',
             });
 
             if (result.success) {
-                setIsAuthenticated(true);
-            } else {
-                // Alert.alert('Authentication Failed', 'Could not authenticate.');
+                completeLogin();
             }
         } catch {
             console.error('Authentication error');
@@ -89,8 +111,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    const logout = () => {
+    const logout = async () => {
         setIsAuthenticated(false);
+        // We do NOT clear mPIN here on regular logout (so they can log back in with PIN).
+        // If they want to "Switch User", that logic clears the PIN from SecureStore explicitly in LoginScreen.
     };
 
     return (
@@ -102,6 +126,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 biometricLogin,
                 isBiometricSupported,
                 isSuperAdmin,
+                completeLogin,
+                validateCredentialsOnly,
+                hasMPin,
+                setHasMPin
             }}
         >
             {children}

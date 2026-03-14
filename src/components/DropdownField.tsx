@@ -32,7 +32,7 @@ export default function DropdownField({
     style,
     allowCustom,
 }: DropdownFieldProps) {
-    const { theme } = useGeneralSettings();
+    const { theme, t } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
     const [visible, setVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -82,6 +82,7 @@ export default function DropdownField({
                                     activeColors={activeColors}
                                     value={searchQuery}
                                     onChange={setSearchQuery}
+                                    placeholder={t('search') || 'Search...'}
                                 />
                             </RNView>
                             {searchQuery.length > 0 && (
@@ -110,13 +111,13 @@ export default function DropdownField({
                             )}
                             ListEmptyComponent={() => (
                                 <View style={{ padding: SPACING.lg, alignItems: 'center' }}>
-                                    <Text style={{ color: activeColors.textLight }}>No results found</Text>
+                                    <Text style={{ color: activeColors.textLight }}>{t('no_results_found') || 'No results found'}</Text>
                                     {allowCustom && searchQuery.trim().length > 0 && (
                                         <TouchableOpacity
                                             onPress={() => handleSelect(searchQuery.trim())}
                                             style={{ marginTop: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, backgroundColor: activeColors.primary, borderRadius: BORDER_RADIUS.md }}
                                         >
-                                            <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Add "{searchQuery.trim()}"</Text>
+                                            <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{`${t('add') || 'Add'} "${searchQuery.trim()}"`}</Text>
                                         </TouchableOpacity>
                                     )}
                                 </View>
@@ -130,12 +131,12 @@ export default function DropdownField({
     );
 }
 
-const DropdownFieldSearchInput = ({ activeColors, value, onChange }: any) => {
+const DropdownFieldSearchInput = ({ activeColors, value, onChange, placeholder }: any) => {
     // We use a raw TextInput here for search
     const { TextInput } = require('react-native');
     return (
         <TextInput
-            placeholder="Search..."
+            placeholder={placeholder}
             placeholderTextColor={activeColors.textLight}
             value={value}
             onChangeText={onChange}

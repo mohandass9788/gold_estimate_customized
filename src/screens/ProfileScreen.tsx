@@ -89,7 +89,7 @@ export default function ProfileScreen() {
             await updateUserCredentials(currentUsername, newPassword || undefined, newUsername !== currentUsername ? newUsername : undefined);
             showAlert('Success', 'Profile updated successfully. Please login again.', 'success', [
                 {
-                    text: 'OK',
+                    text: t('ok') || 'OK',
                     onPress: () => {
                         logout();
                         // Expo router should handle redirect to login on logout

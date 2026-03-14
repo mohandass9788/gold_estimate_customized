@@ -119,9 +119,12 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'center',
+        alignItems: 'center',
         padding: SPACING.lg,
     },
     modalContainer: {
+        width: '100%',
+        maxWidth: 520,
         borderRadius: BORDER_RADIUS.lg,
         padding: SPACING.lg,
         maxHeight: '80%',

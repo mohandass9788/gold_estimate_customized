@@ -1,12 +1,13 @@
 export default {
   expo: {
-    name: "Gold Estimation",
+    name: "Estimation",
     slug: "gold-estimation",
     version: "1.0.0",
     scheme: "goldestimation",
     orientation: "portrait",
     icon: "./assets/logo.png",
     userInterfaceStyle: "light",
+    newArchEnabled: true,
 
     splash: {
       image: "./assets/logo.png",
@@ -54,8 +55,7 @@ export default {
           android: {
             compileSdkVersion: 35,
             targetSdkVersion: 35,
-            minSdkVersion: 24,
-            newArchEnabled: true
+            minSdkVersion: 24
           }
         }
       ]

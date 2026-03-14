@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, Modal } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { getRepairs, getRepairById, DBRepair, deleteRepair } from '../services/dbService';
@@ -15,6 +15,7 @@ import { printRepair, getRepairReceiptThermalPayload } from '../services/printSe
 
 export default function RepairListScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams<{ scanId?: string }>();
     const { theme, t, shopDetails, receiptConfig, updateReceiptConfig } = useGeneralSettings();
     const [repairs, setRepairs] = useState<DBRepair[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -34,6 +35,35 @@ export default function RepairListScreen() {
     useEffect(() => {
         loadRepairs();
     }, [statusFilter]);
+
+    useEffect(() => {
+        if (!params.scanId) return;
+
+        const handleScannedRepair = async () => {
+            try {
+                const repair = await getRepairById(params.scanId as string);
+                if (repair) {
+                    if (repair.status === 'PENDING') {
+                        setSelectedRepair(repair);
+                        setTimeout(() => {
+                            setIsDeliveryModalVisible(true);
+                        }, 250);
+                    } else {
+                        Alert.alert(t('info'), t('repair_already_delivered'));
+                    }
+                } else {
+                    Alert.alert(t('error'), t('invalid_repair_qr'));
+                }
+            } catch (error) {
+                console.error('Repair lookup failed:', error);
+                Alert.alert(t('error'), t('scan_error'));
+            } finally {
+                router.setParams({ scanId: undefined });
+            }
+        };
+
+        handleScannedRepair();
+    }, [params.scanId, router, t]);
 
     const loadRepairs = async () => {
         setLoading(true);

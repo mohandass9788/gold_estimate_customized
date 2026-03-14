@@ -28,8 +28,8 @@ export default function DashboardScreen() {
     const { logout } = useAuth();
     const { state, updateGoldRate } = useEstimation();
     const {
-        theme, t, printerType, isPrinterConnected, shopDetails, deviceName,
-        connectionStatus, retryAttempt, countdown, featureFlags
+        theme, language, t, printerType, isPrinterConnected, shopDetails, deviceName,
+        connectionStatus, retryAttempt, countdown, featureFlags, setLanguage, toggleTheme
     } = useGeneralSettings();
     const [isRateModalVisible, setIsRateModalVisible] = React.useState(false);
 
@@ -57,22 +57,26 @@ export default function DashboardScreen() {
         </View>
     );
 
-    const MenuButton = ({ title, icon, route, colors }: any) => (
+    const MenuButton = ({ title, subtitle, icon, route, colors, compact = false }: any) => (
         <TouchableOpacity
-            style={styles.menuButtonWrapper}
+            style={compact ? styles.menuButtonWrapperCompact : styles.menuButtonWrapper}
             onPress={() => router.push(route)}
-            activeOpacity={0.8}
+            activeOpacity={0.88}
         >
             <SafeLinearGradient
                 colors={colors}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.menuButton}
+                style={compact ? styles.menuButtonCompact : styles.menuButton}
             >
-                <View style={styles.menuIconCircle}>
-                    <Icon name={icon} size={28} color="#FFF" />
+                <View style={compact ? styles.menuIconCircleCompact : styles.menuIconCircle}>
+                    <Icon name={icon} size={compact ? 20 : 26} color="#FFF" />
                 </View>
-                <Text style={styles.menuButtonText}>{title}</Text>
+                <View style={compact ? styles.menuTextWrapCompact : { flex: 1 }}>
+                    <Text style={compact ? styles.menuButtonTextCompact : styles.menuButtonText}>{title}</Text>
+                    {!compact && !!subtitle && <Text style={styles.menuButtonSubtext}>{subtitle}</Text>}
+                </View>
+                {!compact && <Icon name="arrow-forward" size={18} color="rgba(255,255,255,0.92)" />}
             </SafeLinearGradient>
         </TouchableOpacity>
     );
@@ -86,6 +90,19 @@ export default function DashboardScreen() {
     };
 
     const printerStatus = getPrinterStatusInfo();
+    const primaryActions = [
+        { title: t('scan_tag'), subtitle: 'Scan and fetch product details', icon: 'qr-code', route: '/(tabs)/scan', colors: ['#B8860B', '#E1B84C'] },
+        { title: t('manual_entry'), subtitle: 'Create estimate from scratch', icon: 'create', route: '/(tabs)/manual?mode=MANUAL', colors: ['#0E7490', '#38BDF8'] },
+        { title: t('purchase'), subtitle: 'Add old gold purchase values', icon: 'cart', route: '/(tabs)/manual?mode=PURCHASE', colors: ['#0F766E', '#34D399'] },
+    ];
+    const secondaryActions = [
+        { title: t('multi_tag_scan'), icon: 'layers', route: '/(tabs)/multi-scan', colors: ['#C2410C', '#FB923C'] },
+        ...(featureFlags.isChitEnabled ? [{ title: t('chit'), icon: 'receipt', route: '/(tabs)/manual?mode=CHIT', colors: ['#7C3AED', '#A78BFA'] }] : []),
+        ...(featureFlags.isAdvanceEnabled ? [{ title: t('advance'), icon: 'wallet', route: '/(tabs)/manual?mode=ADVANCE', colors: ['#BE123C', '#FB7185'] }] : []),
+        ...(featureFlags.isRepairEnabled
+            ? [{ title: t('repairs'), icon: 'construct', route: '/(tabs)/repairs', colors: ['#9F1239', '#F43F5E'] }]
+            : [{ title: t('update_rates'), icon: 'trending-up', route: '/(tabs)/rates', colors: ['#7C2D12', '#F97316'] }]),
+    ];
 
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
@@ -117,10 +134,24 @@ export default function DashboardScreen() {
                             <Icon name="print-outline" size={18} color={printerStatus.color} />
                         </TouchableOpacity>
                         <TouchableOpacity
-                            onPress={() => router.push('/settings')}
+                            onPress={() => setLanguage(language === 'en' ? 'ta' : 'en')}
                             style={[styles.profileButton, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}
                         >
-                            <Icon name="person-outline" size={20} color={activeColors.primary} />
+                            <Icon
+                                name="language-outline"
+                                size={20}
+                                color={activeColors.primary}
+                            />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={toggleTheme}
+                            style={[styles.profileButton, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}
+                        >
+                            <Icon
+                                name={theme === 'light' ? 'moon-outline' : 'sunny-outline'}
+                                size={20}
+                                color={activeColors.primary}
+                            />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -192,18 +223,16 @@ export default function DashboardScreen() {
                     <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('quick_actions')}</Text>
                 </View>
 
+                <View style={styles.primaryActionStack}>
+                    {primaryActions.map((action) => (
+                        <MenuButton key={action.title} {...action} />
+                    ))}
+                </View>
+
                 <View style={styles.grid}>
-                    <MenuButton title={t('scan_tag')} icon="qr-code" route="/(tabs)/manual?mode=TAG" colors={['#FFD700', '#DAA520']} />
-                    <MenuButton title={t('manual_entry')} icon="create" route="/(tabs)/manual?mode=MANUAL" colors={['#50E3C2', '#3CB371']} />
-                    <MenuButton title={t('multi_tag_scan')} icon="layers" route="/(tabs)/multi-scan" colors={['#FF9500', '#FF8C00']} />
-                    {featureFlags.isChitEnabled && <MenuButton title={t('chit')} icon="receipt" route="/(tabs)/manual?mode=CHIT" colors={['#AF52DE', '#8E44AD']} />}
-                    {featureFlags.isAdvanceEnabled && <MenuButton title={t('advance')} icon="wallet" route="/(tabs)/manual?mode=ADVANCE" colors={['#FF3B30', '#D32F2F']} />}
-                    {featureFlags.isPurchaseEnabled && <MenuButton title={t('purchase')} icon="cart" route="/(tabs)/manual?mode=PURCHASE" colors={['#5AC8FA', '#3498DB']} />}
-                    {featureFlags.isRepairEnabled ? (
-                        <MenuButton title={t('repairs')} icon="construct" route="/(tabs)/repairs/new" colors={['#FF2D55', '#D00036']} />
-                    ) : (
-                        <MenuButton title={t('update_rates')} icon="trending-up" route="/(tabs)/rates" colors={['#FF2D55', '#D00036']} />
-                    )}
+                    {secondaryActions.map((action) => (
+                        <MenuButton key={action.title} {...action} compact />
+                    ))}
                 </View>
 
                 {/* Recent Activity List */}
@@ -265,8 +294,8 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
     header: {
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
-        paddingBottom: 20,
+        paddingTop: Platform.OS === 'ios' ? 60 : 10,
+        paddingBottom: 10,
         paddingHorizontal: SPACING.lg,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
@@ -426,6 +455,9 @@ const styles = StyleSheet.create({
         fontSize: FONT_SIZES.sm,
         fontWeight: '600',
     },
+    primaryActionStack: {
+        marginBottom: SPACING.sm,
+    },
     grid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -433,38 +465,81 @@ const styles = StyleSheet.create({
         marginBottom: SPACING.xl,
     },
     menuButtonWrapper: {
-        width: '31%',
-        aspectRatio: 0.9,
+        width: '100%',
+        marginBottom: SPACING.md,
+    },
+    menuButtonWrapperCompact: {
+        width: '48.5%',
         marginBottom: SPACING.md,
     },
     menuButton: {
-        flex: 1,
-        borderRadius: BORDER_RADIUS.lg,
-        padding: SPACING.sm,
-        justifyContent: 'center',
+        minHeight: 90,
+        borderRadius: 26,
+        paddingHorizontal: SPACING.lg,
+        paddingVertical: SPACING.lg,
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         elevation: 8,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.16,
+        shadowRadius: 16,
+    },
+    menuButtonCompact: {
+        minHeight: 76,
+        borderRadius: 22,
+        paddingHorizontal: SPACING.md,
+        paddingVertical: SPACING.md,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 14,
     },
     menuIconCircle: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 52,
+        height: 52,
+        borderRadius: 18,
         backgroundColor: 'rgba(255, 255, 255, 0.25)',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: SPACING.xs,
+        marginRight: SPACING.md,
+    },
+    menuIconCircleCompact: {
+        width: 40,
+        height: 40,
+        borderRadius: 14,
+        backgroundColor: 'rgba(255, 255, 255, 0.22)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: SPACING.sm,
+    },
+    menuTextWrapCompact: {
+        flex: 1,
+        justifyContent: 'center',
+        minHeight: 40,
     },
     menuButtonText: {
         color: '#FFFFFF',
-        fontSize: 11,
+        fontSize: FONT_SIZES.lg,
         fontWeight: '800',
-        textAlign: 'center',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        marginBottom: 2,
+    },
+    menuButtonTextCompact: {
+        color: '#FFFFFF',
+        fontSize: FONT_SIZES.sm,
+        fontWeight: '800',
+        lineHeight: 18,
+    },
+    menuButtonSubtext: {
+        color: 'rgba(255,255,255,0.84)',
+        fontSize: FONT_SIZES.sm,
+        fontWeight: '500',
+        paddingRight: SPACING.sm,
     },
     recentSection: {
         marginTop: SPACING.sm,

@@ -73,6 +73,16 @@ export default function StatusSnackbar({
         }
     }, [visible, position]);
 
+    useEffect(() => {
+        if (!visible || !duration || duration <= 0) return;
+
+        const timer = setTimeout(() => {
+            onClose?.();
+        }, duration);
+
+        return () => clearTimeout(timer);
+    }, [visible, duration, onClose]);
+
     if (!shouldRender) return null;
 
     const getIcon = () => {

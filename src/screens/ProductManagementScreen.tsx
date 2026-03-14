@@ -446,30 +446,35 @@ export default function ProductManagementScreen() {
                         <View style={styles.topActions}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                                 <Text style={styles.sectionTitle}>{t('product_categories')}</Text>
-                                <TouchableOpacity
-                                    style={[styles.headerAddButton, { marginLeft: SPACING.sm, backgroundColor: COLORS.primary, height: 32, paddingHorizontal: SPACING.sm }]}
-                                    onPress={openAddProduct}
-                                >
-                                    <Icon name="add" size={18} color={COLORS.white} />
-                                    <Text style={[styles.headerAddButtonText, { color: COLORS.white, fontSize: 12 }]}>{t('add_new')}</Text>
-                                </TouchableOpacity>
                             </View>
                             <View style={styles.topActionsRight}>
                                 <TouchableOpacity
-                                    style={[styles.actionIconButton, { marginRight: SPACING.xs }]}
-                                    onPress={handleDataManagement}
+                                    style={styles.actionIconButton}
+                                    onPress={handleDownloadSample}
                                 >
-                                    <Icon name="cloud-upload-outline" size={22} color={COLORS.primary} />
+                                    <Icon name="download-outline" size={22} color={COLORS.textLight} />
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                    style={[styles.actionIconButton, showSearch && styles.activeActionButton]}
+                                    style={styles.actionIconButton}
+                                    onPress={() => handleImportExcel(true)}
+                                >
+                                    <Icon name="cloud-upload-outline" size={22} color={COLORS.textLight} />
+                                </TouchableOpacity>
+                                {/* <TouchableOpacity
+                                    style={styles.actionIconButton}
+                                    onPress={handleDataManagement}
+                                >
+                                    <Icon name="ellipsis-horizontal-circle-outline" size={22} color={COLORS.textLight} />
+                                </TouchableOpacity> */}
+                                {/* <TouchableOpacity
+                                    style={styles.actionIconButton}
                                     onPress={() => {
                                         setShowSearch(!showSearch);
                                         if (showSearch) setSearchQuery('');
                                     }}
                                 >
-                                    <Icon name="search" size={20} color={showSearch ? COLORS.primary : COLORS.textLight} />
-                                </TouchableOpacity>
+                                    <Icon name="search-outline" size={20} color={COLORS.textLight} />
+                                </TouchableOpacity> */}
                             </View>
                         </View>
 
@@ -482,7 +487,7 @@ export default function ProductManagementScreen() {
                                     onChangeText={setSearchQuery}
                                     autoFocus
                                 />
-                                <TouchableOpacity onPress={() => { setShowSearch(false); setSearchQuery(''); }}>
+                                <TouchableOpacity onPress={() => {setSearchQuery(''); }}>
                                     <Icon name="close-circle" size={20} color={COLORS.textLight} />
                                 </TouchableOpacity>
                             </View>
@@ -495,17 +500,6 @@ export default function ProductManagementScreen() {
                         >
                             <View style={styles.gridContainer}>
                                 {filteredProducts.map(renderProductCard)}
-
-                                {/* Add New Placeholder Card */}
-                                <TouchableOpacity
-                                    style={[styles.productGridCard, styles.dottedCard]}
-                                    onPress={openAddProduct}
-                                >
-                                    <View style={styles.centeredContent}>
-                                        <Icon name="add-circle-outline" size={32} color={COLORS.primary} />
-                                        <Text style={styles.addCardText}>{t('add_new')}</Text>
-                                    </View>
-                                </TouchableOpacity>
                             </View>
 
                             {products.length === 0 && (
@@ -518,6 +512,14 @@ export default function ProductManagementScreen() {
                     </View>
                 </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
+
+            <TouchableOpacity
+                style={styles.fab}
+                onPress={openAddProduct}
+                activeOpacity={0.9}
+            >
+                <Icon name="add" size={28} color={COLORS.white} />
+            </TouchableOpacity>
 
             {/* Edit Category Modal */}
             <Modal
@@ -813,22 +815,6 @@ const styles = StyleSheet.create({
         color: COLORS.textLight,
         textTransform: 'uppercase',
     },
-    headerAddButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.background,
-        paddingVertical: SPACING.xs,
-        paddingHorizontal: SPACING.sm,
-        borderRadius: BORDER_RADIUS.sm,
-        borderWidth: 1,
-        borderColor: COLORS.primary,
-    },
-    headerAddButtonText: {
-        fontSize: FONT_SIZES.xs,
-        color: COLORS.primary,
-        fontWeight: 'bold',
-        marginLeft: 4,
-    },
     mainScroll: {
         flex: 1,
         paddingHorizontal: SPACING.md,
@@ -969,12 +955,12 @@ const styles = StyleSheet.create({
         paddingRight: SPACING.md,
     },
     actionIconButton: {
-        padding: 6,
-        marginRight: SPACING.sm,
-    },
-    activeActionButton: {
-        backgroundColor: COLORS.background,
-        borderRadius: 8,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: SPACING.xs,
     },
     searchContainer: {
         flexDirection: 'row',
@@ -1007,6 +993,22 @@ const styles = StyleSheet.create({
         marginTop: SPACING.sm,
         color: COLORS.textLight,
         fontSize: FONT_SIZES.md,
+    },
+    fab: {
+        position: 'absolute',
+        right: SPACING.xl,
+        bottom: SPACING.xl,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: COLORS.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
     },
     richCard: {
         backgroundColor: COLORS.white,
@@ -1165,25 +1167,6 @@ const styles = StyleSheet.create({
     },
     modalFooter: {
         padding: SPACING.md,
-    },
-    dottedCard: {
-        borderStyle: 'dashed',
-        borderWidth: 2,
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.background,
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: 120,
-    },
-    centeredContent: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    addCardText: {
-        marginTop: 8,
-        color: COLORS.primary,
-        fontWeight: 'bold',
-        fontSize: FONT_SIZES.sm,
     },
     closeButton: {
         padding: 4,

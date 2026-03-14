@@ -180,15 +180,19 @@ export default function PrintDetailsModal({ visible, onClose, onSubmit, initialD
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0,0,0,0.22)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: SPACING.lg,
     },
     keyboardView: {
         width: '100%',
+        alignItems: 'center',
     },
     modalContainer: {
-        borderTopLeftRadius: BORDER_RADIUS.xl,
-        borderTopRightRadius: BORDER_RADIUS.xl,
+        width: '100%',
+        maxWidth: 560,
+        borderRadius: BORDER_RADIUS.xl,
         padding: SPACING.lg,
         maxHeight: '95%',
     },

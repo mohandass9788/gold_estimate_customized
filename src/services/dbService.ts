@@ -432,7 +432,7 @@ export const initDatabase = async () => {
             const settingsCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM settings;');
             if (settingsCount?.count === 0) {
                 await db.runAsync('INSERT INTO settings (key, value) VALUES (?, ?);', ['gst_percentage', '3']);
-                await db.runAsync('INSERT INTO settings (key, value) VALUES (?, ?);', ['shop_name', 'Gold Estimation App']);
+                await db.runAsync('INSERT INTO settings (key, value) VALUES (?, ?);', ['shop_name', 'Estimation']);
             }
 
             // Migration: Add metal column to purchase_categories if missing

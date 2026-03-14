@@ -74,7 +74,7 @@ export default function ShopInfoScreen() {
         updateDeviceName(localDeviceName);
 
         showAlert(t('success'), t('settings_saved'), 'success', [
-            { text: 'OK', onPress: () => router.back() }
+            { text: t('ok') || 'OK', onPress: () => router.back() }
         ]);
     };
 

@@ -417,7 +417,7 @@ export default function PrintPreviewModal({
 const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.22)',
         justifyContent: 'center',
         alignItems: 'center',
     },

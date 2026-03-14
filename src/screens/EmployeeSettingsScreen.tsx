@@ -49,7 +49,7 @@ export default function EmployeeSettingsScreen() {
             setEmployees(data);
         } catch (error) {
             console.error('Failed to fetch employees:', error);
-            showAlert('Error', 'Failed to load employees', 'error');
+            showAlert(t('error') || 'Error', t('failed_to_load_employees') || 'Failed to load employees', 'error');
         } finally {
             setLoading(false);
         }
@@ -77,7 +77,7 @@ export default function EmployeeSettingsScreen() {
 
     const handleSave = async () => {
         if (!empId.trim() || !name.trim()) {
-            showAlert('Validation Error', 'Employee ID and Name are required.', 'warning');
+            showAlert(t('validation_error') || 'Validation Error', t('employee_id_name_required') || 'Employee ID and Name are required.', 'warning');
             return;
         }
 
@@ -92,10 +92,10 @@ export default function EmployeeSettingsScreen() {
         try {
             if (editingEmployee) {
                 await updateEmployee(editingEmployee.id, employeeData);
-                showAlert('Success', 'Employee updated successfully.', 'success');
+                showAlert(t('success') || 'Success', t('employee_updated_success') || 'Employee updated successfully.', 'success');
             } else {
                 await addEmployee(employeeData);
-                showAlert('Success', 'Employee added successfully.', 'success');
+                showAlert(t('success') || 'Success', t('employee_added_success') || 'Employee added successfully.', 'success');
             }
             setIsModalVisible(false);
             fetchEmployees();
@@ -103,31 +103,31 @@ export default function EmployeeSettingsScreen() {
         } catch (error: any) {
             console.error('Save failed:', error);
             if (error.message && error.message.includes('UNIQUE constraint failed')) {
-                showAlert('Error', 'An employee with this ID already exists.', 'error');
+                showAlert(t('error') || 'Error', t('employee_id_exists') || 'An employee with this ID already exists.', 'error');
             } else {
-                showAlert('Error', 'Failed to save employee.', 'error');
+                showAlert(t('error') || 'Error', t('employee_save_failed') || 'Failed to save employee.', 'error');
             }
         }
     };
 
     const handleDelete = (id: number) => {
         Alert.alert(
-            'Confirm Delete',
-            'Are you sure you want to delete this employee? This action cannot be undone.',
+            t('confirm_delete') || 'Confirm Delete',
+            t('delete_employee_confirm') || 'Are you sure you want to delete this employee? This action cannot be undone.',
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('cancel') || 'Cancel', style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('delete') || 'Delete',
                     style: 'destructive',
                     onPress: async () => {
                         try {
                             await deleteEmployee(id);
-                            showAlert('Success', 'Employee deleted successfully.', 'success');
+                            showAlert(t('success') || 'Success', t('employee_deleted_success') || 'Employee deleted successfully.', 'success');
                             fetchEmployees();
                             refreshEmployees(); // Trigger global update
                         } catch (error) {
                             console.error('Delete failed:', error);
-                            showAlert('Error', 'Failed to delete employee.', 'error');
+                            showAlert(t('error') || 'Error', t('employee_delete_failed') || 'Failed to delete employee.', 'error');
                         }
                     }
                 }
@@ -142,7 +142,7 @@ export default function EmployeeSettingsScreen() {
                     <Text style={[styles.empName, { color: activeColors.text }]}>{item.name}</Text>
                     {!item.isActive && (
                         <View style={[styles.inactiveBadge, { backgroundColor: COLORS.error + '20' }]}>
-                            <Text style={[styles.inactiveText, { color: COLORS.error }]}>Inactive</Text>
+                            <Text style={[styles.inactiveText, { color: COLORS.error }]}>{t('inactive') || 'Inactive'}</Text>
                         </View>
                     )}
                 </View>
@@ -179,7 +179,7 @@ export default function EmployeeSettingsScreen() {
 
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
-            <HeaderBar title={t('manage_employees') || 'Manage Employees'} />
+            <HeaderBar title={t('manage_employees') || 'Manage Employees'} showBack />
 
             <FlatList
                 data={employees}
@@ -191,7 +191,7 @@ export default function EmployeeSettingsScreen() {
                         <View style={styles.emptyState}>
                             <Ionicons name="people-outline" size={60} color={activeColors.border} />
                             <Text style={[styles.emptyText, { color: activeColors.textLight }]}>
-                                No employees found. Add your first employee.
+                                {t('no_employees_found') || 'No employees found. Add your first employee.'}
                             </Text>
                         </View>
                     ) : null
@@ -213,13 +213,13 @@ export default function EmployeeSettingsScreen() {
             >
                 <View style={styles.modalOverlay}>
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                         style={styles.keyboardView}
                     >
                         <View style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}>
                             <View style={styles.modalHeader}>
                                 <Text style={[styles.modalTitle, { color: activeColors.text }]}>
-                                    {editingEmployee ? 'Edit Employee' : 'Add Employee'}
+                                    {editingEmployee ? (t('edit_employee') || 'Edit Employee') : (t('add_employee') || 'Add Employee')}
                                 </Text>
                                 <TouchableOpacity onPress={() => setIsModalVisible(false)} style={styles.closeBtn}>
                                     <Ionicons name="close" size={24} color={activeColors.text} />
@@ -228,35 +228,35 @@ export default function EmployeeSettingsScreen() {
 
                             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: SPACING.xl }}>
                                 <View style={styles.formGroup}>
-                                    <Text style={[styles.label, { color: activeColors.textLight }]}>Employee ID *</Text>
+                                    <Text style={[styles.label, { color: activeColors.textLight }]}>{`${t('employee_id') || 'Employee ID'} *`}</Text>
                                     <TextInput
                                         style={[styles.input, { backgroundColor: activeColors.background, color: activeColors.text, borderColor: activeColors.border }]}
                                         value={empId}
                                         onChangeText={setEmpId}
-                                        placeholder="e.g. EMP-001"
+                                        placeholder={t('employee_id_placeholder') || 'e.g. EMP-001'}
                                         placeholderTextColor={activeColors.textLight}
                                         autoCapitalize="characters"
                                     />
                                 </View>
 
                                 <View style={styles.formGroup}>
-                                    <Text style={[styles.label, { color: activeColors.textLight }]}>Full Name *</Text>
+                                    <Text style={[styles.label, { color: activeColors.textLight }]}>{`${t('full_name') || 'Full Name'} *`}</Text>
                                     <TextInput
                                         style={[styles.input, { backgroundColor: activeColors.background, color: activeColors.text, borderColor: activeColors.border }]}
                                         value={name}
                                         onChangeText={setName}
-                                        placeholder="Employee Name"
+                                        placeholder={t('employee_name_placeholder') || 'Employee Name'}
                                         placeholderTextColor={activeColors.textLight}
                                     />
                                 </View>
 
                                 <View style={styles.formGroup}>
-                                    <Text style={[styles.label, { color: activeColors.textLight }]}>Phone Number</Text>
+                                    <Text style={[styles.label, { color: activeColors.textLight }]}>{t('phone_number') || 'Phone Number'}</Text>
                                     <TextInput
                                         style={[styles.input, { backgroundColor: activeColors.background, color: activeColors.text, borderColor: activeColors.border }]}
                                         value={phone}
                                         onChangeText={setPhone}
-                                        placeholder="10-digit mobile number"
+                                        placeholder={t('mobile_number_placeholder') || '10-digit mobile number'}
                                         placeholderTextColor={activeColors.textLight}
                                         keyboardType="phone-pad"
                                         maxLength={10}
@@ -264,18 +264,18 @@ export default function EmployeeSettingsScreen() {
                                 </View>
 
                                 <View style={styles.formGroup}>
-                                    <Text style={[styles.label, { color: activeColors.textLight }]}>Role / Designation</Text>
+                                    <Text style={[styles.label, { color: activeColors.textLight }]}>{t('role_designation') || 'Role / Designation'}</Text>
                                     <TextInput
                                         style={[styles.input, { backgroundColor: activeColors.background, color: activeColors.text, borderColor: activeColors.border }]}
                                         value={role}
                                         onChangeText={setRole}
-                                        placeholder="e.g. Manager, Appraiser, Cashier"
+                                        placeholder={t('role_placeholder') || 'e.g. Manager, Appraiser, Cashier'}
                                         placeholderTextColor={activeColors.textLight}
                                     />
                                 </View>
 
                                 <View style={styles.switchRow}>
-                                    <Text style={[styles.label, { color: activeColors.text, marginBottom: 0 }]}>Active Employee</Text>
+                                    <Text style={[styles.label, { color: activeColors.text, marginBottom: 0 }]}>{t('active_employee') || 'Active Employee'}</Text>
                                     <Switch
                                         value={isActive}
                                         onValueChange={setIsActive}
@@ -285,7 +285,7 @@ export default function EmployeeSettingsScreen() {
                                 </View>
 
                                 <PrimaryButton
-                                    title="Save Employee"
+                                    title={t('save_employee') || 'Save Employee'}
                                     onPress={handleSave}
                                     style={styles.saveBtn as any}
                                 />
@@ -391,14 +391,18 @@ const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: SPACING.lg,
     },
     keyboardView: {
         width: '100%',
+        alignItems: 'center',
     },
     modalContent: {
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        width: '100%',
+        maxWidth: 560,
+        borderRadius: 24,
         padding: SPACING.lg,
         paddingBottom: SPACING.xl,
         maxHeight: '80%', // Ensure it doesn't take full height so ScrollView activates

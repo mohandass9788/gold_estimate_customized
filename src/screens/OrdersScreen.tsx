@@ -296,7 +296,8 @@ export default function OrdersScreen() {
         if (!selectedOrder) return null;
 
         const products = selectedOrderItems.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
-        const deductions = selectedOrderItems.filter(i => i.type !== 'PRODUCT');
+        const deductions = selectedOrderItems.filter(i => i.type === 'CHIT' || i.type === 'ADVANCE');
+        const purchases = selectedOrderItems.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData));
 
         return (
             <Modal visible={showOrderDetails} transparent animationType="slide" onRequestClose={() => setShowOrderDetails(false)}>
@@ -346,6 +347,84 @@ export default function OrdersScreen() {
                                         <Text style={[styles.itemText, { flex: 2, color: activeColors.text }]}>{product.name}</Text>
                                         <Text style={[styles.itemText, { flex: 1, textAlign: 'right', color: activeColors.text }]}>{product.grossWeight.toFixed(3)}g</Text>
                                         <Text style={[styles.itemText, { flex: 1, textAlign: 'right', color: activeColors.text }]}>₹{Math.round(product.totalValue).toLocaleString()}</Text>
+                                    </View>
+                                ))}
+
+                                {products.map((product, idx) => (
+                                    <View key={`prod-extra-${idx}`} style={[styles.detailCard, { backgroundColor: activeColors.background, borderColor: activeColors.border }]}>
+                                        <View style={styles.detailCardHeader}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.detailCardTitle, { color: activeColors.text }]}>{product.name}</Text>
+                                                {!!product.subProductName && (
+                                                    <Text style={[styles.detailCardSubtitle, { color: activeColors.textLight }]}>{product.subProductName}</Text>
+                                                )}
+                                            </View>
+                                            <Text style={[styles.detailCardAmount, { color: activeColors.primary }]}>{`₹${Math.round(product.totalValue || 0).toLocaleString()}`}</Text>
+                                        </View>
+                                        <View style={styles.detailGrid}>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('metal') || 'Metal'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{product.metal || '-'}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.primary + '10', borderColor: activeColors.primary + '25' }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('rate') || 'Rate'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.primary }]}>{`₹${Math.round(product.rate || 0).toLocaleString()}`}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('gross_weight') || 'Gross Weight'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{`${(product.grossWeight || 0).toFixed(3)}g`}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('net_weight') || 'Net Weight'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{`${(product.netWeight || 0).toFixed(3)}g`}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('stone_weight') || 'Stone Weight'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{`${(product.stoneWeight || 0).toFixed(3)}g`}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('less_weight') || 'Less Weight'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{`${product.lessWeightType === 'amount' ? '₹' : ''}${product.lessWeight || 0}${product.lessWeightType === 'grams' ? 'g' : product.lessWeightType === 'percentage' ? '%' : ''}`}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('wastage') || 'VA'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{`${product.wastage || 0}${product.wastageType === 'percentage' ? '%' : ''}`}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('making_charge') || 'MC'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{`${product.makingCharge || 0}${product.makingChargeType === 'perGram' ? '/g' : ''}`}</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                ))}
+
+                                {purchases.map((item, idx) => (
+                                    <View key={`purchase-extra-${idx}`} style={[styles.detailCard, { backgroundColor: activeColors.background, borderColor: activeColors.border }]}>
+                                        <View style={styles.detailCardHeader}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.detailCardTitle, { color: activeColors.text }]}>{item.category}</Text>
+                                                <Text style={[styles.detailCardSubtitle, { color: activeColors.textLight }]}>{`${item.metal} • ${item.purity}`}</Text>
+                                            </View>
+                                            <Text style={[styles.detailCardAmount, { color: activeColors.error }]}>{`-₹${Math.round(item.amount || 0).toLocaleString()}`}</Text>
+                                        </View>
+                                        <View style={styles.detailGrid}>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.primary + '10', borderColor: activeColors.primary + '25' }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('rate') || 'Rate'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.primary }]}>{`₹${Math.round(item.rate || 0).toLocaleString()}`}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('gross_weight') || 'Gross Weight'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{`${(item.grossWeight || 0).toFixed(3)}g`}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('net_weight') || 'Net Weight'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{`${(item.netWeight || 0).toFixed(3)}g`}</Text>
+                                            </View>
+                                            <View style={[styles.detailChip, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                                                <Text style={[styles.detailChipLabel, { color: activeColors.textLight }]}>{t('less_weight') || 'Less Weight'}</Text>
+                                                <Text style={[styles.detailChipValue, { color: activeColors.text }]}>{`${item.lessWeightType === 'amount' ? '₹' : ''}${item.lessWeight || 0}${item.lessWeightType === 'grams' ? 'g' : item.lessWeightType === 'percentage' ? '%' : ''}`}</Text>
+                                            </View>
+                                        </View>
                                     </View>
                                 ))}
 
@@ -643,13 +722,16 @@ const styles = StyleSheet.create({
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0,0,0,0.22)',
+        justifyContent: 'center',
+        padding: SPACING.md,
     },
     detailsModalContent: {
-        maxHeight: '80%',
-        borderTopLeftRadius: BORDER_RADIUS.lg,
-        borderTopRightRadius: BORDER_RADIUS.lg,
+        maxHeight: '88%',
+        width: '100%',
+        maxWidth: 620,
+        alignSelf: 'center',
+        borderRadius: BORDER_RADIUS.lg,
         padding: SPACING.md,
     },
     modalHeader: {
@@ -727,6 +809,53 @@ const styles = StyleSheet.create({
     },
     itemText: {
         fontSize: 12,
+    },
+    detailCard: {
+        marginTop: SPACING.sm,
+        borderWidth: 1,
+        borderRadius: BORDER_RADIUS.md,
+        padding: SPACING.sm,
+    },
+    detailCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: SPACING.sm,
+    },
+    detailCardTitle: {
+        fontSize: FONT_SIZES.sm,
+        fontWeight: '700',
+    },
+    detailCardSubtitle: {
+        fontSize: FONT_SIZES.xs,
+        marginTop: 2,
+    },
+    detailCardAmount: {
+        fontSize: FONT_SIZES.sm,
+        fontWeight: '700',
+        marginLeft: SPACING.sm,
+    },
+    detailGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+    detailChip: {
+        width: '48.5%',
+        borderWidth: 1,
+        borderRadius: BORDER_RADIUS.sm,
+        paddingHorizontal: SPACING.sm,
+        paddingVertical: SPACING.xs,
+        marginBottom: SPACING.xs,
+    },
+    detailChipLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    detailChipValue: {
+        fontSize: FONT_SIZES.xs,
+        fontWeight: '700',
     },
     deductionTitle: {
         fontSize: 10,

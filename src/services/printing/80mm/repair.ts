@@ -24,9 +24,16 @@ export const getRepair80mmPayload = (
     payload += line;
     const title = isDelivery ? 'REPAIR DELIVERY RECEIPT' : 'REPAIR RECEIPT';
     payload += `${thermalCommands.center}${thermalCommands.boldOn}${title}${thermalCommands.boldOff}\x0a`;
+    if (repair.id) {
+        payload += `${thermalCommands.center}${thermalCommands.smallOn}Repair ID: ${repair.id}${thermalCommands.smallOff}\x0a`;
+    }
     payload += line;
 
-    payload += divider;
+    payload += getThermalCustomer({ name: repair.customerName, mobile: repair.customerMobile, address: repair.customerAddress }, width, config);
+    if (repair.customerName || repair.customerMobile || repair.customerAddress) {
+        payload += divider;
+    }
+
     payload += `${thermalCommands.boldOn}${repair.itemName.toUpperCase()}${thermalCommands.boldOff}\x0a`;
     payload += thermalRow(`Qty: ${repair.pcs}  Gross Wt: ${repair.grossWeight}g`, '', width);
     if (repair.natureOfRepair) {
@@ -58,7 +65,7 @@ export const getRepair80mmPayload = (
     }
 
     if (!skipFooter) {
-        payload += getThermalFooter(employeeName || repair.empId, { name: repair.customerName, mobile: repair.customerMobile }, width, config, footerMessage, false, true);
+        payload += getThermalFooter(employeeName || repair.empId, {}, width, config, footerMessage, true, true);
     }
 
     return payload;

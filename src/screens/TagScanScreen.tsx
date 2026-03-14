@@ -9,6 +9,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import { useEstimation } from '../store/EstimationContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { getProductByTag, fetchTagDetailsFromApi } from '../services/productService';
+import { getRepairById } from '../services/dbService';
 import { calculateItemTotal } from '../utils/calculations';
 import { COLORS, FONT_SIZES, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { EstimationItem } from '../types';
@@ -47,6 +48,20 @@ export default function TagScanScreen() {
 
         try {
             console.log("Scanning tag:", data);
+
+            if (data?.startsWith('REP-')) {
+                const repair = await getRepairById(data);
+                if (repair) {
+                    router.navigate({ pathname: '/(tabs)/repairs', params: { scanId: data } });
+                    return;
+                }
+
+                Alert.alert(t('error') || 'Error', t('invalid_repair_qr') || 'Invalid repair QR', [
+                    { text: t('scan_again') || 'Scan Again', onPress: () => setScanned(false) }
+                ]);
+                return;
+            }
+
             const product = await fetchTagDetailsFromApi(data, 'ajithkumar', serverApiUrl);
             console.log("Mapped Product:", product);
 

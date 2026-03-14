@@ -20,6 +20,7 @@ import { EstimationItem, PurchaseItem, ChitItem, AdvanceItem, LessWeightType } f
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { printEstimationItem, printPurchaseItem, printEstimationReceipt, printChitItem, printAdvanceItem } from '../services/printService';
 import ItemDetailModal from '../modals/ItemDetailModal';
+import StatusSnackbar from '../components/StatusSnackbar';
 
 // Fix for React 19 type mismatch
 const View = RNView as any;
@@ -56,11 +57,30 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const [estimationNum, setEstimationNum] = useState<number | null>(null);
     const [scrollOffset, setScrollOffset] = useState(0);
     const [contentWidth, setContentWidth] = useState(0);
-    const [containerWidth, setContainerWidth] = useState(0);
+    const [modeViewportWidth, setModeViewportWidth] = useState(0);
+    const [topSnackbar, setTopSnackbar] = useState<{ visible: boolean; message: string; type: 'success' | 'info' | 'warning' | 'error' }>({
+        visible: false,
+        message: '',
+        type: 'info',
+    });
     const modeScrollRef = React.useRef<any>(null);
+    const modeLayouts = React.useRef<Record<Mode, { x: number; width: number }>>({
+        TAG: { x: 0, width: 0 },
+        MANUAL: { x: 0, width: 0 },
+        PURCHASE: { x: 0, width: 0 },
+        CHIT: { x: 0, width: 0 },
+        ADVANCE: { x: 0, width: 0 },
+    });
     const isInitialLoadPurchase = React.useRef(false);
 
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
+
+    const showTopSnackbar = (message: string, type: 'success' | 'info' | 'warning' | 'error' = 'info') => {
+        setTopSnackbar({ visible: false, message: '', type });
+        setTimeout(() => {
+            setTopSnackbar({ visible: true, message, type });
+        }, 10);
+    };
 
     // Form State
     const [printDetails, setPrintDetails] = useState<any>(null);
@@ -108,7 +128,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         t('duplicate_item') || 'Duplicate Item',
                         t('duplicate_item_msg', { tag: scannedProduct.tagNumber }) || `Item with Tag ${scannedProduct.tagNumber} is already in the list.`,
                         [
-                            { text: 'OK', onPress: () => router.setParams({ scannedData: undefined }) }
+                            { text: t('ok') || 'OK', onPress: () => router.setParams({ scannedData: undefined }) }
                         ]
                     );
                     return;
@@ -153,23 +173,18 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     // Auto-scroll to active tab when mode changes
     useEffect(() => {
-        if (modeScrollRef.current && containerWidth > 0) {
-            const modeToIndex: Record<Mode, number> = {
-                'TAG': 0,
-                'MANUAL': 1,
-                'PURCHASE': 2,
-                'CHIT': 3,
-                'ADVANCE': 4
-            };
-            const index = modeToIndex[mode];
-            const buttonWidth = 110; // minWidth(100) + margin(4*2) + padding
-            const targetX = Math.max(0, (index * buttonWidth) - (containerWidth / 2) + (buttonWidth / 2));
+        if (modeScrollRef.current && modeViewportWidth > 0) {
+            const layout = modeLayouts.current[mode];
+            if (!layout?.width) return;
+            const centeredX = layout.x - (modeViewportWidth / 2) + (layout.width / 2);
+            const maxScroll = Math.max(0, contentWidth - modeViewportWidth);
+            const targetX = Math.min(Math.max(0, centeredX), maxScroll);
 
             setTimeout(() => {
                 modeScrollRef.current.scrollTo({ x: targetX, animated: true });
             }, 100);
         }
-    }, [mode, containerWidth]);
+    }, [mode, modeViewportWidth, contentWidth]);
 
     // Purchase Category change side-effects removed (no subcategories needed)
 
@@ -371,12 +386,22 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     }
 
                     showAlert(
-                        t('print_success') || 'Print Successful',
-                        t('print_success_msg') || 'Receipt printed and order saved. Clear list?',
+                        t('print_success') || 'Print Success',
+                        t('print_success_msg') || 'Receipt printed and order saved. If you want to clear data?',
                         'success',
                         [
-                            { text: t('keep_list') || 'Keep List', onPress: () => { }, style: 'cancel' },
-                            { text: t('clear_list_confirm') || 'Clear List', onPress: () => clearEstimation(), style: 'destructive' }
+                            {
+                                text: t('cancel') || 'Cancel',
+                                onPress: () => { },
+                                style: 'cancel'
+                            },
+                            {
+                                text: t('ok') || 'OK',
+                                onPress: () => {
+                                    clearEstimation();
+                                    setPrintDetails(null);
+                                }
+                            }
                         ]
                     );
                 } catch (saveError) {
@@ -429,15 +454,24 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails, printDetails?.employeeName || currentEmployeeName, receiptConfig, t, printDetails?.customerName, printDetails?.mobile, printDetails?.place);
             }
             setSelectedItems(new Set());
-            // Show clear list prompt for separate print flow as well if not already shown
-            if (!receiptConfig.mergePrint) {
+            if (previewType !== 'merged') {
                 showAlert(
-                    t('success'),
-                    t('printing_completed') || 'Printing completed. Clear list?',
+                    t('print_success') || 'Print Success',
+                    t('printing_completed') || 'Printing completed. If you want to clear data?',
                     'success',
                     [
-                        { text: t('keep_list') || 'Keep List', onPress: () => { }, style: 'cancel' },
-                        { text: t('clear_list_confirm') || 'Clear List', onPress: () => clearEstimation(), style: 'destructive' }
+                        {
+                            text: t('cancel') || 'Cancel',
+                            onPress: () => { },
+                            style: 'cancel'
+                        },
+                        {
+                            text: t('ok') || 'OK',
+                            onPress: () => {
+                                clearEstimation();
+                                setPrintDetails(null);
+                            }
+                        }
                     ]
                 );
             }
@@ -483,7 +517,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             isInitialLoadPurchase.current = false;
         }, 150);
 
-        showAlert(t('editing'), t('purchase_loaded'), 'info');
+        showTopSnackbar(t('purchase_loaded'), 'info');
     };
 
     const handleEditChit = (item: ChitItem) => {
@@ -491,7 +525,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setChitAmount(item.amount.toString());
         setMode('CHIT');
         removeItem(item.id, 'chit');
-        showAlert(t('editing'), t('chit_loaded'), 'info');
+        showTopSnackbar(t('chit_loaded'), 'info');
     };
 
     const handleEditAdvance = (item: AdvanceItem) => {
@@ -499,7 +533,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setAdvanceAmount(item.amount.toString());
         setMode('ADVANCE');
         removeItem(item.id, 'advance');
-        showAlert(t('editing'), t('advance_loaded'), 'info');
+        showTopSnackbar(t('advance_loaded'), 'info');
     };
 
     const handleRemoveItem = (id: string, type: 'estimation' | 'purchase' | 'chit' | 'advance' = 'estimation') => {
@@ -561,7 +595,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
         addPurchaseItem(item);
         clearPurchaseForm();
-        showAlert(t('success'), t('item_added'), 'success');
+        showTopSnackbar(t('item_added'), 'success');
     };
 
     const handleAddChit = () => {
@@ -576,7 +610,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         });
         setChitId('');
         setChitAmount('');
-        showAlert(t('success'), t('item_added'), 'success');
+        showTopSnackbar(t('item_added'), 'success');
     };
 
     const handleAddAdvance = () => {
@@ -591,7 +625,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         });
         setAdvanceId('');
         setAdvanceAmount('');
-        showAlert(t('success'), t('item_added'), 'success');
+        showTopSnackbar(t('item_added'), 'success');
     };
 
 
@@ -761,25 +795,41 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         setPurchaseRate('');
     };
 
-    const ModeButton = ({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) => (
+    const ModeButton = ({ label, icon, active, onPress, modeKey }: { label: string; icon: string; active: boolean; onPress: () => void; modeKey: Mode }) => (
         <TouchableOpacity
             style={[
                 styles.modeButton,
+                {
+                    backgroundColor: active ? activeColors.primary : activeColors.background,
+                    borderColor: active ? activeColors.primary : activeColors.border,
+                },
                 active && {
-                    backgroundColor: activeColors.primary,
                     shadowColor: activeColors.primary,
                     shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 8,
-                    elevation: 5,
+                    shadowOpacity: 0.18,
+                    shadowRadius: 10,
+                    elevation: 4,
                 }
             ]}
             onPress={onPress}
+            onLayout={(e: any) => {
+                const { x, width } = e.nativeEvent.layout;
+                modeLayouts.current[modeKey] = { x, width };
+            }}
         >
+            <View style={[
+                styles.modeIconWrap,
+                { backgroundColor: active ? 'rgba(255,255,255,0.18)' : activeColors.cardBg }
+            ]}>
+                <Icon
+                    name={icon}
+                    size={18}
+                    color={active ? '#FFF' : activeColors.primary}
+                />
+            </View>
             <Text style={[
                 styles.modeButtonText,
-                { color: theme === 'light' ? '#666' : '#AAA' },
-                active && { color: '#FFF', fontWeight: '800' }
+                { color: active ? '#FFF' : activeColors.text },
             ]}>
                 {label}
             </Text>
@@ -788,13 +838,15 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     const handleTabScroll = (direction: 'left' | 'right') => {
         if (!modeScrollRef.current) return;
-        const scrollAmount = containerWidth * 0.6;
-        const target = direction === 'left' ? scrollOffset - scrollAmount : scrollOffset + scrollAmount;
+        const scrollAmount = modeViewportWidth * 0.6;
+        const maxScroll = Math.max(0, contentWidth - modeViewportWidth);
+        const nextTarget = direction === 'left' ? scrollOffset - scrollAmount : scrollOffset + scrollAmount;
+        const target = Math.min(Math.max(0, nextTarget), maxScroll);
         modeScrollRef.current.scrollTo({ x: target, animated: true });
     };
 
     const showLeftArrow = scrollOffset > 10;
-    const showRightArrow = contentWidth > containerWidth && scrollOffset < (contentWidth - containerWidth - 10);
+    const showRightArrow = contentWidth > modeViewportWidth && scrollOffset < (contentWidth - modeViewportWidth - 10);
 
     // DetailViewModal local component removed in favor of imported ItemDetailModal
 
@@ -922,7 +974,6 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             <PrintPreviewModal />
 
             <View style={[styles.modeSelectorContainer, { backgroundColor: activeColors.cardBg, borderBottomColor: activeColors.border }]}
-                onLayout={(e: any) => setContainerWidth(e.nativeEvent.layout.width)}
             >
                 {showLeftArrow && (
                     <TouchableOpacity style={styles.scrollArrow} onPress={() => handleTabScroll('left')}>
@@ -934,15 +985,16 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.modeSelectorScroll}
+                    onLayout={(e: any) => setModeViewportWidth(e.nativeEvent.layout.width)}
                     onScroll={(e: any) => setScrollOffset(e.nativeEvent.contentOffset.x)}
                     onContentSizeChange={(w: any) => setContentWidth(w)}
                     scrollEventThrottle={16}
                 >
-                    <ModeButton label={t('scan_tag_btn')} active={mode === 'TAG'} onPress={() => setMode('TAG')} />
-                    <ModeButton label={t('manual_entry_btn')} active={mode === 'MANUAL'} onPress={() => setMode('MANUAL')} />
-                    <ModeButton label={t('purchase_btn')} active={mode === 'PURCHASE'} onPress={() => setMode('PURCHASE')} />
-                    <ModeButton label={t('chit_btn')} active={mode === 'CHIT'} onPress={() => setMode('CHIT')} />
-                    <ModeButton label={t('advance_btn')} active={mode === 'ADVANCE'} onPress={() => setMode('ADVANCE')} />
+                    <ModeButton label={t('scan_tag_btn')} icon="qr-code-outline" modeKey="TAG" active={mode === 'TAG'} onPress={() => setMode('TAG')} />
+                    <ModeButton label={t('manual_entry_btn')} icon="create-outline" modeKey="MANUAL" active={mode === 'MANUAL'} onPress={() => setMode('MANUAL')} />
+                    <ModeButton label={t('purchase_btn')} icon="bag-handle-outline" modeKey="PURCHASE" active={mode === 'PURCHASE'} onPress={() => setMode('PURCHASE')} />
+                    <ModeButton label={t('chit_btn')} icon="receipt-outline" modeKey="CHIT" active={mode === 'CHIT'} onPress={() => setMode('CHIT')} />
+                    <ModeButton label={t('advance_btn')} icon="wallet-outline" modeKey="ADVANCE" active={mode === 'ADVANCE'} onPress={() => setMode('ADVANCE')} />
                 </ScrollView>
                 {showRightArrow && (
                     <TouchableOpacity style={styles.scrollArrow} onPress={() => handleTabScroll('right')}>
@@ -965,7 +1017,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             if (mode === 'TAG') addTagItem(item);
                             else addManualItem(item);
                             setEditingItem(null);
-                            Alert.alert('Success', t('item_added_to_list') || 'Item added to list');
+                            showTopSnackbar(t('item_added_to_list') || 'Item added to list', 'success');
                         }}
                         onClear={() => setEditingItem(null)}
                     />
@@ -1328,6 +1380,14 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 type={viewingType}
             />
             <SummaryCard totals={state.totals} style={{ marginBottom: 10 }} />
+            <StatusSnackbar
+                visible={topSnackbar.visible}
+                message={topSnackbar.message}
+                type={topSnackbar.type}
+                onClose={() => setTopSnackbar(prev => ({ ...prev, visible: false }))}
+                position="top"
+                duration={2500}
+            />
         </ScreenContainer>
     );
 }
@@ -1342,10 +1402,19 @@ const styles = StyleSheet.create({
     },
     modeSelectorContainer: {
         flexDirection: 'row',
-        height: 60,
+        minHeight: 84,
         alignItems: 'center',
         marginVertical: SPACING.md,
-        paddingHorizontal: SPACING.sm,
+        marginHorizontal: SPACING.md,
+        paddingHorizontal: SPACING.xs,
+        paddingVertical: SPACING.xs,
+        borderRadius: 28,
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.06,
+        shadowRadius: 18,
+        elevation: 3,
     },
     scrollArrow: {
         width: 36,
@@ -1362,23 +1431,32 @@ const styles = StyleSheet.create({
         zIndex: 10,
     },
     modeSelectorScroll: {
-        paddingHorizontal: SPACING.sm,
+        paddingHorizontal: SPACING.xs,
         alignItems: 'center',
     },
     modeButton: {
         paddingHorizontal: SPACING.md,
-        paddingVertical: 12,
-        marginHorizontal: 6,
+        paddingVertical: 10,
+        marginHorizontal: 5,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 25,
-        minWidth: 110,
+        borderRadius: 22,
+        minWidth: 116,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        flexDirection: 'row',
+        gap: SPACING.sm,
+    },
+    modeIconWrap: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     modeButtonText: {
-        fontSize: FONT_SIZES.sm,
-        fontWeight: 'bold',
+        fontSize: FONT_SIZES.xs,
+        fontWeight: '800',
+        letterSpacing: 0.3,
     },
     section: {
         padding: SPACING.md,
@@ -1522,7 +1600,7 @@ const styles = StyleSheet.create({
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.22)',
         justifyContent: 'flex-end',
     },
     modalContent: {

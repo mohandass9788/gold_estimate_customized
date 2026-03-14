@@ -62,7 +62,7 @@ export default function MultiTagScanScreen() {
             setScannedTags(prev => prev.map(t => t.id === tagId ? { ...t, status: 'confirmed', product } : t));
         } catch (error) {
             setScannedTags(prev => prev.map(t => t.id === tagId ? { ...t, status: 'error' } : t));
-            Alert.alert('Error', `Failed to fetch details for tag: ${tagId}`);
+            Alert.alert(t('error') || 'Error', `${t('failed_to_fetch_tag_details') || 'Failed to fetch details for tag'}: ${tagId}`);
         }
     };
 
@@ -73,7 +73,7 @@ export default function MultiTagScanScreen() {
     const handleProceed = () => {
         const confirmedTags = scannedTags.filter(t => t.status === 'confirmed' && t.product);
         if (confirmedTags.length === 0) {
-            Alert.alert('No Items', 'Please add/confirm at least one tag before proceeding.');
+            Alert.alert(t('no_items') || 'No Items', t('confirm_at_least_one_tag') || 'Please add/confirm at least one tag before proceeding.');
             return;
         }
 
@@ -133,7 +133,7 @@ export default function MultiTagScanScreen() {
                         style={[styles.addButton, { backgroundColor: activeColors.primary }]}
                         onPress={() => confirmTag(item.id)}
                     >
-                        <Text style={styles.buttonText}>ADD</Text>
+                        <Text style={styles.buttonText}>{t('add') || 'ADD'}</Text>
                     </TouchableOpacity>
                 ) : item.status === 'processing' ? (
                     <ActivityIndicator color={activeColors.primary} style={{ marginRight: 10 }} />

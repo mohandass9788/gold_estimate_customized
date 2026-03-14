@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
+import { useGeneralSettings } from '../store/GeneralSettingsContext';
 
 export interface AlertButton {
     text: string;
@@ -38,6 +39,7 @@ export default function CustomAlertModal({
     onClose,
     theme
 }: CustomAlertModalProps) {
+    const { t } = useGeneralSettings();
     const [fadeAnim] = React.useState(new Animated.Value(0));
     const [scaleAnim] = React.useState(new Animated.Value(0.8));
 
@@ -135,7 +137,7 @@ export default function CustomAlertModal({
                             ))
                         ) : (
                             <TouchableOpacity style={styles.button} onPress={onClose}>
-                                <Text style={styles.buttonText}>OK</Text>
+                                <Text style={styles.buttonText}>{t('ok') || 'OK'}</Text>
                             </TouchableOpacity>
                         )}
                     </View>
