@@ -195,7 +195,7 @@ export default function DashboardScreen() {
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Gold Rate Card Overhaul */}
-                <View style={{ marginBottom: SPACING.lg }}>
+                <View >
                     <GoldRateCard
                         rate={state.goldRate}
                         onEdit={() => setIsRateModalVisible(true)}
@@ -401,7 +401,6 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: SPACING.md,
-        paddingBottom: 100,
     },
     metricsRow: {
         flexDirection: 'row',
