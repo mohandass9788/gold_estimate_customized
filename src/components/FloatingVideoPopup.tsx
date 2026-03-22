@@ -10,21 +10,30 @@ import {
     Platform,
     Linking,
     Image,
-    ActivityIndicator
+    ActivityIndicator,
+    NativeModules
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+// Safely import WebView
+let WebView: any;
+try {
+    WebView = require('react-native-webview').WebView;
+} catch (e) {
+    console.warn('WebView is not available');
+}
 import * as WebBrowser from 'expo-web-browser';
 import { useTutorial } from '../store/TutorialContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZES, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const POPUP_WIDTH = 160;
-const POPUP_HEIGHT = 220; // Portrait as requested
+const POPUP_WIDTH = 220;
+const POPUP_HEIGHT = 300;
 
 export const FloatingVideoPopup: React.FC = () => {
     const { tutorialData, isPopupVisible, setPopupVisible } = useTutorial();
     const { theme, t } = useGeneralSettings();
+    const [shouldPlay, setShouldPlay] = useState(false);
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     // Boundary limits
@@ -38,14 +47,14 @@ export const FloatingVideoPopup: React.FC = () => {
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2;
+            },
             onPanResponderGrant: () => {
                 setIsDragging(true);
-                pan.setOffset({
-                    x: (pan.x as any)._value,
-                    y: (pan.y as any)._value
-                });
-                pan.setValue({ x: 0, y: 0 });
+                // Stop any ongoing animation to prevent jumping
+                pan.stopAnimation();
+                pan.extractOffset();
             },
             onPanResponderMove: Animated.event(
                 [null, { dx: pan.x, dy: pan.y }],
@@ -55,7 +64,6 @@ export const FloatingVideoPopup: React.FC = () => {
                 setIsDragging(false);
                 pan.flattenOffset();
                 
-                // Keep within bounds
                 let targetX = (pan.x as any)._value;
                 let targetY = (pan.y as any)._value;
 
@@ -67,11 +75,43 @@ export const FloatingVideoPopup: React.FC = () => {
                 Animated.spring(pan, {
                     toValue: { x: targetX, y: targetY },
                     useNativeDriver: false,
-                    friction: 5
+                    friction: 8,
+                    tension: 50
                 }).start();
             }
         })
     ).current;
+
+    const getYoutubeEmbedUrl = (url: string) => {
+        if (!url) return '';
+        let videoId = '';
+        if (url.includes('shorts/')) {
+            videoId = url.split('shorts/')[1]?.split('?')[0];
+        } else if (url.includes('v=')) {
+            videoId = url.split('v=')[1]?.split('&')[0];
+        } else if (url.includes('youtu.be/')) {
+            videoId = url.split('youtu.be/')[1]?.split('?')[0];
+        }
+        
+        if (!videoId) return url;
+        // autoplay=1, mute=1 (required for autoplay in most browsers), loop=1, playlist=[videoId] (required for loop)
+        return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&modestbranding=1&rel=0`;
+    };
+
+    const embedUrl = getYoutubeEmbedUrl(tutorialData?.videoUrl || '');
+
+    useEffect(() => {
+        if (isPopupVisible && tutorialData?.isEnabled) {
+            // Give it 2 seconds to load before "activating" the player logic
+            // This can help with initial layout/rendering issues
+            const timer = setTimeout(() => {
+                setShouldPlay(true);
+            }, 2000);
+            return () => clearTimeout(timer);
+        } else {
+            setShouldPlay(false);
+        }
+    }, [isPopupVisible, tutorialData?.isEnabled]);
 
     const handlePlayVideo = async () => {
         if (tutorialData?.videoUrl) {
@@ -111,25 +151,45 @@ export const FloatingVideoPopup: React.FC = () => {
                 </TouchableOpacity>
             </View>
 
-            {/* Video Content Placeholder */}
-            <TouchableOpacity 
-                activeOpacity={0.8}
-                onPress={handlePlayVideo}
-                style={styles.content}
-            >
-                <View style={[styles.thumbnailPlaceholder, { backgroundColor: activeColors.background }]}>
-                    <Ionicons name="play-circle" size={48} color={activeColors.primary} />
-                    <Text style={[styles.playText, { color: activeColors.textLight }]}>
-                        {t('watch_now') || 'Watch Now'}
-                    </Text>
-                </View>
+            {/* Video Content - Inline WebView Player */}
+            <View style={styles.content}>
+                {embedUrl && WebView && shouldPlay ? (
+                    <WebView
+                        key={embedUrl}
+                        style={styles.webView}
+                        source={{ uri: embedUrl }}
+                        allowsFullscreenVideo
+                        allowsInlineMediaPlayback
+                        mediaPlaybackRequiresUserAction={false}
+                        scrollEnabled={false}
+                        startInLoadingState={true}
+                        javaScriptEnabled={true}
+                        domStorageEnabled={true}
+                        renderLoading={() => (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator color={activeColors.primary} size="large" />
+                            </View>
+                        )}
+                    />
+                ) : (
+                    <TouchableOpacity 
+                        activeOpacity={0.8}
+                        onPress={handlePlayVideo}
+                        style={[styles.thumbnailPlaceholder, { backgroundColor: activeColors.background }]}
+                    >
+                        <Ionicons name="play-circle" size={56} color={activeColors.primary} />
+                        <Text style={[styles.playText, { color: activeColors.textLight }]}>
+                            {!shouldPlay ? (t('loading') || 'Loading...') : (WebView ? (t('invalid_video') || 'Invalid Video') : (t('watch_now') || 'Watch Now (External)'))}
+                        </Text>
+                    </TouchableOpacity>
+                )}
                 
-                <View style={styles.infoArea}>
-                    <Text numberOfLines={2} style={[styles.title, { color: activeColors.text }]}>
+                <View style={[styles.infoArea, { backgroundColor: activeColors.cardBg }]}>
+                    <Text numberOfLines={1} style={[styles.title, { color: activeColors.text }]}>
                         {tutorialData.title || t('tutorial_video') || 'Tutorial Video'}
                     </Text>
                 </View>
-            </TouchableOpacity>
+            </View>
         </Animated.View>
     );
 };
@@ -161,11 +221,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: SPACING.sm,
     },
     dragHandle: {
-        width: 30,
-        height: 4,
-        borderRadius: 2,
+        width: 40,
+        height: 5,
+        borderRadius: 3,
         backgroundColor: '#ccc',
-        opacity: 0.5,
+        opacity: 0.8,
     },
     closeButton: {
         padding: 4,
@@ -174,12 +234,22 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     thumbnailPlaceholder: {
-        height: POPUP_HEIGHT - 80,
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
+    webView: {
+        flex: 1,
+        backgroundColor: 'transparent',
+    },
+    loadingContainer: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.1)',
+    },
     playText: {
-        fontSize: FONT_SIZES.xs,
+        fontSize: FONT_SIZES.sm,
         marginTop: SPACING.xs,
         fontWeight: 'bold',
     },
@@ -187,7 +257,7 @@ const styles = StyleSheet.create({
         padding: SPACING.sm,
         justifyContent: 'center',
         alignItems: 'center',
-        height: 50,
+        height: 60,
     },
     title: {
         fontSize: FONT_SIZES.sm,

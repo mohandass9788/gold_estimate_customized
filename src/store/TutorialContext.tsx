@@ -32,7 +32,7 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const response = await apiClient.get('/api/public/tutorial-video');
             if (response.data) {
                 setTutorialData(response.data);
-                
+
                 // Logic to show/hide based on screen/state if needed
                 // For now, we just enable it if it's enabled in backend
                 if (response.data.isEnabled) {
@@ -43,15 +43,15 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             // Silently fail if endpoint doesn't exist yet, but provide mock data for development if needed
             console.log('Tutorial video endpoint failed. Using mock data for testing if in development.');
             // Mock data for demo/testing
-            /*
+
             setTutorialData({
                 isEnabled: true,
-                videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                videoUrl: 'https://www.youtube.com/shorts/Lo_PwhXuETA?feature=share',
                 title: 'Welcome Tutorial',
                 showOnScreens: ['activation', 'dashboard']
             });
             setIsPopupVisible(true);
-            */
+
         }
     }, []);
 
