@@ -74,7 +74,7 @@ export const getConsolidated80mmPayload = (
 
             const pcsStr = item.pcs.toString();
             const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
-            const vaStr = vWeight.toFixed(2);
+            const vaStr = vWeight.toFixed(3);
 
             payload += `${padR(itemNamePrimary, 13)}${padR(pcsStr, 4)}${padR(weightStr, 7)}${padR(mcStr, 7)}${padR(vaStr, 6)}${padL(amountStr, 11)}\x0a`;
 
@@ -116,6 +116,7 @@ export const getConsolidated80mmPayload = (
     // 2. Purchase Items (Skip if summaryOnly)
     if (data.purchaseItems.length > 0 && !summaryOnly) {
         payload += `${thermalCommands.center}${thermalCommands.boldOn}PURCHASE (OLD GOLD)${thermalCommands.boldOff}\x0a`;
+        payload += divider;
         payload += `${padR('ITEM', 15)}${padR('G.WT', 11)}${padR('RATE', 8)}${padL('AMOUNT', 14)}\x0a`;
         payload += divider;
 
@@ -130,12 +131,13 @@ export const getConsolidated80mmPayload = (
         payload += divider;
 
         payload += thermalRow('Purchase Deduction', '-' + formatCurrency(data.totals.purchaseTotal), width);
-        payload += '\x0a';
+        payload += divider;
     }
 
     // 3. Adjustments (Chit/Advance)
     if (data.chitItems.length > 0 || data.advanceItems.length > 0) {
         payload += `${thermalCommands.center}${thermalCommands.boldOn}ADJUSTMENTS${thermalCommands.boldOff}\x0a`;
+        payload += divider;
         data.chitItems.forEach(item => {
             payload += thermalRow(`Chit (${item.chitId})`, '-' + formatCurrency(item.amount), width);
         });

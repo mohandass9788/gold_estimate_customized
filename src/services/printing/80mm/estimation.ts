@@ -49,7 +49,7 @@ export const getEstimation80mmPayload = (
 
     const pcsStr = item.pcs.toString();
     const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
-    const vaStr = vWeight.toFixed(2);
+    const vaStr = vWeight.toFixed(3);
 
     payload += `${padR(itemNamePrimary, 13)}${padR(pcsStr, 4)}${padR(weightStr, 7)}${padR(mcStr, 7)}${padR(vaStr, 6)}${padL(amountStr, 11)}\x0a`;
 

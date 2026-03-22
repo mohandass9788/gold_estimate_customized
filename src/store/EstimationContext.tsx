@@ -323,7 +323,6 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
             estimationNumber: estimationNumber
         };
         await saveEstimation(dbEstimate);
-        
         // Local Server Sync
         if (useLocalServerForScanning && localServerUrl && localSaveEndpoint) {
             try {

@@ -46,7 +46,7 @@ export const getEstimation58mmPayload = (
 
     const pcsStr = item.pcs.toString();
     const vWeight = item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage;
-    const vaStr = vWeight.toFixed(2);
+    const vaStr = vWeight.toFixed(3);
 
     // Two-line layout for 58mm
     payload += `${thermalCommands.boldOn}${padR(itemNamePrimary, 16)}${padL(amountStr, 16)}${thermalCommands.boldOff}\n`;
