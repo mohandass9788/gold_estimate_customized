@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { updateRepairStatus, DBRepair, getSetting } from '../services/dbService';
 import { printRepairDelivery } from '../services/printService';
+import { useAuth } from '../store/AuthContext';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 
 interface RepairDeliveryModalProps {
@@ -19,6 +20,7 @@ interface RepairDeliveryModalProps {
 
 export default function RepairDeliveryModal({ visible, repair, onClose, onSuccess }: RepairDeliveryModalProps) {
     const { theme, t, receiptConfig } = useGeneralSettings();
+    const { validateSubscription } = useAuth();
     const [extraAmount, setExtraAmount] = useState('');
     const [gstType, setGstType] = useState<'none' | 'amount' | 'percentage'>('none');
     const [gstValue, setGstValue] = useState('');
@@ -66,6 +68,10 @@ export default function RepairDeliveryModal({ visible, repair, onClose, onSucces
     const totalAmount = hasExistingGst ? baseTotal : baseTotal + finalGstAmount;
 
     const handleDeliver = async () => {
+        if (!validateSubscription()) {
+            setShowConfirm(false);
+            return;
+        }
         setLoading(true);
         try {
             await updateRepairStatus(

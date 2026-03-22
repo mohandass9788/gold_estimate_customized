@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, TouchableOpacity as RNRTouchableOpacity, ScrollView as RNScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, TouchableOpacity as RNRTouchableOpacity, ScrollView as RNScrollView, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as FS from 'expo-file-system';
 const FileSystem = FS as any;
-const { documentDirectory, EncodingType, readAsStringAsync } = FileSystem;
 import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
 import PrimaryButton from '../components/PrimaryButton';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
-import { cloudBackup } from '../services/cloudBackupService';
 import { backupDatabaseLocal, restoreDatabaseLocal } from '../services/localBackupService';
+import { pushSyncData, pullSyncData, getSyncBackupPreview } from '../services/syncService';
+import { useSubscriptionRestricted } from '../hooks/useSubscriptionRestricted';
 
 // Fix for React 19 type mismatch
 const View = RNView as any;
@@ -22,216 +22,219 @@ const Icon = Ionicons as any;
 
 export default function BackupRestoreScreen() {
     const router = useRouter();
-    const { theme, t, deviceName } = useGeneralSettings();
+    const { verifyAccess } = useSubscriptionRestricted();
+    const { theme, t, deviceName, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [loading, setLoading] = useState(false);
-    const [googleConnected, setGoogleConnected] = useState(false);
-    const [microsoftConnected, setMicrosoftConnected] = useState(false);
-    const [lastBackup, setLastBackup] = useState<string | null>(null);
-
-    const handleGoogleLogin = async () => {
-        setLoading(true);
-        try {
-            const success = await cloudBackup.loginGoogle();
-            setGoogleConnected(success);
-            if (success) {
-                Alert.alert(t('success'), t('google_drive_connected') || 'Connected to Google Drive');
-            }
-        } catch (error) {
-            Alert.alert(t('error'), t('login_failed'));
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleMicrosoftLogin = async () => {
-        setLoading(true);
-        try {
-            const success = await cloudBackup.loginMicrosoft();
-            setMicrosoftConnected(success);
-            if (success) {
-                Alert.alert(t('success'), t('onedrive_connected') || 'Connected to OneDrive');
-            }
-        } catch (error) {
-            Alert.alert(t('error'), t('login_failed'));
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleBackup = async (provider: 'google' | 'microsoft') => {
-        setLoading(true);
-        try {
-            const dbUri = `${FileSystem.documentDirectory}SQLite/gold_estimation.db`;
-            const success = provider === 'google'
-                ? await cloudBackup.uploadToGoogle(dbUri, deviceName)
-                : await cloudBackup.uploadToOneDrive(dbUri, deviceName);
-
-            if (success) {
-                const now = new Date().toLocaleString();
-                setLastBackup(now);
-                Alert.alert(t('success'), t('backup_completed') || 'Backup completed successfully');
-            } else {
-                Alert.alert(t('error'), t('backup_failed'));
-            }
-        } catch (error) {
-            console.error('Backup Error:', error);
-            Alert.alert(t('error'), t('backup_failed'));
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [lastSync, setLastSync] = useState<string | null>(null);
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewData, setPreviewData] = useState<any>(null);
 
     const handleLocalBackup = async () => {
-        setLoading(true);
-        try {
-            const success = await backupDatabaseLocal(deviceName, t);
-            if (success) {
-                // Success message handled by service
+        verifyAccess(async () => {
+            setLoading(true);
+            try {
+                await backupDatabaseLocal(deviceName, t, showAlert);
+            } finally {
+                setLoading(false);
             }
-        } finally {
-            setLoading(false);
-        }
+        });
     };
 
     const handleLocalRestore = async () => {
+        verifyAccess(async () => {
+            setLoading(true);
+            try {
+                await restoreDatabaseLocal(t, showAlert);
+            } finally {
+                setLoading(false);
+            }
+        });
+    };
+
+    const handleServerBackupPreCheck = async () => {
+        verifyAccess(async () => {
+            setLoading(true);
+            try {
+                const results = await getSyncBackupPreview();
+                setPreviewData(results);
+                setShowPreview(true);
+            } catch (error: any) {
+                showAlert(t('error'), error.message || t('server_backup_failed'), 'error');
+            } finally {
+                setLoading(false);
+            }
+        });
+    };
+
+    const handleConfirmServerBackup = async () => {
+        setShowPreview(false);
         setLoading(true);
         try {
-            const success = await restoreDatabaseLocal(t);
-            if (success) {
-                // Success message handled by service
-            }
+            await pushSyncData();
+            setLastSync(new Date().toLocaleString());
+            showAlert(t('success'), t('server_backup_success') || 'Data successfully pushed to server', 'success');
+        } catch (error: any) {
+            showAlert(t('error'), error.message || t('server_backup_failed'), 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    const ProviderCard = ({ title, icon, color, isConnected, onLogin, onBackup }: any) => (
-        <View style={[styles.card, { backgroundColor: activeColors.cardBg }]}>
-            <View style={styles.cardHeader}>
-                <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
-                    <Icon name={icon} size={30} color={color} />
-                </View>
-                <View style={styles.cardInfo}>
-                    <Text style={[styles.cardTitle, { color: activeColors.text }]}>{title}</Text>
-                    <Text style={[styles.cardStatus, { color: isConnected ? COLORS.success : activeColors.textLight }]}>
-                        {isConnected ? (t('connected') || 'Connected') : (t('not_connected') || 'Not Connected')}
-                    </Text>
-                </View>
-            </View>
+    const handleServerRestore = async () => {
+        verifyAccess(async () => {
+            setLoading(true);
+            try {
+                await pullSyncData();
+                setLastSync(new Date().toLocaleString());
+                showAlert(t('success'), t('server_restore_success') || 'Data successfully restored from server', 'success');
+            } catch (error: any) {
+                showAlert(t('error'), error.message || t('server_restore_failed'), 'error');
+            } finally {
+                setLoading(false);
+            }
+        });
+    };
 
-            {!isConnected ? (
-                <PrimaryButton
-                    title={t('login') || 'Login'}
-                    onPress={onLogin}
-                    isLoading={loading}
-                    style={{ marginTop: SPACING.md }}
-                />
-            ) : (
-                <View style={styles.actionRow}>
-                    <PrimaryButton
-                        title={t('backup_now') || 'Backup Now'}
-                        onPress={onBackup}
-                        isLoading={loading}
-                        style={{ flex: 1, marginRight: SPACING.sm }}
-                    />
-                </View>
-            )}
-        </View>
-    );
-
-    const LocalProviderCard = ({ title, icon, color, description, onAction }: any) => (
-        <View style={[styles.card, { backgroundColor: activeColors.cardBg }]}>
-            <View style={styles.cardHeader}>
-                <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
-                    <Icon name={icon} size={30} color={color} />
-                </View>
-                <View style={styles.cardInfo}>
-                    <Text style={[styles.cardTitle, { color: activeColors.text }]}>{title}</Text>
-                    <Text style={[styles.cardStatus, { color: activeColors.textLight }]}>{description}</Text>
-                </View>
+    const ActionCard = ({ title, icon, color, description, onAction, subTitle }: any) => (
+        <TouchableOpacity 
+            style={[styles.smallCard, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]} 
+            onPress={onAction}
+            activeOpacity={0.7}
+        >
+            <View style={[styles.iconCircle, { backgroundColor: color + '15' }]}>
+                <Icon name={icon} size={24} color={color} />
             </View>
-            <PrimaryButton
-                title={title}
-                onPress={onAction}
-                isLoading={loading}
-                style={{ marginTop: SPACING.md }}
-            />
-        </View>
+            <View style={styles.cardContent}>
+                <Text style={[styles.cardTitle, { color: activeColors.text }]}>{title}</Text>
+                <Text style={[styles.cardDesc, { color: activeColors.textLight }]} numberOfLines={2}>{description}</Text>
+            </View>
+            <Icon name="chevron-forward" size={18} color={activeColors.border} />
+        </TouchableOpacity>
     );
 
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
-            <HeaderBar title={t('backup_restore') || 'Backup & Restore'} />
+            <HeaderBar title={t('backup_restore') || 'Backup & Restore'} showBack />
             <ScrollView contentContainerStyle={styles.container}>
-                {/* CLOUD BACKUP HIDDEN FOR NOW
-                <View style={styles.infoSection}>
-                    <Icon name="cloud-upload-outline" size={60} color={activeColors.primary} />
-                    <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('cloud_backup') || 'Cloud Backup'}</Text>
-                    <Text style={[styles.infoDesc, { color: activeColors.textLight }]}>
-                        {t('backup_description') || 'Securely backup your database to Google Drive or OneDrive to prevent data loss.'}
-                    </Text>
-                    {lastBackup && (
-                        <Text style={[styles.lastBackup, { color: activeColors.primary }]}>
-                            {t('last_backup') || 'Last Backup'}: {lastBackup}
-                        </Text>
-                    )}
-                </View>
-
-                <ProviderCard
-                    title="Google Drive"
-                    icon="logo-google"
-                    color="#4285F4"
-                    isConnected={googleConnected}
-                    onLogin={handleGoogleLogin}
-                    onBackup={() => handleBackup('google')}
-                />
-
-                <ProviderCard
-                    title="OneDrive"
-                    icon="logo-windows"
-                    color="#0067B8"
-                    isConnected={microsoftConnected}
-                    onLogin={handleMicrosoftLogin}
-                    onBackup={() => handleBackup('microsoft')}
-                />
-                */}
-
-                <View style={{ marginTop: SPACING.xl, marginBottom: SPACING.md }}>
-                    <Text style={{ color: activeColors.primary, fontSize: FONT_SIZES.lg, fontWeight: 'bold' }}>
-                        {t('local_backup_restore') || 'Local Backup & Restore'}
+                
+                <View style={styles.headerSection}>
+                    <Icon name="cloud-done-outline" size={48} color={activeColors.primary} />
+                    <Text style={[styles.mainTitle, { color: activeColors.text }]}>{t('data_security') || 'Data Security'}</Text>
+                    <Text style={[styles.mainDesc, { color: activeColors.textLight }]}>
+                        {t('backup_restore_intro') || 'Keep your business data safe with local backups or secure server synchronization.'}
                     </Text>
                 </View>
 
-                <LocalProviderCard
-                    title={t('local_backup') || 'Local Backup'}
-                    icon="phone-portrait-outline"
+                <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('server_sync') || 'Server Synchronization'}</Text>
+                    {lastSync && <Text style={[styles.lastSync, { color: activeColors.textLight }]}>{t('last_sync') || 'Last'}: {lastSync}</Text>}
+                </View>
+                
+                <ActionCard 
+                    title={t('backup_to_server') || 'Backup to Server'}
+                    icon="cloud-upload"
                     color={activeColors.primary}
-                    description={t('local_backup_desc') || "Save a copy of your database to your device's storage."}
+                    description={t('backup_to_server_desc') || 'Push your local data to the central server.'}
+                    onAction={handleServerBackupPreCheck}
+                />
+
+                <ActionCard 
+                    title={t('restore_from_server') || 'Restore from Server'}
+                    icon="cloud-download"
+                    color="#2D9CDB"
+                    description={t('restore_from_server_desc') || 'Download and merge your data from the central server.'}
+                    onAction={handleServerRestore}
+                />
+
+                <View style={[styles.sectionHeader, { marginTop: SPACING.lg }]}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('local_management') || 'Local Management'}</Text>
+                </View>
+
+                <ActionCard 
+                    title={t('local_backup') || 'Local Backup'}
+                    icon="save-outline"
+                    color="#27AE60"
+                    description={t('local_backup_desc') || 'Save a copy of your database to your device storage.'}
                     onAction={handleLocalBackup}
                 />
 
-                <LocalProviderCard
+                <ActionCard 
                     title={t('local_restore') || 'Local Restore'}
-                    icon="download-outline"
+                    icon="folder-open-outline"
                     color="#F2994A"
-                    description={t('local_restore_desc') || "Restore data from a previously saved .db file."}
+                    description={t('local_restore_desc') || 'Restore data from a previously saved .db file.'}
                     onAction={handleLocalRestore}
                 />
 
-                <View style={[styles.warningSection, { backgroundColor: activeColors.error + '10' }]}>
+                <View style={[styles.warningBox, { backgroundColor: activeColors.error + '10', borderColor: activeColors.error + '30' }]}>
                     <Icon name="warning-outline" size={20} color={activeColors.error} />
-                    <Text style={[styles.warningText, { color: activeColors.error }]}>
-                        {t('backup_warning') || 'Make sure you have a stable internet connection before performing a backup.'}
-                    </Text>
+                    <View style={{ flex: 1, marginLeft: SPACING.md }}>
+                        <Text style={[styles.warningHeader, { color: activeColors.error }]}>{t('be_careful') || 'Important Note'}</Text>
+                        <Text style={[styles.warningText, { color: activeColors.textLight }]}>
+                            {t('backup_restore_warning') || 'Restoring data will overwrite your current local records. Ensure you have a backup before proceeding.'}
+                        </Text>
+                    </View>
                 </View>
+
             </ScrollView>
+
+            {showPreview && previewData && (
+                <View style={styles.overlay}>
+                    <View style={[styles.previewModal, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                        <View style={styles.previewHeader}>
+                            <Icon name="list-circle-outline" size={32} color={activeColors.primary} />
+                            <Text style={[styles.previewTitle, { color: activeColors.text }]}>{t('sync_preview_title')}</Text>
+                        </View>
+                        
+                        <Text style={[styles.previewDesc, { color: activeColors.textLight }]}>{t('sync_preview_desc')}</Text>
+                        
+                        <View style={styles.countsGrid}>
+                            <View style={styles.countRow}>
+                                <Text style={[styles.countLabel, { color: activeColors.text }]}>{t('customers_label')}</Text>
+                                <Text style={[styles.countValue, { color: activeColors.primary }]}>{previewData.customers}</Text>
+                            </View>
+                            <View style={styles.countRow}>
+                                <Text style={[styles.countLabel, { color: activeColors.text }]}>{t('estimations_label')}</Text>
+                                <Text style={[styles.countValue, { color: activeColors.primary }]}>{previewData.estimations}</Text>
+                            </View>
+                            <View style={styles.countRow}>
+                                <Text style={[styles.countLabel, { color: activeColors.text }]}>{t('purchases_label')}</Text>
+                                <Text style={[styles.countValue, { color: activeColors.primary }]}>{previewData.purchases}</Text>
+                            </View>
+                            <View style={styles.countRow}>
+                                <Text style={[styles.countLabel, { color: activeColors.text }]}>{t('repairs_label')}</Text>
+                                <Text style={[styles.countValue, { color: activeColors.primary }]}>{previewData.repairs}</Text>
+                            </View>
+                            <View style={styles.countRow}>
+                                <Text style={[styles.countLabel, { color: activeColors.text }]}>{t('employees_label')}</Text>
+                                <Text style={[styles.countValue, { color: activeColors.primary }]}>{previewData.employees}</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.previewActions}>
+                            <TouchableOpacity 
+                                style={[styles.previewBtn, { backgroundColor: activeColors.border }]} 
+                                onPress={() => setShowPreview(false)}
+                            >
+                                <Text style={[styles.btnText, { color: activeColors.text }]}>{t('cancel')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.previewBtn, { backgroundColor: activeColors.primary }]} 
+                                onPress={handleConfirmServerBackup}
+                            >
+                                <Text style={[styles.btnText, { color: COLORS.white }]}>{t('confirm_backup')}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            )}
 
             {loading && (
                 <View style={styles.overlay}>
                     <ActivityIndicator size="large" color={activeColors.primary} />
-                    <Text style={[styles.loadingText, { color: COLORS.white }]}>{t('processing')}</Text>
+                    <Text style={[styles.loadingText, { color: COLORS.white }]}>{t('processing')}...</Text>
                 </View>
             )}
         </ScreenContainer>
@@ -242,87 +245,155 @@ const styles = StyleSheet.create({
     container: {
         padding: SPACING.lg,
     },
-    infoSection: {
+    headerSection: {
         alignItems: 'center',
         marginBottom: SPACING.xl,
-        paddingTop: SPACING.md,
     },
-    infoTitle: {
+    mainTitle: {
         fontSize: FONT_SIZES.xl,
         fontWeight: 'bold',
-        marginTop: SPACING.md,
+        marginTop: SPACING.sm,
     },
-    infoDesc: {
-        fontSize: FONT_SIZES.md,
+    mainDesc: {
+        fontSize: FONT_SIZES.sm,
         textAlign: 'center',
-        marginTop: SPACING.sm,
-        paddingHorizontal: SPACING.lg,
+        marginTop: SPACING.xs,
+        paddingHorizontal: SPACING.md,
     },
-    lastBackup: {
-        fontSize: FONT_SIZES.sm,
-        fontWeight: '600',
-        marginTop: SPACING.md,
-    },
-    card: {
-        borderRadius: BORDER_RADIUS.lg,
-        padding: SPACING.lg,
-        marginBottom: SPACING.lg,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-    },
-    cardHeader: {
+    sectionHeader: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: SPACING.md,
+        marginBottom: SPACING.sm,
+        paddingHorizontal: SPACING.xs,
     },
-    iconContainer: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: SPACING.md,
-    },
-    cardInfo: {
-        flex: 1,
-    },
-    cardTitle: {
-        fontSize: FONT_SIZES.lg,
+    sectionTitle: {
+        fontSize: FONT_SIZES.xs,
         fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 1.5,
     },
-    cardStatus: {
-        fontSize: FONT_SIZES.sm,
-        marginTop: 2,
+    lastSync: {
+        fontSize: 10,
     },
-    actionRow: {
-        flexDirection: 'row',
-        marginTop: SPACING.sm,
-    },
-    warningSection: {
+    smallCard: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: SPACING.md,
         borderRadius: BORDER_RADIUS.md,
-        marginTop: SPACING.md,
+        marginBottom: SPACING.md,
+        borderWidth: 1,
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+    },
+    iconCircle: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: SPACING.md,
+    },
+    cardContent: {
+        flex: 1,
+    },
+    cardTitle: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+    },
+    cardDesc: {
+        fontSize: FONT_SIZES.xs,
+        marginTop: 2,
+    },
+    warningBox: {
+        flexDirection: 'row',
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.md,
+        marginTop: SPACING.lg,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+    },
+    warningHeader: {
+        fontSize: FONT_SIZES.sm,
+        fontWeight: 'bold',
+        marginBottom: 2,
     },
     warningText: {
-        flex: 1,
         fontSize: FONT_SIZES.xs,
-        marginLeft: SPACING.sm,
+        lineHeight: 16,
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.6)',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 1000,
     },
     loadingText: {
         marginTop: SPACING.md,
-        fontSize: FONT_SIZES.md,
-        fontWeight: '600',
+        fontWeight: 'bold',
+    },
+    previewModal: {
+        width: '85%',
+        padding: SPACING.lg,
+        borderRadius: BORDER_RADIUS.lg,
+        borderWidth: 1,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+    },
+    previewHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: SPACING.md,
+    },
+    previewTitle: {
+        fontSize: FONT_SIZES.lg,
+        fontWeight: 'bold',
+        marginLeft: SPACING.sm,
+    },
+    previewDesc: {
+        fontSize: FONT_SIZES.sm,
+        lineHeight: 20,
+        marginBottom: SPACING.lg,
+    },
+    countsGrid: {
+        backgroundColor: 'rgba(0,0,0,0.03)',
+        borderRadius: BORDER_RADIUS.md,
+        padding: SPACING.md,
+        marginBottom: SPACING.xl,
+    },
+    countRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: SPACING.xs,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0,0,0,0.05)',
+    },
+    countLabel: {
+        fontSize: FONT_SIZES.sm,
+    },
+    countValue: {
+        fontSize: FONT_SIZES.sm,
+        fontWeight: 'bold',
+    },
+    previewActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    previewBtn: {
+        flex: 0.48,
+        height: 48,
+        borderRadius: BORDER_RADIUS.md,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    btnText: {
+        fontWeight: 'bold',
+        fontSize: FONT_SIZES.sm,
     }
 });

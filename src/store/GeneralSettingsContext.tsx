@@ -1,11 +1,15 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { setSetting, getSetting, getEmployees, DBEmployee } from '../services/dbService';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { setSetting, getSetting, getEmployees, DBEmployee, getCustomEndpoints, DBCustomEndpoint } from '../services/dbService';
 import { initAutoConnect, PrinterData } from '../services/printService';
 import { Platform, NativeModules } from 'react-native';
 import * as Application from 'expo-application';
+import * as Device from 'expo-device';
 import enTranslations from '../locales/en.json';
 import taTranslations from '../locales/ta.json';
 import { AlertButton } from '../components/CustomAlertModal';
+import CustomAlertModal from '../components/CustomAlertModal';
+import { BASE_URL } from '../constants/config';
+
 
 type ThemeMode = 'light' | 'dark';
 type Language = 'en' | 'ta';
@@ -33,7 +37,7 @@ export interface ReceiptConfig {
     makingChargeDisplayType: 'percentage' | 'grams' | 'fixed';
     paperWidth: '58mm' | '80mm' | '112mm';
     mergePrint: boolean;
-    qrEndpointUrl: string;
+    qrEndpointUrl?: string;
 }
 
 export interface FeatureFlags {
@@ -41,6 +45,7 @@ export interface FeatureFlags {
     isAdvanceEnabled: boolean;
     isRepairEnabled: boolean;
     isPurchaseEnabled: boolean;
+    isEstimationEnabled: boolean;
 }
 
 export interface PrintDetails {
@@ -121,8 +126,19 @@ interface GeneralSettingsContextType {
     printDetailsModalInitialData: PrintDetails | null;
     serverApiUrl: string;
     updateServerApiUrl: (url: string) => void;
+    localServerUrl: string;
+    updateLocalServerUrl: (url: string) => void;
+    localQrEndpoint: string;
+    updateLocalQrEndpoint: (path: string) => void;
+    localSaveEndpoint: string;
+    updateLocalSaveEndpoint: (path: string) => void;
+    useLocalServerForScanning: boolean;
+    setUseLocalServerForScanning: (value: boolean) => void;
+    customEndpoints: DBCustomEndpoint[];
+    refreshCustomEndpoints: () => Promise<void>;
     employees: DBEmployee[];
     refreshEmployees: () => Promise<void>;
+    refreshAuthStatus: () => Promise<void>;
 }
 
 const GeneralSettingsContext = createContext<GeneralSettingsContextType | undefined>(undefined);
@@ -150,7 +166,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     });
 
     const [connectedPrinter, setConnectedPrinter] = useState<ConnectedPrinter | null>(null);
-    const [printerType, setPrinterTypeState] = useState<PrinterType>('system');
+    const [printerType, setPrinterTypeState] = useState<PrinterType>('thermal');
 
     const [adminPin, setAdminPin] = useState('1234');
 
@@ -177,25 +193,39 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         buttons: []
     });
 
-    const [serverApiUrl, setServerApiUrlState] = useState<string>('https://school.agnisofterp.com/maha/agni');
+    const [serverApiUrl, setServerApiUrlState] = useState<string>(BASE_URL);
+    const [localServerUrl, setLocalServerUrlState] = useState<string>('');
+    const [localQrEndpoint, setLocalQrEndpointState] = useState<string>('/api/product/scan-tag');
+    const [localSaveEndpoint, setLocalSaveEndpointState] = useState<string>('/api/estimation/save');
+    const [useLocalServerForScanning, setUseLocalServerForScanningState] = useState<boolean>(false);
+    const [customEndpoints, setCustomEndpoints] = useState<DBCustomEndpoint[]>([]);
     const [employees, setEmployees] = useState<DBEmployee[]>([]);
 
-    const refreshEmployees = async () => {
+    const refreshCustomEndpoints = useCallback(async () => {
+        try {
+            const endpoints = await getCustomEndpoints();
+            setCustomEndpoints(endpoints);
+        } catch (e) {
+            console.error('Failed to refresh custom endpoints:', e);
+        }
+    }, []);
+
+    const refreshEmployees = useCallback(async () => {
         try {
             const emps = await getEmployees(true);
             setEmployees(emps);
         } catch (e) {
             console.error('Failed to refresh employees:', e);
         }
-    };
+    }, []);
 
-    const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons: AlertButton[] = []) => {
+    const showAlert = useCallback((title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons: AlertButton[] = []) => {
         setAlertConfig({ visible: true, title, message, type, buttons });
-    };
+    }, []);
 
-    const hideAlert = () => {
+    const hideAlert = useCallback(() => {
         setAlertConfig(prev => ({ ...prev, visible: false }));
-    };
+    }, []);
 
     const [receiptConfig, setReceiptConfig] = useState<ReceiptConfig>({
         showHeader: true,
@@ -213,7 +243,6 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         makingChargeDisplayType: 'fixed',
         paperWidth: '58mm',
         mergePrint: true,
-        qrEndpointUrl: '',
     });
 
     const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({
@@ -221,10 +250,11 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         isAdvanceEnabled: true,
         isRepairEnabled: true,
         isPurchaseEnabled: true,
+        isEstimationEnabled: true,
     });
     const printCallbackRef = useRef<((details: PrintDetails) => Promise<void>) | null>(null);
 
-    const requestPrint = (callback: (details: PrintDetails) => Promise<void>, bypassDetails = false, initialData?: PrintDetails, cachedDetails?: PrintDetails) => {
+    const requestPrint = useCallback((callback: (details: PrintDetails) => Promise<void>, bypassDetails = false, initialData?: PrintDetails, cachedDetails?: PrintDetails) => {
         printCallbackRef.current = callback;
         if (cachedDetails) {
             callback(cachedDetails).then(() => {
@@ -243,9 +273,9 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             setPrintDetailsModalInitialData(initialData || null);
             setShowPrintDetailsModal(true);
         }
-    };
+    }, [currentEmployeeName]);
 
-    const handlePrintConfirm = async (details: PrintDetails) => {
+    const handlePrintConfirm = useCallback(async (details: PrintDetails) => {
         setCurrentEmployeeName(details.employeeName);
         setShowPrintDetailsModal(false);
         setPrintDetailsModalInitialData(null);
@@ -253,7 +283,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             await printCallbackRef.current(details);
             printCallbackRef.current = null;
         }
-    };
+    }, []);
 
     useEffect(() => {
         const fetchDeviceId = async () => {
@@ -265,12 +295,18 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                     return;
                 }
 
+                let hardwareId = '';
                 if (Platform.OS === 'android') {
-                    setDeviceId((Application as any).androidId || '');
+                    hardwareId = (Application as any).androidId || '';
                 } else if (Platform.OS === 'ios') {
-                    const id = await Application.getIosIdForVendorAsync();
-                    setDeviceId(id || '');
+                    hardwareId = await Application.getIosIdForVendorAsync() || '';
                 }
+
+                if (!hardwareId) {
+                    hardwareId = Math.random().toString(36).substring(2, 10).toUpperCase();
+                }
+
+                setDeviceId(hardwareId);
             } catch (e) {
                 console.error('Error fetching device ID:', e);
             }
@@ -306,6 +342,18 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 const savedServerUrl = await getSetting('server_api_url');
                 if (savedServerUrl) setServerApiUrlState(savedServerUrl);
 
+                const savedLocalServerUrl = await getSetting('local_server_url');
+                if (savedLocalServerUrl) setLocalServerUrlState(savedLocalServerUrl);
+
+                const savedUseLocalServer = await getSetting('use_local_server_scanning');
+                if (savedUseLocalServer) setUseLocalServerForScanningState(savedUseLocalServer === 'true');
+
+                const savedLocalQr = await getSetting('local_qr_endpoint');
+                if (savedLocalQr) setLocalQrEndpointState(savedLocalQr);
+
+                const savedLocalSave = await getSetting('local_save_endpoint');
+                if (savedLocalSave) setLocalSaveEndpointState(savedLocalSave);
+
                 const savedPin = await getSetting('admin_pin');
                 if (savedPin) setAdminPin(savedPin);
 
@@ -336,17 +384,29 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
                 if (!effectiveName) {
                     let defaultName = 'DEVICE';
                     try {
-                        let uniqueId = '';
+                        const brand = (Device.brand || '').toUpperCase();
+                        const model = (Device.modelName || '').toUpperCase();
+
+                        let uniquePart = '';
                         if (Platform.OS === 'android') {
-                            uniqueId = (Application as any).androidId || '';
+                            uniquePart = (Application as any).androidId?.substring(0, 6).toUpperCase() || '';
                         } else if (Platform.OS === 'ios') {
-                            uniqueId = await Application.getIosIdForVendorAsync() || '';
+                            const iosId = await Application.getIosIdForVendorAsync();
+                            uniquePart = iosId?.substring(0, 6).toUpperCase() || '';
                         }
-                        if (uniqueId) {
-                            defaultName = `DEV-${uniqueId.substring(0, 6).toUpperCase()}`;
+
+                        if (brand && model) {
+                            defaultName = `${brand}-${model}`;
+                        } else if (brand) {
+                            defaultName = `${brand}-${uniquePart || 'DEVICE'}`;
+                        } else if (uniquePart) {
+                            defaultName = `DEV-${uniquePart}`;
                         } else {
                             defaultName = `DEV-${Math.floor(Math.random() * 1000000)}`;
                         }
+
+                        // Sanitize name (remove spaces)
+                        defaultName = defaultName.replace(/\s+/g, '-');
                     } catch (e) { }
                     effectiveName = defaultName;
                     await setSetting('device_name', defaultName);
@@ -415,80 +475,124 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         loadSettings().then(() => {
             performAutoConnect();
             refreshEmployees();
+            refreshCustomEndpoints();
         });
     }, []);
 
-    const updateShopDetails = async (details: Partial<typeof shopDetails>) => {
-        setShopDetails(prev => ({ ...prev, ...details }));
-        if (details.name) await setSetting('shop_name', details.name);
-        if (details.address) await setSetting('shop_address', details.address);
-        if (details.phone) await setSetting('shop_phone', details.phone);
-        if (details.gstNumber) await setSetting('shop_gst', details.gstNumber);
-        if (details.email) await setSetting('shop_email', details.email);
-        if (details.footerMessage) await setSetting('shop_footer', details.footerMessage);
-        if (details.gstPercentage) await setSetting('gst_percentage', details.gstPercentage);
-        if (details.appLogo !== undefined) await setSetting('app_logo', details.appLogo);
-        if (details.appIcon !== undefined) await setSetting('app_icon', details.appIcon);
-        if (details.splashImage !== undefined) await setSetting('splash_image', details.splashImage);
-    };
+    const updateShopDetails = useCallback(async (details: Partial<typeof shopDetails>) => {
+        setShopDetails(prev => {
+            const next = { ...prev, ...details };
+            (async () => {
+                if (details.name) await setSetting('shop_name', details.name);
+                if (details.address) await setSetting('shop_address', details.address);
+                if (details.phone) await setSetting('shop_phone', details.phone);
+                if (details.gstNumber) await setSetting('shop_gst', details.gstNumber);
+                if (details.email) await setSetting('shop_email', details.email);
+                if (details.footerMessage) await setSetting('shop_footer', details.footerMessage);
+                if (details.gstPercentage) await setSetting('gst_percentage', details.gstPercentage);
+                if (details.appLogo !== undefined) await setSetting('app_logo', details.appLogo);
+                if (details.appIcon !== undefined) await setSetting('app_icon', details.appIcon);
+                if (details.splashImage !== undefined) await setSetting('splash_image', details.splashImage);
+            })();
+            return next;
+        });
+    }, []);
 
-    const updateAdminPin = async (newPin: string) => {
+    const updateAdminPin = useCallback(async (newPin: string) => {
         setAdminPin(newPin);
         await setSetting('admin_pin', newPin);
-    };
+    }, []);
 
-    const toggleTheme = () => {
-        const newTheme = theme === 'light' ? 'dark' : 'light';
-        setTheme(newTheme);
-        setSetting('app_theme', newTheme);
-    };
+    const toggleTheme = useCallback(() => {
+        setTheme(prev => {
+            const next = prev === 'light' ? 'dark' : 'light';
+            setSetting('app_theme', next);
+            return next;
+        });
+    }, []);
 
-    const setLanguage = (lang: Language) => {
+    const setLanguage = useCallback((lang: Language) => {
         setLanguageState(lang);
         setSetting('app_language', lang);
-    };
+    }, []);
 
-    const setPrinterType = (type: PrinterType) => {
+    const setPrinterType = useCallback((type: PrinterType) => {
         setPrinterTypeState(type);
         setSetting('printer_type', type);
         if (type === 'system') {
             setIsPrinterConnected(false);
             setConnectionStatus('idle');
         }
-    };
+    }, []);
 
-    const updateDeviceName = async (name: string) => {
+    const updateDeviceName = useCallback(async (name: string) => {
         setDeviceNameState(name);
         setDeviceId(name);
         await setSetting('device_name', name);
         await setSetting('custom_device_id', name);
-    };
+    }, []);
 
-    const updateDeviceId = async (id: string) => {
+    const updateDeviceId = useCallback(async (id: string) => {
         setDeviceId(id);
         setDeviceNameState(id);
         await setSetting('custom_device_id', id);
         await setSetting('device_name', id);
-    };
+    }, []);
 
-    const updateServerApiUrl = async (url: string) => {
+    const updateConnectedPrinter = useCallback(async (printer: ConnectedPrinter | null) => {
+        setConnectedPrinter(printer);
+        if (printer) {
+            setIsPrinterConnected(true);
+            setConnectionStatus('connected');
+        } else {
+            setIsPrinterConnected(false);
+            setConnectionStatus('idle');
+        }
+        await setSetting('connected_printer', printer ? JSON.stringify(printer) : '');
+    }, []);
+
+    const updateServerApiUrl = useCallback(async (url: string) => {
         setServerApiUrlState(url);
         await setSetting('server_api_url', url);
-    };
+    }, []);
 
-    const updateReceiptConfig = async (config: Partial<ReceiptConfig>) => {
-        const newConfig = { ...receiptConfig, ...config };
-        setReceiptConfig(newConfig);
-        await setSetting('receipt_config', JSON.stringify(newConfig));
-    };
+    const updateLocalServerUrl = useCallback(async (url: string) => {
+        setLocalServerUrlState(url);
+        await setSetting('local_server_url', url);
+    }, []);
 
-    const updateFeatureFlags = async (flags: Partial<FeatureFlags>) => {
-        const newFlags = { ...featureFlags, ...flags };
-        setFeatureFlags(newFlags);
-        await setSetting('feature_flags', JSON.stringify(newFlags));
-    };
+    const updateLocalSaveEndpoint = useCallback(async (path: string) => {
+        setLocalSaveEndpointState(path);
+        await setSetting('local_save_endpoint', path);
+    }, []);
 
-    const t = (key: string, params?: Record<string, string>) => {
+    const updateLocalQrEndpoint = useCallback(async (path: string) => {
+        setLocalQrEndpointState(path);
+        await setSetting('local_qr_endpoint', path);
+    }, []);
+
+    const setUseLocalServerForScanning = useCallback(async (value: boolean) => {
+        setUseLocalServerForScanningState(value);
+        await setSetting('use_local_server_scanning', String(value));
+    }, []);
+
+    const updateReceiptConfig = useCallback(async (config: Partial<ReceiptConfig>) => {
+        setReceiptConfig(prev => {
+            const next = { ...prev, ...config };
+            setSetting('receipt_config', JSON.stringify(next));
+            return next;
+        });
+    }, []);
+
+    const updateFeatureFlags = useCallback(async (flags: Partial<FeatureFlags>) => {
+        setFeatureFlags(prev => {
+            const next = { ...prev, ...flags };
+            setSetting('feature_flags', JSON.stringify(next));
+            return next;
+        });
+    }, []);
+
+    const t = useCallback((key: string, params?: Record<string, string>) => {
         let translation = translations[language][key] || key;
         if (params) {
             Object.keys(params).forEach(param => {
@@ -496,64 +600,109 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
             });
         }
         return translation;
-    };
+    }, [language]);
+
+    const refreshAuthStatus = useCallback(async () => {
+        try {
+            const { checkAuthStatus } = await import('../services/authService');
+            const res = await checkAuthStatus();
+            const features = res?.features || res?.user?.features || res?.data?.features || res;
+            if (features) {
+                const newFlags = {
+                    isChitEnabled: !!(features.chit || features.feature_chit),
+                    isPurchaseEnabled: !!(features.purchase || features.feature_purchase),
+                    isEstimationEnabled: !!(features.estimation || features.feature_estimation),
+                    isAdvanceEnabled: !!(features.advance_chit || features.feature_advance_chit),
+                    isRepairEnabled: !!(features.repair || features.feature_repair),
+                };
+                updateFeatureFlags(newFlags);
+            }
+        } catch (e) {
+            console.error('Auth status refresh failed:', e);
+        }
+    }, [updateFeatureFlags]);
+
+    const contextValue = useMemo(() => ({
+        theme,
+        language,
+        toggleTheme,
+        setLanguage,
+        connectedPrinter,
+        setPrinterType,
+        printerType,
+        setConnectedPrinter: updateConnectedPrinter,
+        shopDetails,
+        updateShopDetails,
+        t,
+        adminPin,
+        updateAdminPin,
+        isPrinterConnected,
+        setIsPrinterConnected,
+        connectionStatus,
+        retryAttempt,
+        countdown,
+        isBluetoothEnabled,
+        setIsBluetoothEnabled,
+        deviceName,
+        updateDeviceName,
+        currentEmployeeName,
+        setCurrentEmployeeName,
+        showPrintDetailsModal,
+        setShowPrintDetailsModal,
+        handlePrintConfirm,
+        requestPrint,
+        receiptConfig,
+        updateReceiptConfig,
+        featureFlags,
+        updateFeatureFlags,
+        deviceId,
+        updateDeviceId,
+        alertConfig,
+        showAlert,
+        hideAlert,
+        printDetailsModalInitialData,
+        serverApiUrl,
+        updateServerApiUrl,
+        localServerUrl,
+        updateLocalServerUrl,
+        localQrEndpoint,
+        updateLocalQrEndpoint,
+        localSaveEndpoint,
+        updateLocalSaveEndpoint,
+        useLocalServerForScanning,
+        setUseLocalServerForScanning,
+        customEndpoints,
+        refreshCustomEndpoints,
+        employees,
+        refreshEmployees,
+        refreshAuthStatus
+    }), [
+        theme, language, toggleTheme, setLanguage, connectedPrinter, setPrinterType, printerType,
+        updateConnectedPrinter, shopDetails, updateShopDetails, t, adminPin, updateAdminPin,
+        isPrinterConnected, setIsPrinterConnected, connectionStatus, retryAttempt, countdown,
+        isBluetoothEnabled, setIsBluetoothEnabled, deviceName, updateDeviceName,
+        currentEmployeeName, setCurrentEmployeeName, showPrintDetailsModal, setShowPrintDetailsModal,
+        handlePrintConfirm, requestPrint, receiptConfig, updateReceiptConfig, featureFlags,
+        updateFeatureFlags, deviceId, updateDeviceId, alertConfig, showAlert, hideAlert,
+        printDetailsModalInitialData, serverApiUrl, updateServerApiUrl, localServerUrl,
+        updateLocalServerUrl, localQrEndpoint, updateLocalQrEndpoint, localSaveEndpoint,
+        updateLocalSaveEndpoint, useLocalServerForScanning, setUseLocalServerForScanning,
+        customEndpoints, refreshCustomEndpoints, employees, refreshEmployees, refreshAuthStatus
+    ]);
 
     return (
-        <GeneralSettingsContext.Provider value={{
-            theme,
-            language,
-            toggleTheme,
-            setLanguage,
-            connectedPrinter,
-            setPrinterType,
-            printerType,
-            setConnectedPrinter: async (printer: ConnectedPrinter | null) => {
-                setConnectedPrinter(printer);
-                if (printer) {
-                    setIsPrinterConnected(true);
-                    setConnectionStatus('connected');
-                } else {
-                    setIsPrinterConnected(false);
-                    setConnectionStatus('idle');
-                }
-                await setSetting('connected_printer', printer ? JSON.stringify(printer) : '');
-            },
-            shopDetails,
-            updateShopDetails,
-            t,
-            adminPin,
-            updateAdminPin,
-            isPrinterConnected,
-            setIsPrinterConnected,
-            connectionStatus,
-            retryAttempt,
-            countdown,
-            isBluetoothEnabled,
-            setIsBluetoothEnabled,
-            deviceName,
-            updateDeviceName,
-            currentEmployeeName,
-            setCurrentEmployeeName,
-            showPrintDetailsModal,
-            setShowPrintDetailsModal,
-            handlePrintConfirm,
-            requestPrint,
-            receiptConfig,
-            updateReceiptConfig,
-            featureFlags,
-            updateFeatureFlags,
-            deviceId,
-            updateDeviceId,
-            alertConfig,
-            showAlert,
-            hideAlert,
-            printDetailsModalInitialData,
-            serverApiUrl,
-            updateServerApiUrl,
-            employees,
-            refreshEmployees
-        }}>
+        <GeneralSettingsContext.Provider value={contextValue}>
             {children}
+            <CustomAlertModal
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                theme={theme}
+                onClose={hideAlert}
+                buttons={alertConfig.buttons}
+                t={t}
+            />
         </GeneralSettingsContext.Provider>
     );
 };

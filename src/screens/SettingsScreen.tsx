@@ -1,6 +1,7 @@
-import { View as RNView, Text as RNText, StyleSheet, TouchableOpacity as RNRTouchableOpacity, ScrollView as RNScrollView, TextInput as RNTextInput, Modal as RNModal, Linking, Image as RNImage, Alert } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, TouchableOpacity as RNRTouchableOpacity, ScrollView as RNScrollView, TextInput as RNTextInput, Modal as RNModal, Linking, Image as RNImage, Alert, Platform } from 'react-native';
 
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
@@ -9,9 +10,12 @@ import PrimaryButton from '../components/PrimaryButton';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { useAuth } from '../store/AuthContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
+import CustomAlertModal from '../components/CustomAlertModal';
 import React, { useState } from 'react';
+import CategoryManagementModal from '../modals/CategoryManagementModal';
 
 import { setSetting, getSetting } from '../services/dbService';
+import { BASE_URL } from '../constants/config';
 
 // Fix for React 19 type mismatch
 // Fix for React 19 type mismatch
@@ -26,15 +30,15 @@ const Image = RNImage as any;
 
 export default function SettingsScreen() {
     const router = useRouter();
-    const { logout, isSuperAdmin } = useAuth();
+    const { logout, isSuperAdmin, currentUser } = useAuth();
     const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName, deviceId, updateDeviceId, serverApiUrl, updateServerApiUrl, receiptConfig, updateReceiptConfig } = useGeneralSettings();
-    const [showHelpModal, setShowHelpModal] = useState(false);
     const [showEditIdModal, setShowEditIdModal] = useState(false);
     const [showEditServerUrlModal, setShowEditServerUrlModal] = useState(false);
-    const [showEditQrUrlModal, setShowEditQrUrlModal] = useState(false);
     const [tempDeviceId, setTempDeviceId] = useState('');
     const [tempServerUrl, setTempServerUrl] = useState('');
-    const [tempQrUrl, setTempQrUrl] = useState('');
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({ title: '', message: '', type: 'info' as any });
+    const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
 
 
 
@@ -58,12 +62,24 @@ export default function SettingsScreen() {
 
     const handleEmail = () => {
         Linking.openURL('mailto:nexooai@gmail.com').catch(() => {
-            Alert.alert(t('error'), t('could_not_open_mail'));
+            setAlertConfig({
+                title: t('error'),
+                message: t('could_not_open_mail'),
+                type: 'error'
+            });
+            setAlertVisible(true);
         });
     };
 
     const handleCall = () => {
         Linking.openURL('tel:+919585141535');
+    };
+
+    const handleOpenPolicy = (type: 'privacy' | 'terms') => {
+        router.push({
+            pathname: '/settings/legal',
+            params: { type }
+        } as any);
     };
 
     return (
@@ -79,12 +95,11 @@ export default function SettingsScreen() {
                         )}
                     </View>
                     <View>
-                        <Text style={[styles.shopNameDisplay, { color: activeColors.text }]}>{shopDetails.name || 'Admin'}</Text>
-                        <Text style={[styles.profileSub, { color: activeColors.textLight }]}>{deviceName ? `ID: ${deviceName}` : t('account_settings')}</Text>
-                        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }} onPress={() => { setTempDeviceId(deviceId); setShowEditIdModal(true); }}>
+                        <Text style={[styles.shopNameDisplay, { color: activeColors.text }]}>{shopDetails.name || t('admin')}</Text>
+                        <Text style={[styles.profileSub, { color: activeColors.textLight }]}>{deviceName ? `${t('id_label') || 'ID:'} ${deviceName}` : t('account_settings')}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                             <Text style={[styles.profileSub, { color: activeColors.textLight, opacity: 0.8, marginRight: 8 }]}>{t('device_id')}: {deviceId || '...'}</Text>
-                            <Icon name="pencil-outline" size={14} color={activeColors.primary} />
-                        </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
 
@@ -94,6 +109,20 @@ export default function SettingsScreen() {
                         icon="person-outline"
                         label={t('profile_security')}
                         onPress={() => (router as any).push('/settings/profile')}
+                        color="#4A90E2"
+                    />
+                    <SettingItem
+                        icon="calendar-outline"
+                        label={t('subscription_status') || 'Subscription Status'}
+                        onPress={() => (router as any).push('/settings/subscription')}
+                        color="#4E342E"
+                        rightElement={
+                            <View style={[styles.statusBadge, { backgroundColor: (currentUser?.isSubscriptionValid ? COLORS.success : COLORS.error) + '15' }]}>
+                                <Text style={{ color: currentUser?.isSubscriptionValid ? COLORS.success : COLORS.error, fontWeight: 'bold', fontSize: 10 }}>
+                                    {currentUser?.isSubscriptionValid ? (t('active') || 'ACTIVE') : (t('expired') || 'EXPIRED')}
+                                </Text>
+                            </View>
+                        }
                     />
                 </View>
 
@@ -103,35 +132,67 @@ export default function SettingsScreen() {
                         icon="business-outline"
                         label={t('shop_business_settings') || 'Shop & Business Settings'}
                         onPress={() => (router as any).push('/settings/shop-info')}
+                        color="#7ED321"
+                    />
+                </View>
+
+                <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('data_management') || 'Data Management'}</Text>
+                    <SettingItem
+                        icon="people-circle-outline"
+                        label={t('customers') || 'Customer Database'}
+                        onPress={() => (router as any).push('/customers')}
+                        color="#9013FE"
+                    />
+                    <SettingItem
+                        icon="people-outline"
+                        label={t('manage_employees') || 'Manage Employees'}
+                        onPress={() => (router as any).push('/settings/employees')}
+                        color="#50E3C2"
+                    />
+                    <SettingItem
+                        icon="list-outline"
+                        label={t('manage_products')}
+                        onPress={() => (router as any).push('/settings/products')}
+                        color="#F8E71C"
+                    />
+                    <SettingItem
+                        icon="color-palette-outline"
+                        label={t('manage_gold_silver')}
+                        onPress={() => (router as any).push('/settings/manage-gold')}
+                        color="#D0021B"
+                    />
+                    <SettingItem
+                        icon="folder-open-outline"
+                        label={t('manage_purchase_categories') || 'Manage Purchase Categories'}
+                        onPress={() => setIsCategoryModalVisible(true)}
+                        color="#BD10E0"
+                    />
+                </View>
+
+                <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('printer_configuration') || 'Printer Configuration'}</Text>
+                    <SettingItem
+                        icon="bluetooth-outline"
+                        label={t('printer_connection')}
+                        onPress={() => (router as any).push('/settings/printer-connection')}
+                        color="#4A4A4A"
+                    />
+                    <SettingItem
+                        icon="receipt-outline"
+                        label={t('print_receipt_configuration')}
+                        onPress={() => (router as any).push('/settings/receipt-config')}
+                        color="#417505"
                     />
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
                     <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('app_configuration')}</Text>
                     <SettingItem
-                        icon="people-outline"
-                        label={t('manage_employees') || 'Manage Employees'}
-                        onPress={() => (router as any).push('/settings/employees')}
-                    />
-                    <SettingItem
-                        icon="list-outline"
-                        label={t('manage_products')}
-                        onPress={() => (router as any).push('/settings/products')}
-                    />
-                    <SettingItem
-                        icon="color-palette-outline"
-                        label={t('manage_gold_silver')}
-                        onPress={() => (router as any).push('/settings/manage-gold')}
-                    />
-                    <SettingItem
-                        icon="print-outline"
-                        label={t('printers_settings')}
-                        onPress={() => (router as any).push('/settings/printers')}
-                    />
-                    <SettingItem
                         icon={theme === 'light' ? "sunny-outline" : "moon-outline"}
                         label={t('theme')}
                         onPress={toggleTheme}
+                        color={theme === 'light' ? "#FFB900" : "#5C5C5C"}
                         rightElement={
                             <View style={[styles.toggleBadge, { backgroundColor: activeColors.primary + '15' }]}>
                                 <Text style={{ color: activeColors.primary, fontWeight: 'bold', fontSize: 12 }}>
@@ -149,30 +210,10 @@ export default function SettingsScreen() {
                                     <Text style={[styles.langText, language === 'en' && { color: COLORS.white }]}>EN</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={() => setLanguage('ta')} style={[styles.langBtn, language === 'ta' && { backgroundColor: activeColors.primary }]}>
-                                    <Text style={[styles.langText, language === 'ta' && { color: COLORS.white }]}>த</Text>
+                                    <Text style={[styles.langText, language === 'ta' && { color: COLORS.white }]}>தமிழ்</Text>
                                 </TouchableOpacity>
                             </View>
                         }
-                    />
-                </View>
-
-                <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('api_settings') || 'API Settings'}</Text>
-                    <SettingItem
-                        icon="server-outline"
-                        label={t('server_api_url')}
-                        onPress={() => {
-                            setTempServerUrl(serverApiUrl);
-                            setShowEditServerUrlModal(true);
-                        }}
-                    />
-                    <SettingItem
-                        icon="qr-code-outline"
-                        label={t('qr_endpoint_url')}
-                        onPress={() => {
-                            setTempQrUrl(receiptConfig.qrEndpointUrl || '');
-                            setShowEditQrUrlModal(true);
-                        }}
                     />
                 </View>
 
@@ -189,16 +230,16 @@ export default function SettingsScreen() {
                 )}
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('data_management') || 'Data Management'}</Text>
-                    <SettingItem
-                        icon="people-outline"
-                        label={t('customers') || 'Customer Database'}
-                        onPress={() => (router as any).push('/customers')}
-                    />
+                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('system_api_settings') || 'System & API Settings'}</Text>
                     <SettingItem
                         icon="cloud-upload-outline"
                         label={t('backup_restore') || 'Backup & Restore'}
                         onPress={() => (router as any).push('/settings/backup-restore')}
+                    />
+                    <SettingItem
+                        icon="server-outline"
+                        label={t('local_server_settings') || 'Local Server Settings'}
+                        onPress={() => (router as any).push('/settings/local-server')}
                     />
                 </View>
 
@@ -207,7 +248,24 @@ export default function SettingsScreen() {
                     <SettingItem
                         icon="help-circle-outline"
                         label={t('help_support')}
-                        onPress={() => setShowHelpModal(true)}
+                        onPress={() => (router as any).push('/help')}
+                        color="#E91E63"
+                    />
+                </View>
+
+                <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('policies') || 'Policies'}</Text>
+                    <SettingItem
+                        icon="shield-outline"
+                        label={t('privacy_policy') || 'Privacy Policy'}
+                        onPress={() => handleOpenPolicy('privacy')}
+                        color="#607D8B"
+                    />
+                    <SettingItem
+                        icon="document-text-outline"
+                        label={t('terms_conditions') || 'Terms & Conditions'}
+                        onPress={() => handleOpenPolicy('terms')}
+                        color="#795548"
                     />
                 </View>
 
@@ -215,7 +273,6 @@ export default function SettingsScreen() {
                     style={[styles.logoutBtn, { backgroundColor: activeColors.error + '10', borderColor: activeColors.error }]}
                     onPress={() => {
                         logout();
-                        router.replace('/login');
                     }}
                 >
                     <Icon name="log-out-outline" size={22} color={activeColors.error} />
@@ -225,57 +282,6 @@ export default function SettingsScreen() {
                 <Text style={[styles.version, { color: activeColors.textLight }]}>{t('version')} 1.0.0</Text>
             </ScrollView>
 
-            <Modal
-                visible={showHelpModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowHelpModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>{t('help_support')}</Text>
-                            <TouchableOpacity onPress={() => setShowHelpModal(false)}>
-                                <Icon name="close" size={24} color={activeColors.text} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <Text style={[styles.modalSubtitle, { color: activeColors.textLight }]}>{t('contact_us')}</Text>
-
-                        <TouchableOpacity style={[styles.contactItem, { borderColor: activeColors.border }]} onPress={handleCall}>
-                            <View style={styles.contactLeft}>
-                                <Icon name="call-outline" size={24} color={activeColors.primary} />
-                                <View style={styles.contactInfo}>
-                                    <Text style={[styles.contactValue, { color: activeColors.text }]}>+91 95851 41535</Text>
-                                </View>
-                            </View>
-                            <Icon name="chevron-forward" size={20} color={activeColors.textLight} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={[styles.contactItem, { borderColor: activeColors.border }]} onPress={handleWhatsApp}>
-                            <View style={styles.contactLeft}>
-                                <Icon name="logo-whatsapp" size={24} color={COLORS.success} />
-                                <View style={styles.contactInfo}>
-                                    <Text style={[styles.contactLabel, { color: activeColors.textLight }]}>{t('whatsapp')}</Text>
-                                    <Text style={[styles.contactValue, { color: activeColors.text }]}>+91 95851 41535</Text>
-                                </View>
-                            </View>
-                            <Icon name="chevron-forward" size={20} color={activeColors.textLight} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={[styles.contactItem, { borderColor: activeColors.border }]} onPress={handleEmail}>
-                            <View style={styles.contactLeft}>
-                                <Icon name="mail-outline" size={24} color={COLORS.error} />
-                                <View style={styles.contactInfo}>
-                                    <Text style={[styles.contactLabel, { color: activeColors.textLight }]}>{t('email')}</Text>
-                                    <Text style={[styles.contactValue, { color: activeColors.text }]}>nexooai@gmail.com</Text>
-                                </View>
-                            </View>
-                            <Icon name="chevron-forward" size={20} color={activeColors.textLight} />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
 
             <Modal
                 visible={showEditIdModal}
@@ -305,7 +311,7 @@ export default function SettingsScreen() {
                             ]}
                             value={tempDeviceId}
                             onChangeText={setTempDeviceId}
-                            placeholder="Enter Device ID"
+                            placeholder={t('enter_device_id') || 'Enter Device ID'}
                             placeholderTextColor={activeColors.textLight}
                         />
                         <View style={styles.modalActions}>
@@ -343,6 +349,15 @@ export default function SettingsScreen() {
                         <Text style={[styles.modalSubtitle, { color: activeColors.textLight }]}>
                             {t('server_api_desc')}
                         </Text>
+
+                        <View style={styles.urlPreviewContainer}>
+                            <Text style={[styles.urlPreviewLabel, { color: activeColors.textLight }]}>{t('current_server_url') || 'Current Server URL:'}</Text>
+                            <View style={[styles.urlCard, { backgroundColor: activeColors.background, borderColor: activeColors.border }]}>
+                                <Text style={[styles.urlText, { color: activeColors.primary }]} numberOfLines={1}>{serverApiUrl}</Text>
+                            </View>
+                        </View>
+
+                        <Text style={[styles.inputLabel, { color: activeColors.text }]}>{t('new_server_url') || 'Update Server URL:'}</Text>
                         <TextInput
                             style={[
                                 styles.textInput,
@@ -378,57 +393,19 @@ export default function SettingsScreen() {
                 </View>
             </Modal>
 
-            <Modal
-                visible={showEditQrUrlModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowEditQrUrlModal(false)}
-            >
-                <View style={styles.modalOverlayCen}>
-                    <View style={[styles.modalCard, { backgroundColor: activeColors.cardBg }]}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>{t('qr_endpoint_url')}</Text>
-                            <TouchableOpacity onPress={() => setShowEditQrUrlModal(false)}>
-                                <Icon name="close" size={24} color={activeColors.text} />
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={[styles.modalSubtitle, { color: activeColors.textLight }]}>
-                            {t('qr_endpoint_desc')}
-                        </Text>
-                        <TextInput
-                            style={[
-                                styles.textInput,
-                                {
-                                    backgroundColor: activeColors.background,
-                                    borderColor: activeColors.border,
-                                    color: activeColors.text,
-                                }
-                            ]}
-                            value={tempQrUrl}
-                            onChangeText={setTempQrUrl}
-                            placeholder={t('enter_qr_endpoint_url')}
-                            placeholderTextColor={activeColors.textLight}
-                            autoCapitalize="none"
-                            keyboardType="url"
-                        />
-                        <View style={styles.modalActions}>
-                            <PrimaryButton
-                                title={t('cancel')}
-                                onPress={() => setShowEditQrUrlModal(false)}
-                                style={{ ...styles.modalBtn, backgroundColor: activeColors.border } as any}
-                            />
-                            <PrimaryButton
-                                title={t('save')}
-                                onPress={() => {
-                                    updateReceiptConfig({ qrEndpointUrl: tempQrUrl });
-                                    setShowEditQrUrlModal(false);
-                                }}
-                                style={styles.modalBtn as any}
-                            />
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+            <CustomAlertModal
+                visible={alertVisible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                theme={theme as 'light' | 'dark'}
+                onClose={() => setAlertVisible(false)}
+                t={t}
+            />
+            <CategoryManagementModal
+                visible={isCategoryModalVisible}
+                onClose={() => setIsCategoryModalVisible(false)}
+            />
         </ScreenContainer>
     );
 }
@@ -500,6 +477,11 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     toggleBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    statusBadge: {
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 12,
@@ -625,5 +607,27 @@ const styles = StyleSheet.create({
     modalBtn: {
         flex: 1,
         marginHorizontal: SPACING.xs,
+    },
+    urlPreviewContainer: {
+        marginBottom: SPACING.lg,
+    },
+    urlPreviewLabel: {
+        fontSize: FONT_SIZES.xs,
+        marginBottom: SPACING.xs,
+        fontWeight: 'bold',
+    },
+    urlCard: {
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.md,
+        borderWidth: 1,
+    },
+    urlText: {
+        fontSize: FONT_SIZES.sm,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    inputLabel: {
+        fontSize: FONT_SIZES.sm,
+        fontWeight: 'bold',
+        marginBottom: SPACING.xs,
     }
 });

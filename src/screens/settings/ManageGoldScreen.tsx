@@ -113,20 +113,6 @@ export default function ManageGoldScreen() {
             <HeaderBar title={t('manage_gold_silver_title')} showBack />
 
             <View style={styles.content}>
-                <View style={styles.header}>
-                    <Text style={[styles.title, { color: activeColors.text }]}>{t('metal_types')}</Text>
-                    <TouchableOpacity
-                        style={[styles.addButton, { backgroundColor: activeColors.primary }]}
-                        onPress={() => {
-                            resetForm();
-                            setIsModalVisible(true);
-                        }}
-                    >
-                        <Icon name="add" size={24} color={COLORS.white} />
-                        <Text style={styles.addButtonText}>{t('add_new')}</Text>
-                    </TouchableOpacity>
-                </View>
-
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                     {metalTypes.map((item) => (
                         <View key={item.id} style={[styles.card, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
@@ -220,6 +206,17 @@ export default function ManageGoldScreen() {
                     </View>
                 </TouchableWithoutFeedback>
             </Modal>
+
+            <TouchableOpacity
+                style={[styles.fab, { backgroundColor: activeColors.primary }]}
+                onPress={() => {
+                    resetForm();
+                    setIsModalVisible(true);
+                }}
+                activeOpacity={0.8}
+            >
+                <Icon name="add" size={32} color="#FFF" />
+            </TouchableOpacity>
         </ScreenContainer>
     );
 }
@@ -331,5 +328,20 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontStyle: 'italic',
+    },
+    fab: {
+        position: 'absolute',
+        right: SPACING.lg,
+        bottom: SPACING.lg,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
     }
 });

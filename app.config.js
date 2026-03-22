@@ -1,16 +1,16 @@
 export default {
   expo: {
-    name: "Estimation",
+    name: "Estimator",
     slug: "gold-estimation",
     version: "1.0.0",
     scheme: "goldestimation",
     orientation: "portrait",
-    icon: "./assets/logo.png",
+    icon: "./assets/adaptive-icon.png",
     userInterfaceStyle: "light",
     newArchEnabled: true,
 
     splash: {
-      image: "./assets/logo.png",
+      image: "./assets/adaptive-icon.png",
       resizeMode: "contain",
       backgroundColor: "#ffffff"
     },
@@ -30,6 +30,7 @@ export default {
     android: {
       package: "com.nexooai.goldestimate",
       versionCode: 1,
+      googleServicesFile: "./google-services.json",
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
@@ -40,11 +41,13 @@ export default {
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
         "ACCESS_FINE_LOCATION",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "POST_NOTIFICATIONS"
       ]
     },
 
     plugins: [
+      "expo-notifications",
       "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-router",

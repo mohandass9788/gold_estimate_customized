@@ -376,6 +376,17 @@ export const initDatabase = async () => {
                     UNIQUE(categoryId, name)
                 );
             `);
+            
+            // Create Custom Endpoints table
+            await db.execAsync(`
+                CREATE TABLE IF NOT EXISTS custom_endpoints (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    method TEXT DEFAULT 'POST',
+                    isActive INTEGER DEFAULT 1
+                );
+            `);
 
             // Insert default data if empty
             const productCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM products;');
@@ -599,6 +610,12 @@ export const clearEstimations = async (): Promise<void> => {
     if (!db) await initDatabase();
     await db!.runAsync('DELETE FROM estimations;');
 };
+
+export const deleteEstimation = async (id: string): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync('DELETE FROM estimations WHERE id = ?;', [id]);
+};
+
 
 export const getFilteredEstimations = async (startDate?: string, endDate?: string, limit: number = 50): Promise<DBEstimation[]> => {
     if (!db) await initDatabase();
@@ -1044,5 +1061,66 @@ export const updateCompany = async (id: number, name: string, mobile: string, ad
         'UPDATE companies SET name = ?, mobile = ?, address1 = ? WHERE id = ?;',
         [name, mobile, address1 || null, id]
     );
+};
+
+export const getSyncTotals = async (): Promise<{
+    customers: number;
+    estimations: number;
+    purchases: number;
+    repairs: number;
+    employees: number;
+}> => {
+    if (!db) await initDatabase();
+    
+    // We use getFirstAsync with count(*) to efficiently get totals
+    const customers = await db!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM customers;');
+    const estimations = await db!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM estimations;');
+    const purchases = await db!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM orders;');
+    const repairs = await db!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM repairs;');
+    const employees = await db!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM employees;');
+
+    return {
+        customers: customers?.count || 0,
+        estimations: estimations?.count || 0,
+        purchases: purchases?.count || 0,
+        repairs: repairs?.count || 0,
+        employees: employees?.count || 0
+    };
+};
+
+// Custom Endpoints Logic
+export interface DBCustomEndpoint {
+    id?: number;
+    title: string;
+    path: string;
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    isActive: number;
+}
+
+export const getCustomEndpoints = async (): Promise<DBCustomEndpoint[]> => {
+    if (!db) await initDatabase();
+    return await db!.getAllAsync<DBCustomEndpoint>('SELECT * FROM custom_endpoints ORDER BY title ASC;');
+};
+
+export const saveCustomEndpoint = async (endpoint: DBCustomEndpoint): Promise<number> => {
+    if (!db) await initDatabase();
+    if (endpoint.id) {
+        await db!.runAsync(
+            'UPDATE custom_endpoints SET title = ?, path = ?, method = ?, isActive = ? WHERE id = ?;',
+            [endpoint.title, endpoint.path, endpoint.method, endpoint.isActive, endpoint.id]
+        );
+        return endpoint.id;
+    } else {
+        const result = await db!.runAsync(
+            'INSERT INTO custom_endpoints (title, path, method, isActive) VALUES (?, ?, ?, ?);',
+            [endpoint.title, endpoint.path, endpoint.method, endpoint.isActive]
+        );
+        return result.lastInsertRowId;
+    }
+};
+
+export const deleteCustomEndpoint = async (id: number): Promise<void> => {
+    if (!db) await initDatabase();
+    await db!.runAsync('DELETE FROM custom_endpoints WHERE id = ?;', [id]);
 };
 

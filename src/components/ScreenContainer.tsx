@@ -150,6 +150,7 @@ export default function ScreenContainer({ children, backgroundColor, keyboardAvo
                     buttons={alertConfig.buttons}
                     onClose={hideAlert}
                     theme={theme}
+                    t={t}
                 />
             </KeyboardAvoidingView>
         </SafeAreaView>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableOpacity as RNRTouchableOpacity, Modal as RNModal, ActivityIndicator as RNActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSubscriptionRestricted } from '../hooks/useSubscriptionRestricted';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import ScreenContainer from '../components/ScreenContainer';
@@ -13,6 +14,7 @@ import SummaryCard from '../components/SummaryCard';
 import EstimationForm from '../components/EstimationForm';
 import CardItemRow from '../components/CardItemRow';
 import { useEstimation } from '../store/EstimationContext';
+import { useAuth } from '../store/AuthContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { calculateNetWeight } from '../utils/calculations';
 import { getPurchaseCategories, DBPurchaseCategory, getNextEstimationNumber } from '../services/dbService';
@@ -39,9 +41,28 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const { state, addTagItem, addManualItem, addPurchaseItem, addChitItem, addAdvanceItem, removeItem, resetEstimation, clearEstimation, saveCurrentEstimation } = useEstimation();
     const {
         receiptConfig, currentEmployeeName, shopDetails, deviceName,
-        isPrinterConnected, printerType, t, showAlert, theme, requestPrint
+        isPrinterConnected, printerType, t, showAlert, theme, requestPrint,
+        featureFlags
     } = useGeneralSettings();
-    const [mode, setMode] = useState<Mode>((params.mode as Mode) || initialMode);
+
+    const getFirstEnabledMode = (): Mode => {
+        if (featureFlags.isEstimationEnabled) return 'TAG';
+        if (featureFlags.isPurchaseEnabled) return 'PURCHASE';
+        if (featureFlags.isChitEnabled) return 'CHIT';
+        if (featureFlags.isAdvanceEnabled) return 'ADVANCE';
+        return 'TAG';
+    };
+
+    const isModeEnabled = (m: Mode) => {
+        if (m === 'TAG' || m === 'MANUAL') return featureFlags.isEstimationEnabled;
+        if (m === 'PURCHASE') return featureFlags.isPurchaseEnabled;
+        if (m === 'CHIT') return featureFlags.isChitEnabled;
+        if (m === 'ADVANCE') return featureFlags.isAdvanceEnabled;
+        return true;
+    };
+
+    const initialBestMode = (params.mode as Mode) || initialMode;
+    const [mode, setMode] = useState<Mode>(isModeEnabled(initialBestMode) ? initialBestMode : getFirstEnabledMode());
     const [editingItem, setEditingItem] = useState<EstimationItem | null>(null);
     const [viewingItem, setViewingItem] = useState<any | null>(null);
     const [viewingType, setViewingType] = useState<'estimation' | 'purchase' | 'chit' | 'advance'>('estimation');
@@ -56,6 +77,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const [advanceItemsToPrint, setAdvanceItemsToPrint] = useState<AdvanceItem[]>([]);
     const [estimationNum, setEstimationNum] = useState<number | null>(null);
     const [scrollOffset, setScrollOffset] = useState(0);
+    const { currentUser, isSuperAdmin, logout, validateSubscription } = useAuth();
     const [contentWidth, setContentWidth] = useState(0);
     const [modeViewportWidth, setModeViewportWidth] = useState(0);
     const [topSnackbar, setTopSnackbar] = useState<{ visible: boolean; message: string; type: 'success' | 'info' | 'warning' | 'error' }>({
@@ -124,9 +146,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     : null;
 
                 if (existingItem) {
-                    Alert.alert(
+                    showAlert(
                         t('duplicate_item') || 'Duplicate Item',
                         t('duplicate_item_msg', { tag: scannedProduct.tagNumber }) || `Item with Tag ${scannedProduct.tagNumber} is already in the list.`,
+                        'warning',
                         [
                             { text: t('ok') || 'OK', onPress: () => router.setParams({ scannedData: undefined }) }
                         ]
@@ -230,36 +253,45 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
         }
     };
 
+    const { verifyAccess } = useSubscriptionRestricted();
+
     const handlePrintAllConsolidated = async () => {
-        if (state.items.length === 0 && state.purchaseItems.length === 0 && state.chitItems.length === 0 && state.advanceItems.length === 0) {
-            Alert.alert(t('no_items') || 'No items to print');
-            return;
-        }
+        if (!validateSubscription()) return;
+        
+        verifyAccess(async () => {
+            if (state.items.length === 0 && state.purchaseItems.length === 0 && state.chitItems.length === 0 && state.advanceItems.length === 0) {
+                showAlert(t('no_items') || 'No items to print', '', 'info');
+                return;
+            }
 
-        const nextNum = await getNextEstimationNumber();
-        setEstimationNum(nextNum);
+            const nextNum = await getNextEstimationNumber();
+            setEstimationNum(nextNum);
 
-        requestPrint(async (details) => {
-            setPrintDetails(details);
-            setItemsToPrint(state.items);
-            setPurchaseItemsToPrint(state.purchaseItems);
-            setChitItemsToPrint(state.chitItems);
-            setAdvanceItemsToPrint(state.advanceItems);
-            setPreviewType('merged');
-            setShowPrintPreview(true);
-        }, false, {
-            customerName: printDetails?.customerName || state.customer?.name || '',
-            mobile: printDetails?.mobile || state.customer?.mobile || '',
-            place: printDetails?.place || state.customer?.address || '',
-            employeeName: printDetails?.employeeName || currentEmployeeName || ''
-        }, printDetails);
+            requestPrint(async (details) => {
+                setPrintDetails(details);
+                setItemsToPrint(state.items);
+                setPurchaseItemsToPrint(state.purchaseItems);
+                setChitItemsToPrint(state.chitItems);
+                setAdvanceItemsToPrint(state.advanceItems);
+                setPreviewType('merged');
+                setShowPrintPreview(true);
+            }, false, {
+                customerName: printDetails?.customerName || state.customer?.name || '',
+                mobile: printDetails?.mobile || state.customer?.mobile || '',
+                place: printDetails?.place || state.customer?.address || '',
+                employeeName: printDetails?.employeeName || currentEmployeeName || ''
+            }, printDetails);
+        });
     };
 
     const handlePrintSelected = async () => {
-        if (selectedItems.size === 0) {
-            Alert.alert(t('no_items_selected') || 'No Items Selected');
-            return;
-        }
+        if (!validateSubscription()) return;
+        
+        verifyAccess(async () => {
+            if (selectedItems.size === 0) {
+                showAlert(t('no_items_selected') || 'No Items Selected', '', 'info');
+                return;
+            }
 
         // Fetch the next estimation number for today if we don't already have one
         const currentEstNum = state.currentEstimationNumber;
@@ -291,9 +323,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 return;
             }
 
-            Alert.alert(
+            showAlert(
                 t('print'),
                 'Choose print format:',
+                'info',
                 [
                     {
                         text: t('merged_receipt') || 'Single Receipt (Merged)',
@@ -317,7 +350,8 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             mobile: printDetails?.mobile || state.customer?.mobile || '',
             place: printDetails?.place || state.customer?.address || '',
             employeeName: printDetails?.employeeName || currentEmployeeName || ''
-        }, printDetails);
+            }, printDetails);
+        });
     };
 
     const confirmPrint = async () => {
@@ -774,7 +808,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     const handleShare = async () => {
         if (state.items.length === 0 && state.purchaseItems.length === 0) {
-            Alert.alert(t('no_items'));
+            showAlert(t('no_items'), '', 'warning');
             return;
         }
 
@@ -783,7 +817,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
             const { uri } = await Print.printToFileAsync({ html });
             await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
         } catch (error) {
-            Alert.alert('Error', 'Failed to share');
+            showAlert('Error', 'Failed to share', 'error');
         }
     };
 
@@ -978,11 +1012,11 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 onLayout={(e: any) => setModeViewportWidth(e.nativeEvent.layout.width)}
             >
                 <View style={styles.modeSelectorGrid}>
-                    <ModeButton label={t('scan_tag_btn')} icon="qr-code-outline" modeKey="TAG" active={mode === 'TAG'} onPress={() => setMode('TAG')} />
-                    <ModeButton label={t('manual_entry_btn')} icon="create-outline" modeKey="MANUAL" active={mode === 'MANUAL'} onPress={() => setMode('MANUAL')} />
-                    <ModeButton label={t('purchase_btn')} icon="bag-handle-outline" modeKey="PURCHASE" active={mode === 'PURCHASE'} onPress={() => setMode('PURCHASE')} />
-                    <ModeButton label={t('chit_btn')} icon="receipt-outline" modeKey="CHIT" active={mode === 'CHIT'} onPress={() => setMode('CHIT')} />
-                    <ModeButton label={t('advance_btn')} icon="wallet-outline" modeKey="ADVANCE" active={mode === 'ADVANCE'} onPress={() => setMode('ADVANCE')} />
+                    {featureFlags.isEstimationEnabled && <ModeButton label={t('scan_tag_btn')} icon="qr-code-outline" modeKey="TAG" active={mode === 'TAG'} onPress={() => setMode('TAG')} />}
+                    {featureFlags.isEstimationEnabled && <ModeButton label={t('manual_entry_btn')} icon="create-outline" modeKey="MANUAL" active={mode === 'MANUAL'} onPress={() => setMode('MANUAL')} />}
+                    {featureFlags.isPurchaseEnabled && <ModeButton label={t('purchase_btn')} icon="bag-handle-outline" modeKey="PURCHASE" active={mode === 'PURCHASE'} onPress={() => setMode('PURCHASE')} />}
+                    {featureFlags.isChitEnabled && <ModeButton label={t('chit_btn')} icon="receipt-outline" modeKey="CHIT" active={mode === 'CHIT'} onPress={() => setMode('CHIT')} />}
+                    {featureFlags.isAdvanceEnabled && <ModeButton label={t('advance_btn')} icon="wallet-outline" modeKey="ADVANCE" active={mode === 'ADVANCE'} onPress={() => setMode('ADVANCE')} />}
                 </View>
             </View>
 
@@ -997,10 +1031,12 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         initialData={editingItem}
                         onScanPress={() => router.push('/(tabs)/scan')}
                         onAdd={(item) => {
-                            if (mode === 'TAG') addTagItem(item);
-                            else addManualItem(item);
-                            setEditingItem(null);
-                            showTopSnackbar(t('item_added_to_list') || 'Item added to list', 'success');
+                            verifyAccess(() => {
+                                if (mode === 'TAG') addTagItem(item);
+                                else addManualItem(item);
+                                setEditingItem(null);
+                                showTopSnackbar(t('item_added_to_list') || 'Item added to list', 'success');
+                            });
                         }}
                         onClear={() => setEditingItem(null)}
                     />
@@ -1021,7 +1057,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         />
                         <PrimaryButton
                             title={t('add_chit')}
-                            onPress={handleAddChit}
+                            onPress={() => verifyAccess(handleAddChit)}
                             style={{ marginTop: SPACING.md }}
                         />
                     </View>
@@ -1042,7 +1078,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         />
                         <PrimaryButton
                             title={t('add_advance')}
-                            onPress={handleAddAdvance}
+                            onPress={() => verifyAccess(handleAddAdvance)}
                             style={{ marginTop: SPACING.md }}
                         />
                     </View>
@@ -1135,7 +1171,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         </View>
                         <PrimaryButton
                             title={t('add_purchase')}
-                            onPress={handleAddPurchase}
+                            onPress={() => verifyAccess(handleAddPurchase)}
                             style={{ marginTop: SPACING.md }}
                         />
                     </View>

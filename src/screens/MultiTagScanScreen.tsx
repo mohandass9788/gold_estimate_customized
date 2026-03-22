@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, Vibration, FlatList as RNFlatList, TouchableOpacity as RNRTouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, Vibration, FlatList as RNFlatList, TouchableOpacity as RNRTouchableOpacity, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +29,7 @@ interface ScannedTag {
 export default function MultiTagScanScreen() {
     const router = useRouter();
     const { addMultipleTagItems, state } = useEstimation();
-    const { theme, t } = useGeneralSettings();
+    const { theme, t, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [permission, requestPermission] = useCameraPermissions();
@@ -62,7 +62,7 @@ export default function MultiTagScanScreen() {
             setScannedTags(prev => prev.map(t => t.id === tagId ? { ...t, status: 'confirmed', product } : t));
         } catch (error) {
             setScannedTags(prev => prev.map(t => t.id === tagId ? { ...t, status: 'error' } : t));
-            Alert.alert(t('error') || 'Error', `${t('failed_to_fetch_tag_details') || 'Failed to fetch details for tag'}: ${tagId}`);
+            showAlert(t('error') || 'Error', `${t('failed_to_fetch_tag_details') || 'Failed to fetch details for tag'}: ${tagId}`, 'error');
         }
     };
 
@@ -73,7 +73,7 @@ export default function MultiTagScanScreen() {
     const handleProceed = () => {
         const confirmedTags = scannedTags.filter(t => t.status === 'confirmed' && t.product);
         if (confirmedTags.length === 0) {
-            Alert.alert(t('no_items') || 'No Items', t('confirm_at_least_one_tag') || 'Please add/confirm at least one tag before proceeding.');
+            showAlert(t('no_items') || 'No Items', t('confirm_at_least_one_tag') || 'Please add/confirm at least one tag before proceeding.', 'warning');
             return;
         }
 
@@ -112,7 +112,7 @@ export default function MultiTagScanScreen() {
         });
 
         addMultipleTagItems(itemsToAdd);
-        Alert.alert(t('success'), t('items_added_to_estimation', { count: itemsToAdd.length.toString() }) || `${itemsToAdd.length} items added to estimation.`);
+        showAlert(t('success'), t('items_added_to_estimation', { count: itemsToAdd.length.toString() }) || `${itemsToAdd.length} items added to estimation.`, 'success');
         router.push({ pathname: '/(tabs)/estimation', params: { mode: 'TAG' } });
     };
 

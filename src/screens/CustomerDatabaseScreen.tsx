@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, FlatList as RNFlatList, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator, TextInput as RNTextInput } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, FlatList as RNFlatList, TouchableOpacity as RNRTouchableOpacity, ActivityIndicator as RNActivityIndicator, TextInput as RNTextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
@@ -8,6 +8,7 @@ import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { getCustomers, deleteCustomer, DBCustomer, saveCustomer, updateCustomer } from '../services/dbService';
 import CustomerDetailsModal from '../modals/CustomerDetailsModal';
 import { Customer } from '../types';
+import { useSubscriptionRestricted } from '../hooks/useSubscriptionRestricted';
 
 const View = RNView as any;
 const Text = RNText as any;
@@ -18,7 +19,7 @@ const FlatList = RNFlatList as any;
 const TextInput = RNTextInput as any;
 
 export default function CustomerDatabaseScreen() {
-    const { theme, t } = useGeneralSettings();
+    const { theme, t, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [customers, setCustomers] = useState<DBCustomer[]>([]);
@@ -26,6 +27,8 @@ export default function CustomerDatabaseScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<DBCustomer | null>(null);
+
+    const { verifyAccess } = useSubscriptionRestricted();
 
     const loadCustomers = async () => {
         setIsLoading(true);
@@ -44,9 +47,10 @@ export default function CustomerDatabaseScreen() {
     }, [searchQuery]);
 
     const handleDelete = (id: number, name: string) => {
-        Alert.alert(
+        showAlert(
             t('confirm_delete') || 'Confirm Delete',
             t('delete_customer_msg', { name }) || `Are you sure you want to delete ${name}?`,
+            'warning',
             [
                 { text: t('cancel'), style: 'cancel' },
                 {
@@ -61,6 +65,10 @@ export default function CustomerDatabaseScreen() {
         );
     };
 
+    const handleProtectedDelete = (id: number, name: string) => {
+        verifyAccess(() => handleDelete(id, name));
+    };
+
     const handleAddCustomer = async (data: Customer) => {
         try {
             if (editingCustomer) {
@@ -71,7 +79,7 @@ export default function CustomerDatabaseScreen() {
             setEditingCustomer(null);
             loadCustomers();
         } catch (error: any) {
-            Alert.alert(t('error'), error.message || 'Failed to save customer');
+            showAlert(t('error'), error.message || 'Failed to save customer', 'error');
         }
     };
 
@@ -99,16 +107,13 @@ export default function CustomerDatabaseScreen() {
             </View>
             <View style={styles.cardActions}>
                 <TouchableOpacity
-                    onPress={() => {
-                        setEditingCustomer(item);
-                        setShowAddModal(true);
-                    }}
+                    onPress={() => verifyAccess(() => { setEditingCustomer(item); setShowAddModal(true); })}
                     style={styles.actionIcon}
                 >
                     <Icon name="pencil-outline" size={20} color={activeColors.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity
-                    onPress={() => handleDelete(item.id, item.name)}
+                    onPress={() => handleProtectedDelete(item.id, item.name)}
                     style={styles.actionIcon}
                 >
                     <Icon name="trash-outline" size={20} color={COLORS.error} />
@@ -121,11 +126,7 @@ export default function CustomerDatabaseScreen() {
         <ScreenContainer>
             <HeaderBar
                 title={t('customers') || "Customers"}
-                rightAction={
-                    <TouchableOpacity onPress={() => { setEditingCustomer(null); setShowAddModal(true); }}>
-                        <Icon name="person-add-outline" size={24} color={activeColors.primary} />
-                    </TouchableOpacity>
-                }
+                showBack
             />
 
             <View style={styles.searchContainer}>
@@ -180,6 +181,14 @@ export default function CustomerDatabaseScreen() {
                     address: editingCustomer.address1
                 } : null}
             />
+
+            <TouchableOpacity
+                style={[styles.fab, { backgroundColor: activeColors.primary }]}
+                onPress={() => verifyAccess(() => { setEditingCustomer(null); setShowAddModal(true); })}
+                activeOpacity={0.8}
+            >
+                <Icon name="person-add" size={28} color="#FFF" />
+            </TouchableOpacity>
         </ScreenContainer>
     );
 }
@@ -276,5 +285,20 @@ const styles = StyleSheet.create({
     emptyText: {
         marginTop: SPACING.md,
         fontSize: FONT_SIZES.md,
+    },
+    fab: {
+        position: 'absolute',
+        right: SPACING.lg,
+        bottom: SPACING.lg,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
     }
 });

@@ -8,7 +8,6 @@ import {
     Modal,
     TextInput,
     Switch,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     ScrollView
@@ -20,9 +19,11 @@ import PrimaryButton from '../components/PrimaryButton';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { getEmployees, addEmployee, updateEmployee, deleteEmployee, DBEmployee } from '../services/dbService';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
+import { useSubscriptionRestricted } from '../hooks/useSubscriptionRestricted';
 
 export default function EmployeeSettingsScreen() {
     const { theme, t, showAlert, refreshEmployees } = useGeneralSettings();
+    const { verifyAccess } = useSubscriptionRestricted();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [employees, setEmployees] = useState<DBEmployee[]>([]);
@@ -56,23 +57,27 @@ export default function EmployeeSettingsScreen() {
     };
 
     const openAddModal = () => {
-        setEditingEmployee(null);
-        setEmpId('');
-        setName('');
-        setPhone('');
-        setRole('');
-        setIsActive(true);
-        setIsModalVisible(true);
+        verifyAccess(() => {
+            setEditingEmployee(null);
+            setEmpId('');
+            setName('');
+            setPhone('');
+            setRole('');
+            setIsActive(true);
+            setIsModalVisible(true);
+        });
     };
 
     const openEditModal = (emp: DBEmployee) => {
-        setEditingEmployee(emp);
-        setEmpId(emp.empId);
-        setName(emp.name);
-        setPhone(emp.phone);
-        setRole(emp.role);
-        setIsActive(emp.isActive === 1);
-        setIsModalVisible(true);
+        verifyAccess(() => {
+            setEditingEmployee(emp);
+            setEmpId(emp.empId);
+            setName(emp.name);
+            setPhone(emp.phone);
+            setRole(emp.role);
+            setIsActive(emp.isActive === 1);
+            setIsModalVisible(true);
+        });
     };
 
     const handleSave = async () => {
@@ -111,28 +116,31 @@ export default function EmployeeSettingsScreen() {
     };
 
     const handleDelete = (id: number) => {
-        Alert.alert(
-            t('confirm_delete') || 'Confirm Delete',
-            t('delete_employee_confirm') || 'Are you sure you want to delete this employee? This action cannot be undone.',
-            [
-                { text: t('cancel') || 'Cancel', style: 'cancel' },
-                {
-                    text: t('delete') || 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await deleteEmployee(id);
-                            showAlert(t('success') || 'Success', t('employee_deleted_success') || 'Employee deleted successfully.', 'success');
-                            fetchEmployees();
-                            refreshEmployees(); // Trigger global update
-                        } catch (error) {
-                            console.error('Delete failed:', error);
-                            showAlert(t('error') || 'Error', t('employee_delete_failed') || 'Failed to delete employee.', 'error');
+        verifyAccess(() => {
+            showAlert(
+                t('confirm_delete') || 'Confirm Delete',
+                t('delete_employee_confirm') || 'Are you sure you want to delete this employee? This action cannot be undone.',
+                'warning',
+                [
+                    { text: t('cancel') || 'Cancel', style: 'cancel' },
+                    {
+                        text: t('delete') || 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                            try {
+                                await deleteEmployee(id);
+                                showAlert(t('success') || 'Success', t('employee_deleted_success') || 'Employee deleted successfully.', 'success');
+                                fetchEmployees();
+                                refreshEmployees(); // Trigger global update
+                            } catch (error) {
+                                console.error('Delete failed:', error);
+                                showAlert(t('error') || 'Error', t('employee_delete_failed') || 'Failed to delete employee.', 'error');
+                            }
                         }
                     }
-                }
-            ]
-        );
+                ]
+            );
+        });
     };
 
     const renderEmployee = ({ item }: { item: DBEmployee }) => (

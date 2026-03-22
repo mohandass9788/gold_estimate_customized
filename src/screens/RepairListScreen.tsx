@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { getRepairs, getRepairById, DBRepair, deleteRepair } from '../services/dbService';
+import { useAuth } from '../store/AuthContext';
 import ScreenContainer from '../components/ScreenContainer';
 import { Camera, CameraView } from 'expo-camera';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
@@ -16,10 +17,11 @@ import { printRepair, getRepairReceiptThermalPayload } from '../services/printSe
 export default function RepairListScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ scanId?: string }>();
-    const { theme, t, shopDetails, receiptConfig, updateReceiptConfig } = useGeneralSettings();
+    const { theme, t, shopDetails, receiptConfig, updateReceiptConfig, showAlert } = useGeneralSettings();
+    const { validateSubscription } = useAuth();
     const [repairs, setRepairs] = useState<DBRepair[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'DELIVERED'>('ALL');
+    const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'DELIVERED' | 'RECEIVED'>('ALL');
     const [loading, setLoading] = useState(true);
     const [selectedRepair, setSelectedRepair] = useState<DBRepair | null>(null);
     const [isDeliveryModalVisible, setIsDeliveryModalVisible] = useState(false);
@@ -49,14 +51,14 @@ export default function RepairListScreen() {
                             setIsDeliveryModalVisible(true);
                         }, 250);
                     } else {
-                        Alert.alert(t('info'), t('repair_already_delivered'));
+                        showAlert(t('info'), t('repair_already_delivered'), 'info');
                     }
                 } else {
-                    Alert.alert(t('error'), t('invalid_repair_qr'));
+                    showAlert(t('error'), t('invalid_repair_qr'), 'error');
                 }
             } catch (error) {
                 console.error('Repair lookup failed:', error);
-                Alert.alert(t('error'), t('scan_error'));
+                showAlert(t('error'), t('scan_error'), 'error');
             } finally {
                 router.setParams({ scanId: undefined });
             }
@@ -68,9 +70,15 @@ export default function RepairListScreen() {
     const loadRepairs = async () => {
         setLoading(true);
         try {
-            const status = statusFilter === 'ALL' ? undefined : statusFilter;
+            const status = (statusFilter === 'ALL' || statusFilter === 'RECEIVED') ? undefined : statusFilter;
             const data = await getRepairs(100, status);
-            setRepairs(data);
+
+            // If RECEIVED filter is selected, we filter PENDING items here (as Received is same as Pending in current DB)
+            if (statusFilter === 'RECEIVED') {
+                setRepairs(data.filter(r => r.status === 'PENDING'));
+            } else {
+                setRepairs(data);
+            }
         } catch (error) {
             console.error('Failed to load repairs:', error);
         } finally {
@@ -85,7 +93,7 @@ export default function RepairListScreen() {
             setScanned(false);
             setIsScannerVisible(true);
         } else {
-            Alert.alert(t('error'), t('camera_permission_needed'));
+            showAlert(t('error'), t('camera_permission_needed'), 'error');
         }
     };
 
@@ -104,14 +112,14 @@ export default function RepairListScreen() {
                         setIsDeliveryModalVisible(true);
                     }, 500);
                 } else {
-                    Alert.alert(t('info'), t('repair_already_delivered'));
+                    showAlert(t('info'), t('repair_already_delivered'), 'info');
                 }
             } else {
-                Alert.alert(t('error'), t('invalid_repair_qr'));
+                showAlert(t('error'), t('invalid_repair_qr'), 'error');
             }
         } catch (error) {
             console.error('Scan lookup failed:', error);
-            Alert.alert(t('error'), t('scan_error'));
+            showAlert(t('error'), t('scan_error'), 'error');
         }
     };
 
@@ -168,7 +176,7 @@ export default function RepairListScreen() {
                 </View>
                 <View style={styles.amountWrap}>
                     <Text style={[styles.amountLabel, { color: activeColors.textLight }]}>{t('balance')}</Text>
-                    <Text style={[styles.amountValue, { color: COLORS.primary }]}>₹{item.balance.toLocaleString()}</Text>
+                    <Text style={[styles.amountValue, { color: COLORS.primary }]}>{item.balance.toLocaleString()}</Text>
                     <Text style={[styles.dateText, { color: activeColors.textLight, marginTop: 4 }]}>
                         {format(new Date(item.date), 'dd MMM yyyy')}
                     </Text>
@@ -205,7 +213,7 @@ export default function RepairListScreen() {
             setIsPreviewVisible(true);
         } catch (error) {
             console.error('Failed to generate preview:', error);
-            Alert.alert(t('error'), t('preview_error'));
+            showAlert(t('error'), t('preview_error'), 'error');
         }
     };
 
@@ -233,9 +241,10 @@ export default function RepairListScreen() {
     };
 
     const handleDelete = (item: DBRepair) => {
-        Alert.alert(
+        showAlert(
             t('confirm_delete'),
             t('confirm_delete_repair'),
+            'warning',
             [
                 { text: t('cancel'), style: 'cancel' },
                 {
@@ -275,8 +284,12 @@ export default function RepairListScreen() {
                     />
                 </View>
 
-                <View style={styles.filterRow}>
-                    {(['ALL', 'PENDING', 'DELIVERED'] as const).map((status) => (
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.filterRow}
+                >
+                    {(['ALL', 'RECEIVED', 'PENDING', 'DELIVERED'] as const).map((status) => (
                         <TouchableOpacity
                             key={status}
                             style={[
@@ -293,7 +306,7 @@ export default function RepairListScreen() {
                             </Text>
                         </TouchableOpacity>
                     ))}
-                </View>
+                </ScrollView>
             </SafeLinearGradient>
 
             <FlatList
@@ -341,8 +354,9 @@ export default function RepairListScreen() {
                 visible={isPreviewVisible}
                 onClose={() => setIsPreviewVisible(false)}
                 onPrint={() => {
+                    if (!validateSubscription()) return;
                     if (previewData) {
-                        printRepair(previewData as any);
+                        printRepair(previewData as any, shopDetails, undefined, receiptConfig, t);
                     }
                 }}
                 repairData={previewData as any}
@@ -451,15 +465,15 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     filterItem: {
-        paddingHorizontal: SPACING.md,
-        paddingVertical: 6,
-        borderRadius: 20,
-        minWidth: 80,
+        paddingHorizontal: SPACING.lg,
+        paddingVertical: 10,
+        borderRadius: 25,
+        minWidth: 100,
         alignItems: 'center',
     },
     filterText: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
     listContent: {
         padding: SPACING.md,
@@ -483,13 +497,13 @@ const styles = StyleSheet.create({
         marginBottom: SPACING.sm,
     },
     statusBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 14,
     },
     statusText: {
-        fontSize: 10,
-        fontWeight: 'bold',
+        fontSize: 11,
+        fontWeight: '900',
         textTransform: 'uppercase',
     },
     dateText: {

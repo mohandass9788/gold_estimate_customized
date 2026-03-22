@@ -6,7 +6,6 @@ import {
     ScrollView as RNScrollView,
     TouchableOpacity as RNRTouchableOpacity,
     TextInput as RNTextInput,
-    Alert,
     Modal as RNModal,
     KeyboardAvoidingView as RNKeyboardAvoidingView,
     Platform,
@@ -40,6 +39,7 @@ import {
     DBProduct,
     DBSubProduct
 } from '../services/dbService';
+import { useSubscriptionRestricted } from '../hooks/useSubscriptionRestricted';
 
 const View = RNView as any;
 const Text = RNText as any;
@@ -54,6 +54,7 @@ const Icon = Ionicons as any;
 const { width } = Dimensions.get('window');
 
 export default function ProductManagementScreen() {
+    const { verifyAccess } = useSubscriptionRestricted();
     const { t, showAlert } = useGeneralSettings();
     const [products, setProducts] = useState<DBProduct[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<DBProduct | null>(null);
@@ -98,61 +99,67 @@ export default function ProductManagementScreen() {
     };
 
     const handleAddProduct = async () => {
-        if (!newProductName.trim()) {
-            showAlert(t('error'), t('product_name_required') || 'Product name is required', 'error');
-            return;
-        }
-        try {
-            await addProduct(
-                newProductName.trim(),
-                parseInt(defaultPurity),
-                parseFloat(defaultWastage) || 0,
-                defaultWastageType,
-                parseFloat(defaultMakingCharge) || 0,
-                defaultMakingChargeType,
-                newProductMetal,
-                hsnCode.trim()
-            );
-            resetForms();
-            setShowAddModal(false);
-            loadProducts();
-            showAlert(t('success'), t('product_added_successfully') || 'Product added successfully', 'success');
-        } catch (error) {
-            console.error('Add product error:', error);
-            showAlert(t('error'), t('product_add_failed') || 'Product already exists or could not be added', 'error');
-        }
+        verifyAccess(async () => {
+            if (!newProductName.trim()) {
+                showAlert(t('error'), t('product_name_required') || 'Product name is required', 'error');
+                return;
+            }
+            try {
+                await addProduct(
+                    newProductName.trim(),
+                    parseInt(defaultPurity),
+                    parseFloat(defaultWastage) || 0,
+                    defaultWastageType,
+                    parseFloat(defaultMakingCharge) || 0,
+                    defaultMakingChargeType,
+                    newProductMetal,
+                    hsnCode.trim()
+                );
+                resetForms();
+                setShowAddModal(false);
+                loadProducts();
+                showAlert(t('success'), t('product_added_successfully') || 'Product added successfully', 'success');
+            } catch (error) {
+                console.error('Add product error:', error);
+                showAlert(t('error'), t('product_add_failed') || 'Product already exists or could not be added', 'error');
+            }
+        });
     };
 
     const handleUpdateProduct = async () => {
-        if (!selectedProduct) return;
-        try {
-            await updateProduct({
-                ...selectedProduct,
-                defaultPurity: parseInt(defaultPurity),
-                defaultWastage: parseFloat(defaultWastage) || 0,
-                defaultWastageType: defaultWastageType,
-                defaultMakingCharge: parseFloat(defaultMakingCharge) || 0,
-                defaultMakingChargeType: defaultMakingChargeType,
-                hsnCode: hsnCode.trim()
-            });
-            loadProducts();
-            showAlert(t('success'), t('product_defaults_updated') || 'Product defaults updated', 'success');
-        } catch (error) {
-            showAlert(t('error'), t('product_update_failed') || 'Could not update product defaults', 'error');
-        }
+        verifyAccess(async () => {
+            if (!selectedProduct) return;
+            try {
+                await updateProduct({
+                    ...selectedProduct,
+                    defaultPurity: parseInt(defaultPurity),
+                    defaultWastage: parseFloat(defaultWastage) || 0,
+                    defaultWastageType: defaultWastageType,
+                    defaultMakingCharge: parseFloat(defaultMakingCharge) || 0,
+                    defaultMakingChargeType: defaultMakingChargeType,
+                    hsnCode: hsnCode.trim()
+                });
+                loadProducts();
+                showAlert(t('success'), t('product_defaults_updated') || 'Product defaults updated', 'success');
+            } catch (error) {
+                showAlert(t('error'), t('product_update_failed') || 'Could not update product defaults', 'error');
+            }
+        });
     };
 
     const handleAddSubProduct = async () => {
-        if (!selectedProduct || !newSubProductName.trim()) return;
-        try {
-            await addSubProduct(selectedProduct.id, newSubProductName.trim());
-            setNewSubProductName('');
-            setShowAddModal(false);
-            loadSubProducts(selectedProduct.id);
-        } catch (error) {
-            console.error('Add sub-product error:', error);
-            showAlert(t('error'), t('sub_product_add_failed') || 'Sub-product already exists or could not be added', 'error');
-        }
+        verifyAccess(async () => {
+            if (!selectedProduct || !newSubProductName.trim()) return;
+            try {
+                await addSubProduct(selectedProduct.id, newSubProductName.trim());
+                setNewSubProductName('');
+                setShowAddModal(false);
+                loadSubProducts(selectedProduct.id);
+            } catch (error) {
+                console.error('Add sub-product error:', error);
+                showAlert(t('error'), t('sub_product_add_failed') || 'Sub-product already exists or could not be added', 'error');
+            }
+        });
     };
 
     const resetForms = () => {
@@ -181,117 +188,119 @@ export default function ProductManagementScreen() {
     };
 
     const handleImportExcel = async (isManualCall = true) => {
-        try {
-            // Safer dynamic import for DocumentPicker
-            let DocumentPicker;
+        verifyAccess(async () => {
             try {
-                // Try requiring the module
-                const DP = require('expo-document-picker');
-                if (!DP) throw new Error('require returned undefined');
+                // Safer dynamic import for DocumentPicker
+                let DocumentPicker;
+                try {
+                    // Try requiring the module
+                    const DP = require('expo-document-picker');
+                    if (!DP) throw new Error('require returned undefined');
 
-                // Support both namespace and default exports
-                DocumentPicker = DP.default || DP;
+                    // Support both namespace and default exports
+                    DocumentPicker = DP.default || DP;
 
-                if (!DocumentPicker || typeof DocumentPicker.getDocumentAsync !== 'function') {
-                    throw new Error('Module loaded but getDocumentAsync is not a function');
+                    if (!DocumentPicker || typeof DocumentPicker.getDocumentAsync !== 'function') {
+                        throw new Error('Module loaded but getDocumentAsync is not a function');
+                    }
+                } catch (e) {
+                    console.error('DocumentPicker load failed:', e);
+                    // Only alert if this was a manual user action
+                    if (isManualCall) {
+                        showAlert(
+                            t('error') || 'Error',
+                            'The Document Picker module is not available. Please ensure you are using a development build with the expo-document-picker module included.',
+                            'error'
+                        );
+                    }
+                    return;
                 }
-            } catch (e) {
-                console.error('DocumentPicker load failed:', e);
-                // Only alert if this was a manual user action
-                if (isManualCall) {
-                    showAlert(
-                        t('error') || 'Error',
-                        'The Document Picker module is not available. Please ensure you are using a development build with the expo-document-picker module included.',
-                        'error'
+
+                const result = await DocumentPicker.getDocumentAsync({
+                    type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'text/csv'],
+                    copyToCacheDirectory: true
+                });
+
+                if (result.canceled) return;
+
+                setIsImporting(true);
+                // Support both result.assets[0].uri (new) and result.uri (old)
+                const fileUri = result.assets ? (result.assets[0] ? result.assets[0].uri : null) : (result as any).uri;
+                if (!fileUri) throw new Error('No file URI found');
+
+                const fileBase64 = await FileSystem.readAsStringAsync(fileUri, {
+                    encoding: 'base64'
+                });
+
+                const workbook = XLSX.read(fileBase64, { type: 'base64' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const data = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+                if (data.length === 0) {
+                    showAlert(t('error'), 'File is empty', 'error');
+                    setIsImporting(false);
+                    return;
+                }
+
+                // Simple import logic: Expecting columns Name, Metal (GOLD/SILVER), Purity, Wastage, WastageType, MC, MCType, HSN, SubProducts (comma separated)
+                let importedCount = 0;
+                let skippedCount = 0;
+                let subProductsAdded = 0;
+
+                for (const row of data) {
+                    const name = row.Name || row.name || row.ProductName;
+                    if (!name) continue;
+
+                    const metal = (row.Metal || row.metal || 'GOLD').toUpperCase();
+                    const hsn = row.HSN || row.hsn || '';
+                    const purity = parseInt(row.Purity || row.purity || (metal === 'SILVER' ? '100' : '22'));
+                    const wastage = parseFloat(row.Wastage || row.wastage || '0');
+                    const wastageType = row.WastageType || row.wastage_type || 'percentage';
+                    const mc = parseFloat(row.MC || row.mc || '0');
+                    const mcType = row.MCType || row.mc_type || 'perGram';
+
+                    const { id: productId, created } = await ensureProduct(
+                        name.trim(),
+                        purity,
+                        wastage,
+                        wastageType,
+                        mc,
+                        mcType,
+                        metal,
+                        hsn
                     );
-                }
-                return;
-            }
 
-            const result = await DocumentPicker.getDocumentAsync({
-                type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'text/csv'],
-                copyToCacheDirectory: true
-            });
+                    if (created) importedCount++;
+                    else skippedCount++;
 
-            if (result.canceled) return;
-
-            setIsImporting(true);
-            // Support both result.assets[0].uri (new) and result.uri (old)
-            const fileUri = result.assets ? (result.assets[0] ? result.assets[0].uri : null) : (result as any).uri;
-            if (!fileUri) throw new Error('No file URI found');
-
-            const fileBase64 = await FileSystem.readAsStringAsync(fileUri, {
-                encoding: 'base64'
-            });
-
-            const workbook = XLSX.read(fileBase64, { type: 'base64' });
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            const data = XLSX.utils.sheet_to_json(worksheet) as any[];
-
-            if (data.length === 0) {
-                showAlert(t('error'), 'File is empty', 'error');
-                setIsImporting(false);
-                return;
-            }
-
-            // Simple import logic: Expecting columns Name, Metal (GOLD/SILVER), Purity, Wastage, WastageType, MC, MCType, HSN, SubProducts (comma separated)
-            let importedCount = 0;
-            let skippedCount = 0;
-            let subProductsAdded = 0;
-
-            for (const row of data) {
-                const name = row.Name || row.name || row.ProductName;
-                if (!name) continue;
-
-                const metal = (row.Metal || row.metal || 'GOLD').toUpperCase();
-                const hsn = row.HSN || row.hsn || '';
-                const purity = parseInt(row.Purity || row.purity || (metal === 'SILVER' ? '100' : '22'));
-                const wastage = parseFloat(row.Wastage || row.wastage || '0');
-                const wastageType = row.WastageType || row.wastage_type || 'percentage';
-                const mc = parseFloat(row.MC || row.mc || '0');
-                const mcType = row.MCType || row.mc_type || 'perGram';
-
-                const { id: productId, created } = await ensureProduct(
-                    name.trim(),
-                    purity,
-                    wastage,
-                    wastageType,
-                    mc,
-                    mcType,
-                    metal,
-                    hsn
-                );
-
-                if (created) importedCount++;
-                else skippedCount++;
-
-                const subs = row.SubProducts || row.sub_products || '';
-                if (subs) {
-                    const subList = subs.split(',').map((s: string) => s.trim());
-                    for (const subName of subList) {
-                        if (subName) {
-                            const { created: subCreated } = await ensureSubProduct(productId, subName);
-                            if (subCreated) subProductsAdded++;
+                    const subs = row.SubProducts || row.sub_products || '';
+                    if (subs) {
+                        const subList = subs.split(',').map((s: string) => s.trim());
+                        for (const subName of subList) {
+                            if (subName) {
+                                const { created: subCreated } = await ensureSubProduct(productId, subName);
+                                if (subCreated) subProductsAdded++;
+                            }
                         }
                     }
                 }
+
+                loadProducts();
+
+                let message = t('import_summary') || 'Import Summary:';
+                message += `\n\n• ${t('new_products') || 'New Products'}: ${importedCount}`;
+                if (skippedCount > 0) message += `\n• ${t('existing_products') || 'Existing (Skipped)'}: ${skippedCount}`;
+                message += `\n• ${t('sub_products_added') || 'Sub-products Added'}: ${subProductsAdded}`;
+
+                showAlert(t('success'), message, 'success');
+            } catch (error) {
+                console.error('Import error:', error);
+                showAlert(t('error'), 'Failed to import products. Ensure file format is correct.', 'error');
+            } finally {
+                setIsImporting(false);
             }
-
-            loadProducts();
-
-            let message = t('import_summary') || 'Import Summary:';
-            message += `\n\n• ${t('new_products') || 'New Products'}: ${importedCount}`;
-            if (skippedCount > 0) message += `\n• ${t('existing_products') || 'Existing (Skipped)'}: ${skippedCount}`;
-            message += `\n• ${t('sub_products_added') || 'Sub-products Added'}: ${subProductsAdded}`;
-
-            showAlert(t('success'), message, 'success');
-        } catch (error) {
-            console.error('Import error:', error);
-            showAlert(t('error'), 'Failed to import products. Ensure file format is correct.', 'error');
-        } finally {
-            setIsImporting(false);
-        }
+        });
     };
 
     const handleDownloadSample = async () => {

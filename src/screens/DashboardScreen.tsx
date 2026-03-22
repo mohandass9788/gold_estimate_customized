@@ -1,18 +1,19 @@
 import React from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity, Platform, Image as RNImage, Dimensions } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity, Platform, Image as RNImage, Dimensions, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../store/AuthContext';
 import { useEstimation } from '../store/EstimationContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS, SHADOWS } from '../constants/theme';
 import ScreenContainer from '../components/ScreenContainer';
 import GoldRateCard from '../components/GoldRateCard';
 import RateUpdateModal from '../components/RateUpdateModal';
 import SafeLinearGradient from '../components/SafeLinearGradient';
 import StatusSnackbar from '../components/StatusSnackbar';
 import { format } from 'date-fns';
+import { useFocusEffect } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
@@ -25,13 +26,29 @@ const Icon = Ionicons as any;
 
 export default function DashboardScreen() {
     const router = useRouter();
-    const { logout } = useAuth();
+    const { logout, refreshProfile } = useAuth();
     const { state, updateGoldRate } = useEstimation();
     const {
         theme, language, t, printerType, isPrinterConnected, shopDetails, deviceName,
         connectionStatus, retryAttempt, countdown, featureFlags, setLanguage, toggleTheme
     } = useGeneralSettings();
     const [isRateModalVisible, setIsRateModalVisible] = React.useState(false);
+    const [refreshing, setRefreshing] = React.useState(false);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            refreshProfile();
+        }, [refreshProfile])
+    );
+
+    const onRefresh = React.useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await refreshProfile();
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshProfile]);
 
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
@@ -91,24 +108,27 @@ export default function DashboardScreen() {
 
     const printerStatus = getPrinterStatusInfo();
     const primaryActions = [
-        { title: t('scan_tag'), subtitle: 'Scan and fetch product details', icon: 'qr-code', route: '/(tabs)/scan', colors: ['#B8860B', '#E1B84C'] },
-        { title: t('manual_entry'), subtitle: 'Create estimate from scratch', icon: 'create', route: '/(tabs)/manual?mode=MANUAL', colors: ['#0E7490', '#38BDF8'] },
-        { title: t('purchase'), subtitle: 'Add old gold purchase values', icon: 'cart', route: '/(tabs)/manual?mode=PURCHASE', colors: ['#0F766E', '#34D399'] },
+        ...(featureFlags.isEstimationEnabled ? [
+            { title: t('scan_tag'), subtitle: 'Scan and fetch product details', icon: 'qr-code', route: '/(tabs)/scan', colors: ['#B8860B', '#E1B84C'] },
+            { title: t('manual_entry'), subtitle: 'Create estimate from scratch', icon: 'create', route: '/(tabs)/manual?mode=MANUAL', colors: ['#0E7490', '#38BDF8'] }
+        ] : []),
+        ...(featureFlags.isPurchaseEnabled ? [
+            { title: t('purchase'), subtitle: 'Add old gold purchase values', icon: 'cart', route: '/(tabs)/manual?mode=PURCHASE', colors: ['#0F766E', '#34D399'] }
+        ] : [])
     ];
     const secondaryActions = [
-        { title: t('multi_tag_scan'), icon: 'layers', route: '/(tabs)/multi-scan', colors: ['#C2410C', '#FB923C'] },
+        ...(featureFlags.isEstimationEnabled ? [{ title: t('multi_tag_scan'), icon: 'layers', route: '/(tabs)/multi-scan', colors: ['#C2410C', '#FB923C'] }] : []),
         ...(featureFlags.isChitEnabled ? [{ title: t('chit'), icon: 'receipt', route: '/(tabs)/manual?mode=CHIT', colors: ['#7C3AED', '#A78BFA'] }] : []),
         ...(featureFlags.isAdvanceEnabled ? [{ title: t('advance'), icon: 'wallet', route: '/(tabs)/manual?mode=ADVANCE', colors: ['#BE123C', '#FB7185'] }] : []),
-        ...(featureFlags.isRepairEnabled
-            ? [{ title: t('repairs'), icon: 'construct', route: '/(tabs)/repairs', colors: ['#9F1239', '#F43F5E'] }]
-            : [{ title: t('update_rates'), icon: 'trending-up', route: '/(tabs)/rates', colors: ['#7C2D12', '#F97316'] }]),
+        ...(featureFlags.isRepairEnabled ? [{ title: t('repairs'), icon: 'construct', route: '/(tabs)/repairs', colors: ['#9F1239', '#F43F5E'] }] : []),
+        { title: t('update_rates'), icon: 'trending-up', route: '/(tabs)/rates', colors: ['#7C2D12', '#F97316'] },
     ];
 
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
             {/* Premium Header */}
             <SafeLinearGradient
-                colors={theme === 'light' ? ['#FFFFFF', '#F8F9FA'] : ['#1C1C1E', '#121212']}
+                colors={theme === 'light' ? ['#FFFFFF', activeColors.background] : ['#1C1C1E', '#121212']}
                 style={styles.header}
             >
                 <View style={styles.headerContent}>
@@ -117,7 +137,8 @@ export default function DashboardScreen() {
                             {shopDetails.appLogo || shopDetails.appIcon ? (
                                 <Image source={{ uri: shopDetails.appLogo || shopDetails.appIcon }} style={styles.logo} />
                             ) : (
-                                <Icon name="business" size={24} color={activeColors.primary} />
+                                <Image source={require("../../assets/icon.png")} style={styles.logo} />
+                                // <Icon name="business" size={24} color={activeColors.primary} />
                             )}
                         </View>
                         <View>
@@ -193,7 +214,18 @@ export default function DashboardScreen() {
                 </View>
             )}
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={activeColors.primary}
+                        colors={[COLORS.primary]}
+                    />
+                }
+            >
                 {/* Gold Rate Card Overhaul */}
                 <View >
                     <GoldRateCard
@@ -295,10 +327,11 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
     header: {
         paddingTop: Platform.OS === 'ios' ? 60 : 10,
-        paddingBottom: 10,
+        paddingBottom: 20,
         paddingHorizontal: SPACING.lg,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
+        borderBottomLeftRadius: BORDER_RADIUS.xl,
+        borderBottomRightRadius: BORDER_RADIUS.xl,
+        ...SHADOWS.light,
     },
     headerContent: {
         flexDirection: 'row',
@@ -413,16 +446,12 @@ const styles = StyleSheet.create({
         borderRadius: BORDER_RADIUS.lg,
         flexDirection: 'row',
         alignItems: 'center',
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
+        ...SHADOWS.medium,
     },
     metricIconWrap: {
-        width: 42,
-        height: 42,
-        borderRadius: 12,
+        width: 44,
+        height: 44,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: SPACING.sm,
@@ -472,46 +501,38 @@ const styles = StyleSheet.create({
         marginBottom: SPACING.md,
     },
     menuButton: {
-        minHeight: 90,
-        borderRadius: 26,
+        minHeight: 96,
+        borderRadius: BORDER_RADIUS.xl,
         paddingHorizontal: SPACING.lg,
         paddingVertical: SPACING.lg,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        elevation: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.16,
-        shadowRadius: 16,
+        ...SHADOWS.heavy,
     },
     menuButtonCompact: {
-        minHeight: 76,
-        borderRadius: 22,
+        minHeight: 82,
+        borderRadius: BORDER_RADIUS.lg,
         paddingHorizontal: SPACING.md,
         paddingVertical: SPACING.md,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        elevation: 6,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 14,
+        ...SHADOWS.medium,
     },
     menuIconCircle: {
-        width: 52,
-        height: 52,
-        borderRadius: 18,
+        width: 56,
+        height: 56,
+        borderRadius: BORDER_RADIUS.md,
         backgroundColor: 'rgba(255, 255, 255, 0.25)',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: SPACING.md,
     },
     menuIconCircleCompact: {
-        width: 40,
-        height: 40,
-        borderRadius: 14,
+        width: 44,
+        height: 44,
+        borderRadius: BORDER_RADIUS.sm,
         backgroundColor: 'rgba(255, 255, 255, 0.22)',
         justifyContent: 'center',
         alignItems: 'center',
@@ -551,6 +572,8 @@ const styles = StyleSheet.create({
         borderRadius: BORDER_RADIUS.lg,
         marginBottom: SPACING.sm,
         borderWidth: 1,
+        borderColor: 'transparent', // Let it blend softly with bg
+        ...SHADOWS.light,
     },
     recentCardLeft: {
         flexDirection: 'row',

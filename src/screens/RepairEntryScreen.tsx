@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, Alert, Image, ActivityIndicator, Platform
+    TextInput, Image, ActivityIndicator, Platform
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { saveRepair, getNextRepairId, getRepairById, DBRepair, getProducts, getS
 import { printRepair, getRepairReceiptThermalPayload } from '../services/printService';
 import ScreenContainer from '../components/ScreenContainer';
 import DropdownField from '../components/DropdownField';
+import { useAuth } from '../store/AuthContext';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import SafeLinearGradient from '../components/SafeLinearGradient';
 import { addDays, format, differenceInDays } from 'date-fns';
@@ -19,7 +20,8 @@ import RepairDetailsPreviewModal from '../modals/RepairDetailsPreviewModal';
 
 export default function RepairEntryScreen() {
     const router = useRouter();
-    const { theme, t, shopDetails, receiptConfig, updateReceiptConfig, employees } = useGeneralSettings();
+    const { theme, t, shopDetails, receiptConfig, updateReceiptConfig, employees, showAlert } = useGeneralSettings();
+    const { validateSubscription } = useAuth();
     const [loading, setLoading] = useState(false);
     const [repairNo, setRepairNo] = useState('');
 
@@ -222,7 +224,7 @@ export default function RepairEntryScreen() {
             : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
         if (permissionResult.granted === false) {
-            Alert.alert(t('permission_denied'), t('camera_permission_needed'));
+            showAlert(t('permission_denied'), t('camera_permission_needed'), 'error');
             return;
         }
 
@@ -230,7 +232,7 @@ export default function RepairEntryScreen() {
             ? await ImagePicker.launchCameraAsync({
                 allowsEditing: true,
                 aspect: [4, 3],
-                quality: 0.5, // Auto-compression as requested
+                quality: 0.5,
             })
             : await ImagePicker.launchImageLibraryAsync({
                 allowsEditing: true,
@@ -243,9 +245,36 @@ export default function RepairEntryScreen() {
         }
     };
 
+    const resetForm = async () => {
+        setType('CUSTOMER');
+        setItemName('');
+        setSubProductName('');
+        setSelectedProductId('');
+        setPcs('1');
+        setGrossWeight('');
+        setStoneWeight('');
+        setNetWeight('');
+        setNatureOfRepair('');
+        setDueDays('7');
+        setDueDate(addDays(new Date(), 7));
+        setEmpId('');
+        setAmount('');
+        setAdvance('');
+        setImages([]);
+        setCustomerName('');
+        setCustomerMobile('');
+        setCustomerAddress('');
+        setGstType('none');
+        setGstValue('');
+        setSavedRepairData(null);
+        setOriginalData(null);
+        setShowPreview(false);
+        await generateRepairId();
+    };
+
     const handleSave = async () => {
         if (!itemName || !customerName) {
-            Alert.alert(t('error'), t('field_required'));
+            showAlert(t('error'), t('field_required'), 'error');
             return;
         }
 
@@ -300,17 +329,15 @@ export default function RepairEntryScreen() {
                 }
             }
 
-            // Flag preview open on successful repair save
             setShowPreview(true);
 
         } catch (error) {
             console.error('Save failed:', error);
-            Alert.alert(t('error'), t('save_failed'));
+            showAlert(t('error'), t('save_failed'), 'error');
         } finally {
             setLoading(false);
         }
     };
-
 
     const removeImage = (index: number) => {
         const newImages = [...images];
@@ -574,7 +601,6 @@ export default function RepairEntryScreen() {
                         </View>
                     </View>
 
-                    {/* GST Section */}
                     <View style={{ marginTop: 14 }}>
                         <Text style={[styles.label, { color: activeColors.textLight, marginBottom: 8 }]}>{t('add_gst') || 'Add GST'}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -673,16 +699,25 @@ export default function RepairEntryScreen() {
                     visible={showPreview}
                     onClose={() => {
                         setShowPreview(false);
-                        router.replace('/(tabs)/repairs');
+                        if (!repairIdParam) {
+                            resetForm();
+                        } else {
+                            router.replace('/(tabs)/repairs');
+                        }
                     }}
                     onPrint={async () => {
+                        if (!validateSubscription()) return;
                         if (savedRepairData) {
                             try {
                                 await printRepair(savedRepairData, shopDetails, empId, receiptConfig, t);
-                                setShowPreview(false);
-                                router.replace('/(tabs)/repairs');
+                                if (!repairIdParam) {
+                                    resetForm();
+                                } else {
+                                    setShowPreview(false);
+                                    router.replace('/(tabs)/repairs');
+                                }
                             } catch (printError: any) {
-                                Alert.alert(t('error'), printError.message || t('print_failed'));
+                                showAlert(t('error'), printError.message || t('print_failed'), 'error');
                             }
                         }
                     }}
@@ -798,47 +833,54 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         width: '100%',
         justifyContent: 'space-between',
-        marginTop: 5,
+        marginTop: 10,
     },
     imagePickBtn: {
         flex: 1,
-        height: 80,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderStyle: 'dashed',
-        borderColor: COLORS.primary,
-        justifyContent: 'center',
+        flexDirection: 'row',
         alignItems: 'center',
-        marginHorizontal: 5,
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: BORDER_RADIUS.md,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
     },
     imagePickText: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        marginTop: 4,
+        fontSize: 12,
+        fontWeight: '600',
+        marginLeft: 8,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        marginVertical: 16,
     },
     balanceRow: {
         flexDirection: 'row',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: SPACING.sm,
     },
     balanceLabel: {
         fontSize: FONT_SIZES.md,
-        fontWeight: '600',
-        marginRight: 10,
+        fontWeight: 'bold',
     },
     balanceValue: {
-        fontSize: FONT_SIZES.lg,
-        fontWeight: 'bold',
+        fontSize: FONT_SIZES.xl,
+        fontWeight: '900',
     },
     saveBtn: {
         flexDirection: 'row',
-        height: 50,
+        height: 54,
         borderRadius: BORDER_RADIUS.lg,
-        justifyContent: 'center',
         alignItems: 'center',
+        justifyContent: 'center',
         marginTop: SPACING.md,
         elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
     },
     saveBtnText: {
         color: '#FFF',
@@ -847,42 +889,41 @@ const styles = StyleSheet.create({
         marginLeft: 10,
     },
     clearBtn: {
-        height: 50,
+        height: 48,
         borderRadius: BORDER_RADIUS.lg,
-        borderWidth: 1,
-        justifyContent: 'center',
         alignItems: 'center',
-        marginTop: SPACING.sm,
+        justifyContent: 'center',
+        marginTop: SPACING.md,
+        borderWidth: 1,
     },
     clearBtnText: {
         fontSize: FONT_SIZES.md,
         fontWeight: '600',
     },
-    divider: {
-        height: 1,
-        backgroundColor: 'rgba(0,0,0,0.1)',
-        marginVertical: 15,
-    },
     gstToggleContainer: {
         flexDirection: 'row',
-        backgroundColor: 'rgba(0,0,0,0.06)',
-        borderRadius: 8,
-        padding: 2,
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        borderRadius: BORDER_RADIUS.md,
+        padding: 4,
+        flex: 1,
+        marginRight: 10,
     },
     gstToggle: {
-        paddingHorizontal: 16,
+        flex: 1,
         paddingVertical: 8,
-        borderRadius: 6,
+        alignItems: 'center',
+        borderRadius: BORDER_RADIUS.sm,
     },
     gstToggleActive: {
-        backgroundColor: COLORS.primary,
+        backgroundColor: '#FFF',
+        elevation: 2,
     },
     gstToggleText: {
         fontSize: 13,
         fontWeight: 'bold',
-        color: '#777',
+        color: '#888',
     },
     gstToggleTextActive: {
-        color: '#FFF',
+        color: COLORS.primary,
     },
 });

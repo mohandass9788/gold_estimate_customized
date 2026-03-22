@@ -1,48 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableOpacity as RNRTouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
-import { getCurrentUser, updateUserCredentials } from '../services/dbService';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { useAuth } from '../store/AuthContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
-import { useRouter } from 'expo-router';
 
-// Fix for React 19 type mismatch
 const View = RNView as any;
 const Text = RNText as any;
 const ScrollView = RNScrollView as any;
 
 export default function ProfileScreen() {
-    const router = useRouter();
-    const { logout } = useAuth();
-    const [currentUsername, setCurrentUsername] = useState('');
-    const [newUsername, setNewUsername] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-
-    useEffect(() => {
-        loadUser();
-    }, []);
-
-    const loadUser = async () => {
-        try {
-            const user = await getCurrentUser();
-            if (user) {
-                setCurrentUsername(user.username);
-                setNewUsername(user.username);
-            }
-        } catch (e) {
-            console.error('Failed to load user', e);
-        }
-    };
-
-    const { t, theme, showAlert, adminPin, updateAdminPin } = useGeneralSettings();
+    const { currentUser, refreshProfile } = useAuth();
+    const { t, showAlert, adminPin, updateAdminPin, theme } = useGeneralSettings();
+    const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
     const [newAdminPin, setNewAdminPin] = useState('');
     const [isPinLoading, setIsPinLoading] = useState(false);
+
+    useEffect(() => {
+        refreshProfile().catch((e) => console.error('Failed to refresh profile', e));
+    }, [refreshProfile]);
 
     useEffect(() => {
         if (adminPin) {
@@ -60,94 +39,41 @@ export default function ProfileScreen() {
         try {
             await updateAdminPin(newAdminPin);
             showAlert('Success', 'Admin PIN updated successfully', 'success');
-        } catch (e) {
+        } catch {
             showAlert('Error', 'Failed to update PIN', 'error');
         } finally {
             setIsPinLoading(false);
         }
     };
 
-    const handleUpdate = async () => {
-        if (!newUsername.trim()) {
-            showAlert('Error', 'Username cannot be empty', 'error');
-            return;
-        }
-
-        if (newPassword || confirmPassword) {
-            if (newPassword !== confirmPassword) {
-                showAlert('Error', 'Passwords do not match', 'error');
-                return;
-            }
-            if (newPassword.length < 4) {
-                showAlert('Error', 'Password must be at least 4 characters', 'error');
-                return;
-            }
-        }
-
-        setIsLoading(true);
-        try {
-            await updateUserCredentials(currentUsername, newPassword || undefined, newUsername !== currentUsername ? newUsername : undefined);
-            showAlert('Success', 'Profile updated successfully. Please login again.', 'success', [
-                {
-                    text: t('ok') || 'OK',
-                    onPress: () => {
-                        logout();
-                        // Expo router should handle redirect to login on logout
-                    }
-                }
-            ]);
-        } catch (e) {
-            showAlert('Error', 'Failed to update profile', 'error');
-            console.error(e);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     return (
-        <ScreenContainer>
+        <ScreenContainer backgroundColor={activeColors.background}>
             <HeaderBar title={t('profile_settings')} showBack />
             <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-
-                <View style={styles.card}>
+                <View style={[styles.card, { backgroundColor: activeColors.cardBg }]}>
                     <Text style={styles.sectionTitle}>{t('account_info')}</Text>
 
-                    <InputField
-                        label={t('username_label')}
-                        value={newUsername}
-                        onChangeText={setNewUsername}
-                        placeholder={t('enter_name')}
-                    />
+                    <View style={styles.infoRow}>
+                        <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>{t('username_label')}</Text>
+                        <Text style={[styles.infoValue, { color: activeColors.text }]}>{currentUser?.username || currentUser?.name || '-'}</Text>
+                    </View>
 
-                    <Text style={styles.helperText}>{t('password_helper_text')}</Text>
+                    <View style={styles.infoRow}>
+                        <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>Email</Text>
+                        <Text style={[styles.infoValue, { color: activeColors.text }]}>{currentUser?.email || '-'}</Text>
+                    </View>
 
-                    <InputField
-                        label={t('new_password') || 'New Password'}
-                        value={newPassword}
-                        onChangeText={setNewPassword}
-                        placeholder={t('enter_new_password')}
-                        secureTextEntry
-                    />
+                    <View style={styles.infoRow}>
+                        <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>Phone</Text>
+                        <Text style={[styles.infoValue, { color: activeColors.text }]}>{currentUser?.phone || '-'}</Text>
+                    </View>
 
-                    <InputField
-                        label={t('confirm_password') || 'Confirm Password'}
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        placeholder={t('confirm_new_password')}
-                        secureTextEntry
-                    />
-
-                    <PrimaryButton
-                        title={isLoading ? "Updating..." : "Update Profile"}
-                        onPress={handleUpdate}
-                        style={styles.button}
-                    />
+                    <Text style={[styles.helperText, { color: activeColors.textLight }]}>Account details are loaded from the server session.</Text>
                 </View>
 
-                <View style={[styles.card, { marginTop: SPACING.lg }]}>
-                    <Text style={styles.sectionTitle}>{t('security_settings')}</Text>
-
-                    <Text style={styles.helperText}>{t('admin_pin_helper')}</Text>
+                <View style={[styles.card, { marginTop: SPACING.lg, backgroundColor: activeColors.cardBg }]}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('security_settings')}</Text>
+                    <Text style={[styles.helperText, { color: activeColors.textLight }]}>{t('admin_pin_helper')}</Text>
 
                     <InputField
                         label={t('new_admin_pin')}
@@ -160,12 +86,11 @@ export default function ProfileScreen() {
                     />
 
                     <PrimaryButton
-                        title={isPinLoading ? "Updating PIN..." : "Update PIN"}
+                        title={isPinLoading ? 'Updating PIN...' : 'Update PIN'}
                         onPress={handleUpdatePin}
                         style={styles.button}
                     />
                 </View>
-
             </ScrollView>
         </ScreenContainer>
     );
@@ -198,9 +123,31 @@ const styles = StyleSheet.create({
         fontSize: FONT_SIZES.xs,
         color: COLORS.textLight,
         marginBottom: SPACING.md,
-        marginTop: -SPACING.sm,
+    },
+    infoRow: {
+        marginBottom: SPACING.md,
+    },
+    infoLabel: {
+        fontSize: FONT_SIZES.xs,
+        color: COLORS.textLight,
+        marginBottom: 4,
+    },
+    infoValue: {
+        fontSize: FONT_SIZES.md,
+        color: COLORS.text,
+        fontWeight: '600',
     },
     button: {
         marginTop: SPACING.lg,
+    },
+    trialBadge: {
+        marginTop: SPACING.md,
+        padding: 8,
+        borderRadius: BORDER_RADIUS.md,
+        alignItems: 'center',
+    },
+    trialText: {
+        fontSize: FONT_SIZES.sm,
+        fontWeight: 'bold',
     }
 });

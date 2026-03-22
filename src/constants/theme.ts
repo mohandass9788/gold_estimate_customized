@@ -1,38 +1,38 @@
 export const LIGHT_COLORS = {
-    primary: '#D4AF37', // Gold color
+    primary: '#CBA135', // Refined True Gold
     secondary: '#1A1A1A',
-    background: '#F8F9FA',
+    background: '#F4F5F7', // Slightly cooler, premium light grey
     cardBg: '#FFFFFF',
-    text: '#1C1C1E',
-    textLight: '#8E8E93',
-    success: '#34C759',
-    warning: '#FF9500',
-    error: '#FF3B30',
-    border: '#E5E5EA',
+    text: '#111827', // Crisp dark for readability
+    textLight: '#6B7280',
+    success: '#10B981', // Emerald green
+    warning: '#F59E0B',
+    error: '#EF4444',
+    border: '#E5E7EB',
     white: '#FFFFFF',
-    gold: '#D4AF37',
-    goldGradient: ['#D4AF37', '#F2D06B', '#D4AF37'],
-    premiumGradient: ['#D4AF37', '#B8860B'],
-    glassBg: 'rgba(255, 255, 255, 0.8)',
+    gold: '#CBA135',
+    goldGradient: ['#E6C27A', '#CBA135', '#B08826'], // Richer 3-stop gold
+    premiumGradient: ['#E6C27A', '#CBA135'], 
+    glassBg: 'rgba(255, 255, 255, 0.85)',
     shadowColor: '#000000',
 };
 
 export const DARK_COLORS = {
     primary: '#D4AF37',
     secondary: '#D4AF37',
-    background: '#000000',
-    cardBg: '#1C1C1E',
-    text: '#FFFFFF',
-    textLight: '#8E8E93',
-    success: '#32D74B',
-    warning: '#FF9F0A',
-    error: '#FF453A',
-    border: '#38383A',
-    white: '#1C1C1E',
+    background: '#09090B', // Deep obsidian black
+    cardBg: '#18181B', // Rich dark grey
+    text: '#F9FAFB',
+    textLight: '#9CA3AF',
+    success: '#10B981',
+    warning: '#F59E0B',
+    error: '#EF4444',
+    border: '#27272A',
+    white: '#18181B',
     gold: '#D4AF37',
-    goldGradient: ['#D4AF37', '#F2D06B', '#D4AF37'],
-    premiumGradient: ['#D4AF37', '#8B6508'],
-    glassBg: 'rgba(28, 28, 30, 0.8)',
+    goldGradient: ['#D4AF37', '#EDC967', '#CBA135'],
+    premiumGradient: ['#D4AF37', '#B08826'],
+    glassBg: 'rgba(24, 24, 27, 0.85)',
     shadowColor: '#000000',
 };
 
@@ -45,6 +45,7 @@ export const SPACING = {
     md: 16,
     lg: 24,
     xl: 32,
+    xxl: 48,
 };
 
 export const FONT_SIZES = {
@@ -58,8 +59,34 @@ export const FONT_SIZES = {
 };
 
 export const BORDER_RADIUS = {
-    sm: 8,
-    md: 12,
-    lg: 20,
-    xl: 28,
+    sm: 10,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    round: 9999,
+};
+
+// Reusable Shadow Styles for a Premium Look (spread where needed)
+export const SHADOWS = {
+    light: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    medium: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 6,
+    },
+    heavy: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.12,
+        shadowRadius: 24,
+        elevation: 12,
+    }
 };

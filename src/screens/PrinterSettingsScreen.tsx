@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator, Platform, PermissionsAndroid, NativeModules, Switch, TextInput } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, ActivityIndicator as RNActivityIndicator, Platform, PermissionsAndroid, NativeModules, Switch, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 // import * as IntentLauncher from 'expo-intent-launcher'; // Moved to dynamic require for safety
@@ -9,6 +9,7 @@ import HeaderBar from '../components/HeaderBar';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import PrimaryButton from '../components/PrimaryButton';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
+import { useAuth } from '../store/AuthContext';
 import { sendTestPrint } from '../services/printService';
 
 // Fix for React 19 type mismatch
@@ -37,6 +38,8 @@ export default function PrinterSettingsScreen() {
         isPrinterConnected, setIsPrinterConnected, isBluetoothEnabled, setIsBluetoothEnabled,
         requestPrint, receiptConfig, updateReceiptConfig, showAlert
     } = useGeneralSettings();
+
+    const { validateSubscription } = useAuth();
 
     // Silence NativeEventEmitter warnings
     useEffect(() => {
@@ -139,9 +142,10 @@ export default function PrinterSettingsScreen() {
                 showAlert('Printer Connected', `${printerData.name} is ready for use.`, 'success');
 
                 // Prompt user to select paper size
-                Alert.alert(
+                showAlert(
                     t('select_paper_size') || 'Select Paper Size',
                     t('choose_paper_size_desc') || 'Please select the paper width for this printer:',
+                    'info',
                     [
                         { text: '58mm', onPress: () => updateReceiptConfig({ paperWidth: '58mm' }) },
                         { text: '80mm', onPress: () => updateReceiptConfig({ paperWidth: '80mm' }) },
@@ -174,6 +178,8 @@ export default function PrinterSettingsScreen() {
     };
 
     const handleTestPrint = async () => {
+        if (!validateSubscription()) return;
+        
         requestPrint(async (details) => {
             setIsPrinting(true);
             try {
@@ -191,157 +197,162 @@ export default function PrinterSettingsScreen() {
     return (
         <ScreenContainer backgroundColor={activeColors.background}>
             <HeaderBar
-                title={t('printers_settings') || 'Printer Settings'}
+                title={t('printer_configuration') || 'Printer Configuration'}
                 showBack
             />
             <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-
-                {/* Printer Type Toggle */}
-                <View style={styles.toggleContainer}>
-                    <TouchableOpacity
-                        style={[
-                            styles.toggleButton,
-                            { backgroundColor: printerType === 'system' ? activeColors.primary : activeColors.cardBg, borderColor: activeColors.border }
-                        ]}
-                        onPress={() => setPrinterType('system')}
-                    >
-                        <Text style={[styles.toggleButtonText, { color: printerType === 'system' ? '#FFF' : activeColors.text }]}>{t('system_printer')}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[
-                            styles.toggleButton,
-                            { backgroundColor: printerType === 'thermal' ? activeColors.primary : activeColors.cardBg, borderColor: activeColors.border }
-                        ]}
-                        onPress={() => setPrinterType('thermal')}
-                    >
-                        <Text style={[styles.toggleButtonText, { color: printerType === 'thermal' ? '#FFF' : activeColors.text }]}>{t('thermal_printer')}</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {printerType === 'system' ? (
-                    <View style={[styles.infoCard, { backgroundColor: activeColors.primary + '10', borderColor: activeColors.primary + '20' }]}>
-                        <Icon name="print-outline" size={32} color={activeColors.primary} />
-                        <View style={styles.infoTextContainer}>
-                            <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('system_printing_active')}</Text>
-                            <Text style={[styles.infoText, { color: activeColors.textLight }]}>
-                                {t('system_printing_desc')}
-                            </Text>
-                        </View>
-                    </View>
-                ) : (
-                    <View style={[styles.infoCard, { backgroundColor: COLORS.success + '10', borderColor: COLORS.success + '20' }]}>
-                        <Icon name="bluetooth-outline" size={32} color={COLORS.success} />
-                        <View style={styles.infoTextContainer}>
-                            <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('thermal_printing_active')}</Text>
-                            <Text style={[styles.infoText, { color: activeColors.textLight }]}>
-                                {t('thermal_printing_desc')}
-                            </Text>
-                        </View>
-                    </View>
-                )}
-
-                {printerType === 'thermal' && (
-                    <View style={styles.section}>
-                        {/* Bluetooth Status Bar */}
-                        <View style={[styles.statusBar, { backgroundColor: isBluetoothEnabled ? activeColors.success + '10' : activeColors.error + '10' }]}>
-                            <View style={styles.row}>
-                                <Icon
-                                    name={isBluetoothEnabled ? "bluetooth" : "bluetooth-outline"}
-                                    size={20}
-                                    color={isBluetoothEnabled ? activeColors.success : activeColors.error}
-                                />
-                                <Text style={[styles.statusText, { color: isBluetoothEnabled ? activeColors.success : activeColors.error }]}>
-                                    {isBluetoothEnabled ? t('bluetooth_on') : t('bluetooth_off')}
-                                </Text>
-                            </View>
-                            {!isBluetoothEnabled && (
-                                <TouchableOpacity style={styles.inlineButton} onPress={openBluetoothSettings}>
-                                    <Text style={styles.inlineButtonText}>{t('enable')}</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-
-                        <View style={styles.sectionHeaderRow}>
-                            <Text style={[styles.sectionHeader, { color: activeColors.textLight }]}>{t('available_bluetooth_devices') || 'Available Bluetooth Devices'}</Text>
-                            <TouchableOpacity onPress={handleScanDevices} disabled={isScanning} style={styles.refreshButton}>
-                                {isScanning ? <ActivityIndicator size="small" color={activeColors.primary} /> : <Icon name="refresh" size={20} color={activeColors.primary} />}
+                
+                {/* Section 1: Connect Printer */}
+                <View style={styles.section}>
+                    <Text style={[styles.sectionHeader, { color: activeColors.textLight }]}>{t('connect_printer') || 'Connect Printer'}</Text>
+                    
+                    <View style={[styles.configCard, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border, padding: SPACING.md }]}>
+                        {/* Printer Type Toggle - Thermal First */}
+                        <View style={styles.toggleContainer}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.toggleButton,
+                                    { backgroundColor: printerType === 'thermal' ? activeColors.primary : activeColors.background, borderColor: activeColors.border }
+                                ]}
+                                onPress={() => setPrinterType('thermal')}
+                            >
+                                <Text style={[styles.toggleButtonText, { color: printerType === 'thermal' ? '#FFF' : activeColors.text }]}>{t('thermal_printer')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.toggleButton,
+                                    { backgroundColor: printerType === 'system' ? activeColors.primary : activeColors.background, borderColor: activeColors.border }
+                                ]}
+                                onPress={() => setPrinterType('system')}
+                            >
+                                <Text style={[styles.toggleButtonText, { color: printerType === 'system' ? '#FFF' : activeColors.text }]}>{t('system_printer')}</Text>
                             </TouchableOpacity>
                         </View>
 
-                        {devices.length > 0 ? (
-                            <View style={styles.deviceList}>
-                                {devices.map((device, index) => {
-                                    const devId = device.inner_mac_address || device.device_id;
-                                    const isSelected = connectedPrinter?.address === devId;
-                                    const isConnecting = connectingDeviceId === devId;
-
-                                    return (
-                                        <TouchableOpacity
-                                            key={index}
-                                            style={[
-                                                styles.deviceItem,
-                                                {
-                                                    backgroundColor: activeColors.cardBg,
-                                                    borderColor: isSelected ? activeColors.primary : activeColors.border,
-                                                    borderWidth: isSelected ? 2 : 1
-                                                }
-                                            ]}
-                                            onPress={() => handleSelectDevice(device)}
-                                            disabled={isConnecting}
-                                        >
-                                            <View style={styles.deviceInfo}>
-                                                <Text style={[styles.deviceName, { color: activeColors.text }]}>{device.device_name || 'Unknown Printer'}</Text>
-                                                <Text style={[styles.deviceAddress, { color: activeColors.textLight }]}>{devId}</Text>
-                                            </View>
-                                            {isConnecting ? (
-                                                <ActivityIndicator size="small" color={activeColors.primary} />
-                                            ) : isSelected ? (
-                                                <View style={styles.connectedBadge}>
-                                                    <Icon name="checkmark-circle" size={20} color={activeColors.primary} />
-                                                    <Text style={[styles.connectedText, { color: activeColors.primary }]}>{t('connected_status')}</Text>
-                                                </View>
-                                            ) : (
-                                                <Icon name="chevron-forward" size={20} color={activeColors.border} />
-                                            )}
-                                        </TouchableOpacity>
-                                    );
-                                })}
+                        {printerType === 'system' ? (
+                            <View style={[styles.infoCard, { backgroundColor: activeColors.primary + '10', borderColor: activeColors.primary + '20', marginBottom: 0 }]}>
+                                <Icon name="print-outline" size={32} color={activeColors.primary} />
+                                <View style={styles.infoTextContainer}>
+                                    <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('system_printing_active')}</Text>
+                                    <Text style={[styles.infoText, { color: activeColors.textLight }]}>
+                                        {t('system_printing_desc')}
+                                    </Text>
+                                </View>
                             </View>
                         ) : (
-                            <View style={[styles.emptyState, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
-                                <Text style={[styles.emptyText, { color: activeColors.textLight }]}>
-                                    {isScanning ? t('scanning') : (lastError || t('no_printers_found'))}
-                                </Text>
-                                {!isScanning && (
-                                    <TouchableOpacity style={styles.retryButton} onPress={handleScanDevices}>
-                                        <Text style={styles.retryButtonText}>{t('retry')}</Text>
+                            <View>
+                                <View style={[styles.infoCard, { backgroundColor: COLORS.success + '10', borderColor: COLORS.success + '20' }]}>
+                                    <Icon name="bluetooth-outline" size={32} color={COLORS.success} />
+                                    <View style={styles.infoTextContainer}>
+                                        <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('thermal_printing_active')}</Text>
+                                    </View>
+                                </View>
+
+                                {/* Bluetooth Status Bar */}
+                                <View style={[styles.statusBar, { backgroundColor: isBluetoothEnabled ? COLORS.success + '10' : COLORS.error + '10' }]}>
+                                    <View style={styles.row}>
+                                        <Icon
+                                            name={isBluetoothEnabled ? "bluetooth" : "bluetooth-outline"}
+                                            size={20}
+                                            color={isBluetoothEnabled ? COLORS.success : COLORS.error}
+                                        />
+                                        <Text style={[styles.statusText, { color: isBluetoothEnabled ? COLORS.success : COLORS.error }]}>
+                                            {isBluetoothEnabled ? t('bluetooth_on') : t('bluetooth_off')}
+                                        </Text>
+                                    </View>
+                                    {!isBluetoothEnabled && (
+                                        <TouchableOpacity style={styles.inlineButton} onPress={openBluetoothSettings}>
+                                            <Text style={styles.inlineButtonText}>{t('enable')}</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+
+                                <View style={styles.sectionHeaderRow}>
+                                    <Text style={[styles.sectionHeader, { color: activeColors.textLight, fontSize: 10 }]}>{t('available_bluetooth_devices') || 'Available Bluetooth Devices'}</Text>
+                                    <TouchableOpacity onPress={handleScanDevices} disabled={isScanning} style={styles.refreshButton}>
+                                        {isScanning ? <ActivityIndicator size="small" color={activeColors.primary} /> : <Icon name="refresh" size={20} color={activeColors.primary} />}
                                     </TouchableOpacity>
+                                </View>
+
+                                {devices.length > 0 ? (
+                                    <View style={styles.deviceList}>
+                                        {devices.map((device, index) => {
+                                            const devId = device.inner_mac_address || device.device_id;
+                                            const isSelected = connectedPrinter?.address === devId;
+                                            const isConnecting = connectingDeviceId === devId;
+
+                                            return (
+                                                <TouchableOpacity
+                                                    key={index}
+                                                    style={[
+                                                        styles.deviceItem,
+                                                        {
+                                                            backgroundColor: activeColors.background,
+                                                            borderColor: isSelected ? activeColors.primary : activeColors.border,
+                                                            borderWidth: isSelected ? 2 : 1
+                                                        }
+                                                    ]}
+                                                    onPress={() => handleSelectDevice(device)}
+                                                    disabled={isConnecting}
+                                                >
+                                                    <View style={styles.deviceInfo}>
+                                                        <Text style={[styles.deviceName, { color: activeColors.text }]}>{device.device_name || 'Unknown Printer'}</Text>
+                                                        <Text style={[styles.deviceAddress, { color: activeColors.textLight }]}>{devId}</Text>
+                                                    </View>
+                                                    {isConnecting ? (
+                                                        <ActivityIndicator size="small" color={activeColors.primary} />
+                                                    ) : isSelected ? (
+                                                        <View style={styles.connectedBadge}>
+                                                            <Icon name="checkmark-circle" size={20} color={activeColors.primary} />
+                                                            <Text style={[styles.connectedText, { color: activeColors.primary }]}>{t('connected_status')}</Text>
+                                                        </View>
+                                                    ) : (
+                                                        <Icon name="chevron-forward" size={20} color={activeColors.border} />
+                                                    )}
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                ) : (
+                                    <View style={[styles.emptyState, { backgroundColor: activeColors.background, borderColor: activeColors.border }]}>
+                                        <Text style={[styles.emptyText, { color: activeColors.textLight }]}>
+                                            {isScanning ? t('scanning') : (lastError || t('no_printers_found'))}
+                                        </Text>
+                                        {!isScanning && (
+                                            <TouchableOpacity style={styles.retryButton} onPress={handleScanDevices}>
+                                                <Text style={styles.retryButtonText}>{t('retry')}</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
                                 )}
                             </View>
                         )}
                     </View>
-                )}
-
-                <View style={styles.section}>
-                    <Text style={[styles.sectionHeader, { color: activeColors.textLight }]}>{t('test_connection')}</Text>
-                    <View style={styles.actionContainer}>
-                        <PrimaryButton
-                            title={isPrinting ? t('printing_progress') : t('send_test_print')}
-                            onPress={handleTestPrint}
-                            disabled={isPrinting || (printerType === 'thermal' && !connectedPrinter)}
-                            isLoading={isPrinting}
-                        />
-                    </View>
                 </View>
 
-                {/* Receipt Configuration Section */}
+                {/* Section 2: Print Details / Receipt Configuration */}
                 <View style={styles.section}>
-                    <View style={styles.sectionHeaderRow}>
-                        <Text style={[styles.sectionHeader, { color: activeColors.textLight }]}>{t('receipt_configuration') || 'Receipt Configuration'}</Text>
-                        <Icon name="settings-outline" size={18} color={activeColors.textLight} />
-                    </View>
-
+                    <Text style={[styles.sectionHeader, { color: activeColors.textLight }]}>{t('print_details') || 'Print Details'}</Text>
+                    
                     <View style={[styles.configCard, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                        <View style={styles.configItem}>
+                            <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('test_connection')}</Text>
+                            <PrimaryButton
+                                title={isPrinting ? t('printing_progress') : t('send_test_print')}
+                                onPress={handleTestPrint}
+                                disabled={isPrinting || (printerType === 'thermal' && !connectedPrinter)}
+                                isLoading={isPrinting}
+                                style={{ minWidth: 150 }}
+                            />
+                        </View>
+                        
+                        <View style={styles.divider} />
+                        
+                        <View style={[styles.sectionHeaderRow, { padding: SPACING.md, paddingBottom: 0 }]}>
+                            <Text style={[styles.sectionHeader, { color: activeColors.textLight, fontSize: 10 }]}>{t('receipt_configuration') || 'Receipt Configuration'}</Text>
+                            <Icon name="settings-outline" size={18} color={activeColors.textLight} />
+                        </View>
+
                         <View style={styles.configItem}>
                             <View style={styles.configTextLabel}>
                                 <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('show_header') || 'Show Header'}</Text>

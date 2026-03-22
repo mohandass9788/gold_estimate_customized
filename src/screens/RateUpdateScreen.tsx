@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableOpacity as RNRTouchableOpacity, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Modal as RNModal } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Modal as RNModal } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
 import InputField from '../components/InputField';
@@ -8,6 +8,7 @@ import { useEstimation } from '../store/EstimationContext';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { useSubscriptionRestricted } from '../hooks/useSubscriptionRestricted';
 
 // Fix for React 19 type mismatch
 const View = RNView as any;
@@ -18,6 +19,7 @@ const Modal = RNModal as any;
 const Icon = Ionicons as any;
 
 export default function RateUpdateScreen() {
+    const { verifyAccess } = useSubscriptionRestricted();
     const { state, updateGoldRate } = useEstimation();
     const { theme, t, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
@@ -122,7 +124,7 @@ export default function RateUpdateScreen() {
 
                     <TouchableOpacity
                         style={[styles.updateTriggerButton, { backgroundColor: COLORS.primary }]}
-                        onPress={() => setShowModal(true)}
+                        onPress={() => verifyAccess(() => setShowModal(true))}
                     >
                         <Icon name="create-outline" size={20} color={COLORS.white} />
                         <Text style={styles.updateTriggerText}>{t('update_rates')}</Text>

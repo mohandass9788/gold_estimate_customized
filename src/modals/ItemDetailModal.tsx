@@ -3,6 +3,7 @@ import { Modal, View as RNView, Text as RNText, StyleSheet, TouchableOpacity as 
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
+import { useAuth } from '../store/AuthContext';
 import { printEstimationReceipt } from '../services/printService';
 
 // Fix for React 19 type mismatch
@@ -21,6 +22,7 @@ interface ItemDetailModalProps {
 
 export default function ItemDetailModal({ visible, onClose, item, type }: ItemDetailModalProps) {
     const { theme, t, shopDetails, currentEmployeeName, receiptConfig, requestPrint } = useGeneralSettings();
+    const { validateSubscription } = useAuth();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     if (!item) return null;
@@ -113,6 +115,8 @@ export default function ItemDetailModal({ visible, onClose, item, type }: ItemDe
     };
 
     const handlePrint = async () => {
+        if (!validateSubscription()) return;
+        
         requestPrint(async (details) => {
             try {
                 const items = type === 'estimation' ? [item] : [];

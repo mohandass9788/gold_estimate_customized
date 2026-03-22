@@ -1,5 +1,7 @@
 import React, { createContext, useReducer, useContext } from 'react';
+import axios from 'axios';
 import { EstimationItem, EstimationTotals, GoldRate, Customer, PurchaseItem, ChitItem, AdvanceItem } from '../types';
+import { useGeneralSettings } from './GeneralSettingsContext';
 import { calculateEstimationTotals } from '../utils/calculations';
 import { initDatabase, saveEstimation, getRecentEstimations, getSetting, setSetting, DBEstimation, getNextEstimationNumber, getEstimationsForRecentDays } from '../services/dbService';
 
@@ -217,6 +219,7 @@ export const useEstimation = () => useContext(EstimationContext);
 
 export const EstimationProvider = ({ children }: { children: React.ReactNode }) => {
     const [state, dispatch] = useReducer(estimationReducer, initialState);
+    const { useLocalServerForScanning, localServerUrl, localSaveEndpoint } = useGeneralSettings();
 
     React.useEffect(() => {
         const setup = async () => {
@@ -320,6 +323,18 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
             estimationNumber: estimationNumber
         };
         await saveEstimation(dbEstimate);
+        
+        // Local Server Sync
+        if (useLocalServerForScanning && localServerUrl && localSaveEndpoint) {
+            try {
+                const url = localServerUrl.replace(/\/+$/, '') + '/' + localSaveEndpoint.replace(/^\/+/, '');
+                console.log('[local-server] Saving estimation to:', url);
+                await axios.post(url, dbEstimate, { timeout: 5000 });
+            } catch (e) {
+                console.error('[local-server] Failed to save estimation locally:', e);
+            }
+        }
+
         const history = await getRecentEstimations(10);
         dispatch({ type: 'SET_HISTORY', payload: history });
     };

@@ -34,7 +34,8 @@ export const getConsolidated80mmPayload = (
     silverRate?: number,
     estimationNumber?: number,
     skipFooter: boolean = false,
-    footerMessage?: string
+    footerMessage?: string,
+    summaryOnly: boolean = false
 ) => {
     const width = 48;
     const divider = thermalCommands.divider(width);
@@ -57,8 +58,8 @@ export const getConsolidated80mmPayload = (
     payload += getThermalCustomer(data.customer, width, config);
     if (data.customer.name || data.customer.mobile || data.customer.address) payload += line;
 
-    // 1. Estimation Items
-    if (data.estimationItems.length > 0) {
+    // 1. Estimation Items (Skip if summaryOnly)
+    if (data.estimationItems.length > 0 && !summaryOnly) {
         payload += `${padR('ITEM', 13)}${padR('PCS', 4)}${padR('G.WT', 7)}${padR('MC', 7)}${padR('VA', 6)}${padL('AMOUNT', 11)}\x0a`;
         payload += divider;
 
@@ -112,8 +113,8 @@ export const getConsolidated80mmPayload = (
         payload += line;
     }
 
-    // 2. Purchase Items
-    if (data.purchaseItems.length > 0) {
+    // 2. Purchase Items (Skip if summaryOnly)
+    if (data.purchaseItems.length > 0 && !summaryOnly) {
         payload += `${thermalCommands.center}${thermalCommands.boldOn}PURCHASE (OLD GOLD)${thermalCommands.boldOff}\x0a`;
         payload += `${padR('ITEM', 15)}${padR('G.WT', 11)}${padR('RATE', 8)}${padL('AMOUNT', 14)}\x0a`;
         payload += divider;

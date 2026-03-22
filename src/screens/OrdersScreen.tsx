@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, FlatList as RNFlatList, TouchableOpacity as RNRTouchableOpacity, Alert, ActivityIndicator as RNActivityIndicator, Platform, Modal as RNModal, ScrollView as RNScrollView } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View as RNView, Text as RNText, StyleSheet, FlatList as RNFlatList, TouchableOpacity as RNRTouchableOpacity, ActivityIndicator as RNActivityIndicator, Platform, Modal as RNModal, ScrollView as RNScrollView } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
@@ -10,7 +10,8 @@ import HeaderBar from '../components/HeaderBar';
 import PrimaryButton from '../components/PrimaryButton';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { useEstimation } from '../store/EstimationContext';
-import { getFilteredOrders, getOrderDetails, deleteOrder, DBOrder, DBOrderItem } from '../services/dbService';
+import { getFilteredEstimations, deleteEstimation, DBEstimation } from '../services/dbService';
+import { useAuth } from '../store/AuthContext';
 import { printEstimationReceipt, getEstimationReceiptThermalPayload } from '../services/printService';
 import PrintPreviewModal from '../modals/PrintPreviewModal';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
@@ -30,25 +31,44 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 export default function OrdersScreen() {
     const router = useRouter();
     const { theme, t, showAlert, shopDetails, requestPrint, currentEmployeeName, receiptConfig } = useGeneralSettings();
+    const { currentUser, validateSubscription } = useAuth();
     const { clearEstimation, loadEstimationIntoContext } = useEstimation();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
-    const [orders, setOrders] = useState<DBOrder[]>([]);
+    const [orders, setOrders] = useState<DBEstimation[]>([]);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
-    const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | '7days' | '30days' | 'custom'>('today');
+    const [previewData, setPreviewData] = useState<any>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | '7days' | '30days' | 'custom'>('all');
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [showStartPicker, setShowStartPicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
-    const [selectedOrder, setSelectedOrder] = useState<DBOrder | null>(null);
-    const [selectedOrderItems, setSelectedOrderItems] = useState<DBOrderItem[]>([]);
+    const [selectedOrder, setSelectedOrder] = useState<DBEstimation | null>(null);
+    const [selectedOrderItems, setSelectedOrderItems] = useState<any[]>([]); // Unified storage for all item types
     const [showOrderDetails, setShowOrderDetails] = useState(false);
     const [isPreviewVisible, setIsPreviewVisible] = useState(false);
     const [previewPayload, setPreviewPayload] = useState('');
-    const [previewData, setPreviewData] = useState<any>(null);
+    const estimationLabel = t('estimation_number') || 'Estimation #';
+    const walkInLabel = t('walk_in') || 'Walk-in';
+
+    const getOrderCustomerLabel = useCallback((customerName?: string | null, estimationNumber?: number | null) => {
+        if (
+            customerName &&
+            customerName !== 'Walk-in' &&
+            customerName !== walkInLabel &&
+            !customerName.startsWith('Estimation #') &&
+            !customerName.startsWith(estimationLabel)
+        ) {
+            return customerName;
+        }
+
+        return `${estimationLabel}${estimationNumber ?? ''}`;
+    }, [estimationLabel, walkInLabel]);
 
     const onDateChange = (event: any, selectedDate?: Date, type: 'start' | 'end' = 'start') => {
         if (type === 'start') {
@@ -72,7 +92,9 @@ export default function OrdersScreen() {
             let end = new Date().toISOString();
             const now = new Date();
 
-            if (dateFilter === 'today') {
+            if (dateFilter === 'all') {
+                start = '';
+            } else if (dateFilter === 'today') {
                 start = new Date(now.setHours(0, 0, 0, 0)).toISOString();
                 end = new Date(now.setHours(23, 59, 59, 999)).toISOString();
             } else if (dateFilter === 'yesterday') {
@@ -80,22 +102,32 @@ export default function OrdersScreen() {
                 start = new Date(yest.setHours(0, 0, 0, 0)).toISOString();
                 end = new Date(yest.setHours(23, 59, 59, 999)).toISOString();
             } else if (dateFilter === '7days') {
-                start = new Date(Date.now() - 7 * 86400000).toISOString();
+                start = new Date(now.getTime() - 7 * 86400000).toISOString();
             } else if (dateFilter === '30days') {
-                start = new Date(Date.now() - 30 * 86400000).toISOString();
+                start = new Date(now.getTime() - 30 * 86400000).toISOString();
             } else if (dateFilter === 'custom') {
                 start = new Date(customStart + 'T00:00:00.000Z').toISOString();
                 end = new Date(customEnd + 'T23:59:59.999Z').toISOString();
             }
 
-            const data = await getFilteredOrders(start, end, 100);
+            const data = await getFilteredEstimations(start, end, 500);
             setOrders(data);
         } catch (error) {
-            console.error('Failed to load orders', error);
+            console.error('Failed to load history', error);
         } finally {
             setIsLoading(false);
         }
     }, [dateFilter, customStart, customEnd]);
+
+    const filteredOrders = useMemo(() => {
+        if (!searchQuery.trim()) return orders;
+        const query = searchQuery.toLowerCase();
+        return orders.filter(order => 
+            order.id.toLowerCase().includes(query) || 
+            (order.customerName && order.customerName.toLowerCase().includes(query)) ||
+            (order.estimationNumber && order.estimationNumber.toString().includes(query))
+        );
+    }, [orders, searchQuery]);
 
     useFocusEffect(
         useCallback(() => {
@@ -114,26 +146,42 @@ export default function OrdersScreen() {
         setSelectedIds(newSelected);
     };
 
-    const handleViewDetails = async (order: DBOrder) => {
+    const handleViewDetails = async (order: DBEstimation) => {
         try {
-            const { items } = await getOrderDetails(order.orderId);
+            const products = JSON.parse(order.items || '[]');
+            const purchases = JSON.parse(order.purchaseItems || '[]');
+            const chits = JSON.parse(order.chitItems || '[]');
+            const advances = JSON.parse(order.advanceItems || '[]');
+
+            // Format into compatible structure for the modal
+            const items = [
+                ...products.map((p: any) => ({ type: 'PRODUCT', itemData: JSON.stringify(p) })),
+                ...purchases.map((p: any) => ({ type: 'PURCHASE', itemData: JSON.stringify(p) })),
+                ...chits.map((c: any) => ({ type: 'CHIT', itemData: JSON.stringify(c) })),
+                ...advances.map((a: any) => ({ type: 'ADVANCE', itemData: JSON.stringify(a) }))
+            ];
+
             setSelectedOrder(order);
             setSelectedOrderItems(items);
             setShowOrderDetails(true);
         } catch (error) {
-            showAlert('Error', 'Failed to load order details', 'error');
+            console.error('Details Error:', error);
+            showAlert(t('error'), t('failed_to_load_details'), 'error');
         }
     };
 
     const handlePrint = async (orderId: string) => {
+        if (!validateSubscription()) return;
+        
         try {
             setIsPrinting(true);
-            const { order, items } = await getOrderDetails(orderId);
+            const order = orders.find(o => o.id === orderId);
+            if (!order) return;
 
-            const products = items.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
-            const purchases = items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData));
-            const chits = items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData));
-            const advances = items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData));
+            const products = JSON.parse(order.items || '[]');
+            const purchases = JSON.parse(order.purchaseItems || '[]');
+            const chits = JSON.parse(order.chitItems || '[]');
+            const advances = JSON.parse(order.advanceItems || '[]');
 
             const payload = await getEstimationReceiptThermalPayload(
                 products,
@@ -142,7 +190,7 @@ export default function OrdersScreen() {
                 advances,
                 shopDetails,
                 order.customerName,
-                order.employeeName || currentEmployeeName || '',
+                currentEmployeeName || t('admin') || 'Admin',
                 receiptConfig,
                 order.estimationNumber,
                 t
@@ -156,64 +204,38 @@ export default function OrdersScreen() {
                 purchaseItems: purchases,
                 chitItems: chits,
                 advanceItems: advances,
-                grandTotal: order.netPayable,
-                totalWeight: products.reduce((s, i) => s + (i.netWeight || 0), 0)
+                grandTotal: order.grandTotal,
+                totalWeight: order.totalWeight
             });
             setIsPreviewVisible(true);
 
         } catch (error: any) {
             console.error('Print Error:', error);
-            showAlert('Print Error', error.message || 'Failed to generate print preview', 'error');
+            showAlert(t('print_error'), error.message || t('failed_to_generate_print_preview'), 'error');
         } finally {
             setIsPrinting(false);
         }
     };
 
-    const handleReload = async (orderId: string) => {
+    const handleReload = async (id: string) => {
         showAlert(
-            'Reload Order',
-            'This will clear your current estimation and load this order for editing. Proceed?',
+            t('reload_order') || 'Reload Estimation',
+            t('reload_order_msg') || 'This will clear your current estimation and load this for editing. Proceed?',
             'warning',
             [
                 { text: t('cancel'), onPress: () => { }, style: 'cancel' },
                 {
-                    text: 'Reload',
+                    text: t('reload_btn') || 'Reload',
                     onPress: async () => {
                         try {
-                            const { order, items } = await getOrderDetails(orderId);
-
-                            // Map order products back to EstimationItem format if needed
-                            // Actually, loadEstimationIntoContext expects a DBEstimation.
-                            // We can construct a mock DBEstimation from order details or fetch from estimations table.
-                            // Let's fetch the original estimation if possible, or construct it.
-
-                            const { getFilteredEstimations } = require('../services/dbService');
-                            const ests = await getFilteredEstimations();
-                            const originalEst = ests.find((e: any) => e.estimationNumber === order.estimationNumber);
-
-                            if (originalEst) {
-                                loadEstimationIntoContext(originalEst, order.orderId);
-                            } else {
-                                // Fallback: construct from order if original estimation not found
-                                const mockEst: any = {
-                                    id: order.orderId, // Use orderId as ID if original missing
-                                    customerName: order.customerName,
-                                    customerMobile: order.customerMobile,
-                                    date: order.date,
-                                    items: JSON.stringify(items.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData))),
-                                    purchaseItems: JSON.stringify(items.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData))),
-                                    chitItems: JSON.stringify(items.filter(i => i.type === 'CHIT').map(i => JSON.parse(i.itemData))),
-                                    advanceItems: JSON.stringify(items.filter(i => i.type === 'ADVANCE').map(i => JSON.parse(i.itemData))),
-                                    totalWeight: 0, // Context will handle this
-                                    grandTotal: order.netPayable,
-                                    estimationNumber: (order.estimationNumber !== null && order.estimationNumber !== undefined) ? order.estimationNumber : 0
-                                };
-                                loadEstimationIntoContext(mockEst as any, order.orderId);
+                            const order = orders.find(o => o.id === id);
+                            if (order) {
+                                loadEstimationIntoContext(order);
+                                router.push('/estimation');
                             }
-                            router.push('/estimation');
                         } catch (error) {
                             console.error('Reload Error:', error);
-                            showAlert('Error', 'Failed to reload order', 'error');
+                            showAlert(t('error'), t('failed_to_reload_estimation'), 'error');
                         }
                     }
                 }
@@ -221,18 +243,18 @@ export default function OrdersScreen() {
         );
     };
 
-    const handleDelete = (orderId: string) => {
+    const handleDelete = (id: string) => {
         showAlert(
-            'Delete Order',
-            'Are you sure you want to delete this order from history?',
+            t('delete_history') || 'Delete History',
+            t('delete_history_msg') || 'Are you sure you want to delete this from history?',
             'warning',
             [
                 { text: t('cancel'), onPress: () => { }, style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('delete'),
                     style: 'destructive',
                     onPress: async () => {
-                        await deleteOrder(orderId);
+                        await deleteEstimation(id);
                         loadOrders();
                     }
                 }
@@ -240,40 +262,40 @@ export default function OrdersScreen() {
         );
     };
 
-    const renderItem = ({ item }: { item: DBOrder }) => (
+    const renderItem = ({ item }: { item: DBEstimation }) => (
         <TouchableOpacity
             style={[
                 styles.card,
                 { backgroundColor: activeColors.cardBg, borderColor: activeColors.border },
-                selectedIds.has(item.orderId) && { borderColor: activeColors.primary, borderWidth: 1.5 }
+                selectedIds.has(item.id) && { borderColor: activeColors.primary, borderWidth: 1.5 }
             ]}
             onPress={() => {
                 if (selectedIds.size > 0) {
-                    toggleSelection(item.orderId);
+                    toggleSelection(item.id);
                 } else {
-                    handlePrint(item.orderId);
+                    handleViewDetails(item);
                 }
             }}
-            onLongPress={() => toggleSelection(item.orderId)}
+            onLongPress={() => toggleSelection(item.id)}
             activeOpacity={0.7}
         >
             <View style={styles.cardHeader}>
-                <View>
-                    <Text style={[styles.customerName, { color: activeColors.text }]}>
-                        {item.customerName && item.customerName !== 'Walk-in' ? item.customerName : (t('estimation_number') || 'Estimation #') + item.estimationNumber}
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.customerName, { color: activeColors.text }]} numberOfLines={1}>
+                        {getOrderCustomerLabel(item.customerName, item.estimationNumber)}
                     </Text>
                     <Text style={[styles.dateText, { color: activeColors.textLight }]}>
-                        {format(new Date(item.date), 'hh:mm a')} • {item.orderId}
+                        {format(new Date(item.date), 'dd MMM, hh:mm a')} • {item.id.slice(-6)}
                     </Text>
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity onPress={() => handlePrint(item.orderId)} style={styles.actionIcon} disabled={isPrinting}>
+                    <TouchableOpacity onPress={() => handlePrint(item.id)} style={styles.actionIcon} disabled={isPrinting}>
                         <Icon name="print-outline" size={20} color={activeColors.primary} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleReload(item.orderId)} style={styles.actionIcon}>
+                    <TouchableOpacity onPress={() => handleReload(item.id)} style={styles.actionIcon}>
                         <Icon name="create-outline" size={20} color={COLORS.success} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(item.orderId)} style={styles.actionIcon}>
+                    <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.actionIcon}>
                         <Icon name="trash-outline" size={20} color={activeColors.error} />
                     </TouchableOpacity>
                 </View>
@@ -283,10 +305,10 @@ export default function OrdersScreen() {
 
             <View style={styles.cardFooter}>
                 <Text style={[styles.employeeName, { color: activeColors.textLight }]}>
-                    By: {item.employeeName}
+                    {item.totalWeight.toFixed(3)}g
                 </Text>
                 <Text style={[styles.totalAmount, { color: activeColors.success }]}>
-                    ₹ {item.netPayable.toLocaleString()}
+                    ₹ {Math.round(item.grandTotal).toLocaleString()}
                 </Text>
             </View>
         </TouchableOpacity>
@@ -295,9 +317,9 @@ export default function OrdersScreen() {
     const OrderDetailsModal = () => {
         if (!selectedOrder) return null;
 
-        const products = selectedOrderItems.filter(i => i.type === 'PRODUCT').map(i => JSON.parse(i.itemData));
-        const deductions = selectedOrderItems.filter(i => i.type === 'CHIT' || i.type === 'ADVANCE');
-        const purchases = selectedOrderItems.filter(i => i.type === 'PURCHASE').map(i => JSON.parse(i.itemData));
+        const products = selectedOrderItems.filter((i: any) => i.type === 'PRODUCT').map((i: any) => JSON.parse(i.itemData));
+        const deductions = selectedOrderItems.filter((i: any) => i.type === 'CHIT' || i.type === 'ADVANCE');
+        const purchases = selectedOrderItems.filter((i: any) => i.type === 'PURCHASE').map((i: any) => JSON.parse(i.itemData));
 
         return (
             <Modal visible={showOrderDetails} transparent animationType="slide" onRequestClose={() => setShowOrderDetails(false)}>
@@ -306,7 +328,7 @@ export default function OrdersScreen() {
                         <View style={styles.modalHeader}>
                             <View>
                                 <Text style={[styles.modalTitle, { color: activeColors.primary }]}>{t('order_details') || 'Order Details'}</Text>
-                                <Text style={[styles.modalSubtitle, { color: activeColors.textLight }]}>{selectedOrder.orderId}</Text>
+                                <Text style={[styles.modalSubtitle, { color: activeColors.textLight }]}>{selectedOrder.id.slice(-8)}</Text>
                             </View>
                             <TouchableOpacity onPress={() => setShowOrderDetails(false)}>
                                 <Icon name="close" size={24} color={activeColors.text} />
@@ -326,11 +348,7 @@ export default function OrdersScreen() {
                                 {/* Customer Info */}
                                 <View style={styles.infoRow}>
                                     <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>{t('customer_label')}</Text>
-                                    <Text style={[styles.infoValue, { color: activeColors.text }]}>{selectedOrder.customerName && selectedOrder.customerName !== 'Walk-in' ? selectedOrder.customerName : (t('estimation_number') || 'Estimation #') + selectedOrder.estimationNumber}</Text>
-                                </View>
-                                <View style={styles.infoRow}>
-                                    <Text style={[styles.infoLabel, { color: activeColors.textLight }]}>{t('operator_label')}</Text>
-                                    <Text style={[styles.infoValue, { color: activeColors.text }]}>{selectedOrder.employeeName}</Text>
+                                    <Text style={[styles.infoValue, { color: activeColors.text }]}>{getOrderCustomerLabel(selectedOrder.customerName, selectedOrder.estimationNumber)}</Text>
                                 </View>
 
                                 <View style={[styles.divider, { backgroundColor: activeColors.border, marginVertical: SPACING.md }]} />
@@ -342,7 +360,7 @@ export default function OrdersScreen() {
                                     <Text style={[styles.tableHead, { flex: 1, textAlign: 'right', color: activeColors.textLight }]}>{t('total_header')}</Text>
                                 </View>
 
-                                {products.map((product, idx) => (
+                                {products.map((product: any, idx: number) => (
                                     <View key={`prod-${idx}`} style={styles.tableRow}>
                                         <Text style={[styles.itemText, { flex: 2, color: activeColors.text }]}>{product.name}</Text>
                                         <Text style={[styles.itemText, { flex: 1, textAlign: 'right', color: activeColors.text }]}>{product.grossWeight.toFixed(3)}g</Text>
@@ -350,7 +368,7 @@ export default function OrdersScreen() {
                                     </View>
                                 ))}
 
-                                {products.map((product, idx) => (
+                                {products.map((product: any, idx: number) => (
                                     <View key={`prod-extra-${idx}`} style={[styles.detailCard, { backgroundColor: activeColors.background, borderColor: activeColors.border }]}>
                                         <View style={styles.detailCardHeader}>
                                             <View style={{ flex: 1 }}>
@@ -398,7 +416,7 @@ export default function OrdersScreen() {
                                     </View>
                                 ))}
 
-                                {purchases.map((item, idx) => (
+                                {purchases.map((item: any, idx: number) => (
                                     <View key={`purchase-extra-${idx}`} style={[styles.detailCard, { backgroundColor: activeColors.background, borderColor: activeColors.border }]}>
                                         <View style={styles.detailCardHeader}>
                                             <View style={{ flex: 1 }}>
@@ -432,12 +450,12 @@ export default function OrdersScreen() {
                                     <>
                                         <View style={[styles.divider, { backgroundColor: activeColors.border, marginVertical: SPACING.md, borderStyle: 'dashed', borderWidth: 0.5 }]} />
                                         <Text style={[styles.deductionTitle, { color: activeColors.error }]}>{t('deductions_title')}</Text>
-                                        {deductions.map((item, idx) => {
+                                        {deductions.map((item: any, idx: number) => {
                                             const data = JSON.parse(item.itemData);
                                             let label = '';
-                                            if (item.type === 'PURCHASE') label = `Old Gold (${data.category})`;
-                                            else if (item.type === 'CHIT') label = `Chit (${data.chitId})`;
-                                            else if (item.type === 'ADVANCE') label = `Advance (${data.advanceId})`;
+                                            if (item.type === 'PURCHASE') label = `${t('old_gold')} (${data.category})`;
+                                            else if (item.type === 'CHIT') label = `${t('chit')} (${data.chitId})`;
+                                            else if (item.type === 'ADVANCE') label = `${t('advance')} (${data.advanceId})`;
 
                                             return (
                                                 <View key={`ded-${idx}`} style={styles.tableRow}>
@@ -454,11 +472,11 @@ export default function OrdersScreen() {
                                 {/* Totals */}
                                 <View style={styles.totalRow}>
                                     <Text style={[styles.totalLabel, { color: activeColors.text }]}>{t('gross_total_label')}</Text>
-                                    <Text style={[styles.totalValue, { color: activeColors.text }]}>₹{Math.round(selectedOrder.grossTotal).toLocaleString()}</Text>
+                                    <Text style={[styles.totalValue, { color: activeColors.text }]}>₹{Math.round(selectedOrder.grandTotal).toLocaleString()}</Text>
                                 </View>
                                 <View style={[styles.totalRow, styles.grandTotalRow]}>
                                     <Text style={[styles.grandTotalLabel, { color: activeColors.primary }]}>{t('net_payable_label')}</Text>
-                                    <Text style={[styles.grandTotalValue, { color: activeColors.primary }]}>₹{Math.round(selectedOrder.netPayable).toLocaleString()}</Text>
+                                    <Text style={[styles.grandTotalValue, { color: activeColors.primary }]}>₹{Math.round(selectedOrder.grandTotal).toLocaleString()}</Text>
                                 </View>
                             </View>
                         </ScrollView>
@@ -467,14 +485,14 @@ export default function OrdersScreen() {
                             <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
                                 <View style={{ flex: 1 }}>
                                     <PrimaryButton
-                                        title="Print"
-                                        onPress={() => { setShowOrderDetails(false); handlePrint(selectedOrder.orderId); }}
+                                        title={t('print') || "Print"}
+                                        onPress={() => { setShowOrderDetails(false); handlePrint(selectedOrder.id); }}
                                     />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <TouchableOpacity
                                         style={[styles.reloadBtn, { borderColor: COLORS.success }]}
-                                        onPress={() => { setShowOrderDetails(false); handleReload(selectedOrder.orderId); }}
+                                        onPress={() => { setShowOrderDetails(false); handleReload(selectedOrder.id); }}
                                     >
                                         <Icon name="create-outline" size={20} color={COLORS.success} />
                                         <Text style={[styles.reloadText, { color: COLORS.success }]}>{t('reload_btn')}</Text>
@@ -499,34 +517,75 @@ export default function OrdersScreen() {
                 }
             />
 
-            <View style={styles.filterScrollWrapper}>
-                <FlatList
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    data={[
-                        { id: 'today', label: t('today') },
-                        { id: 'yesterday', label: t('yesterday') },
-                        { id: '7days', label: t('last_7_days') },
-                        { id: '30days', label: t('last_month') },
-                        { id: 'custom', label: t('custom_range') },
-                    ]}
-                    renderItem={({ item }: any) => (
-                        <TouchableOpacity
-                            style={[
-                                styles.filterBadge,
-                                { backgroundColor: dateFilter === item.id ? activeColors.primary : activeColors.cardBg, borderColor: activeColors.border }
-                            ]}
-                            onPress={() => setDateFilter(item.id)}
-                        >
-                            <Text style={[styles.filterText, { color: dateFilter === item.id ? COLORS.white : activeColors.text }]}>
-                                {item.label}
-                            </Text>
+            <View style={[styles.searchFilterRow, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border }]}>
+                <View style={[styles.searchContainer, { backgroundColor: activeColors.background }]}>
+                    <Icon name="search-outline" size={18} color={activeColors.textLight} />
+                    <TextInput
+                        style={[styles.searchInput, { color: activeColors.text }]}
+                        placeholder={t('search_order') || "Search by ID or Name"}
+                        placeholderTextColor={activeColors.textLight}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')}>
+                            <Icon name="close-circle" size={18} color={activeColors.textLight} />
                         </TouchableOpacity>
                     )}
-                    keyExtractor={(item: any) => item.id}
-                    contentContainerStyle={styles.filterList}
-                />
+                </View>
+                
+                <TouchableOpacity 
+                    style={[styles.filterButton, { backgroundColor: activeColors.primary }]}
+                    onPress={() => setShowFilterModal(true)}
+                >
+                    <Icon name="filter-outline" size={18} color={COLORS.white} />
+                    <Text style={styles.filterButtonText}>
+                        {dateFilter === 'all' ? t('all') : 
+                         dateFilter === 'today' ? t('today') : 
+                         dateFilter === 'yesterday' ? t('yesterday') : 
+                         dateFilter === '7days' ? t('last_7_days') : 
+                         dateFilter === '30days' ? t('last_month') : t('custom_range')}
+                    </Text>
+                    <Icon name="chevron-down" size={14} color={COLORS.white} />
+                </TouchableOpacity>
             </View>
+
+            <Modal visible={showFilterModal} transparent animationType="fade" onRequestClose={() => setShowFilterModal(false)}>
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowFilterModal(false)}>
+                    <View style={[styles.filterModalContent, { backgroundColor: activeColors.cardBg }]}>
+                        <Text style={[styles.filterModalTitle, { color: activeColors.primary }]}>{t('select_filter')}</Text>
+                        {[
+                            { id: 'all', label: t('all') },
+                            { id: 'today', label: t('today') },
+                            { id: 'yesterday', label: t('yesterday') },
+                            { id: '7days', label: t('last_7_days') },
+                            { id: '30days', label: t('last_month') },
+                            { id: 'custom', label: t('custom_range') },
+                        ].map((item) => (
+                            <TouchableOpacity 
+                                key={item.id}
+                                style={[
+                                    styles.filterOption, 
+                                    dateFilter === item.id && { backgroundColor: activeColors.primary + '15' }
+                                ]}
+                                onPress={() => {
+                                    setDateFilter(item.id as any);
+                                    setShowFilterModal(false);
+                                }}
+                            >
+                                <Text style={[
+                                    styles.filterOptionText, 
+                                    { color: activeColors.text },
+                                    dateFilter === item.id && { color: activeColors.primary, fontWeight: 'bold' }
+                                ]}>
+                                    {item.label}
+                                </Text>
+                                {dateFilter === item.id && <Icon name="checkmark" size={18} color={activeColors.primary} />}
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
 
             {dateFilter === 'custom' && (
                 <View style={styles.customDateContainer}>
@@ -583,15 +642,15 @@ export default function OrdersScreen() {
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color={activeColors.primary} />
                 </View>
-            ) : orders.length === 0 ? (
+            ) : filteredOrders.length === 0 ? (
                 <View style={styles.center}>
-                    <Icon name="receipt-outline" size={48} color={activeColors.border} />
+                    <Icon name="search-outline" size={48} color={activeColors.border} />
                     <Text style={{ color: activeColors.textLight, marginTop: 8 }}>{t('no_history_found')}</Text>
                 </View>
             ) : (
                 <FlatList
-                    data={orders}
-                    keyExtractor={(item: DBOrder) => item.orderId}
+                    data={filteredOrders}
+                    keyExtractor={(item: DBEstimation) => item.id}
                     contentContainerStyle={{ paddingBottom: 100, paddingTop: SPACING.md }}
                     renderItem={renderItem}
                 />
@@ -605,9 +664,9 @@ export default function OrdersScreen() {
                         const { BLEPrinter } = require('react-native-thermal-receipt-printer');
                         await BLEPrinter.printText(previewPayload);
                         setIsPreviewVisible(false);
-                        showAlert('Success', t('printed_success') || 'Printed successfully', 'success');
+                        showAlert(t('success'), t('printed_success') || 'Printed successfully', 'success');
                     } catch (error) {
-                        showAlert('Print Error', 'Failed to send data to printer', 'error');
+                        showAlert(t('print_error'), t('failed_to_send_data_to_printer'), 'error');
                     }
                 }}
                 thermalPayload={previewPayload}
@@ -701,24 +760,67 @@ const styles = StyleSheet.create({
         height: 38,
         fontSize: FONT_SIZES.sm,
     },
-    filterScrollWrapper: {
-        paddingVertical: SPACING.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-    },
-    filterList: {
+    searchFilterRow: {
+        flexDirection: 'row',
+        padding: SPACING.sm,
         paddingHorizontal: SPACING.md,
+        alignItems: 'center',
+        gap: 10,
+        borderBottomWidth: 1,
     },
-    filterBadge: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginRight: 8,
-        borderWidth: 1,
+    searchContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        height: 40,
+        borderRadius: BORDER_RADIUS.md,
     },
-    filterText: {
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
+        fontSize: FONT_SIZES.sm,
+        height: '100%',
+    },
+    filterButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        height: 40,
+        borderRadius: BORDER_RADIUS.md,
+        gap: 6,
+    },
+    filterButtonText: {
+        color: COLORS.white,
         fontSize: FONT_SIZES.xs,
         fontWeight: 'bold',
+    },
+    filterModalContent: {
+        width: '80%',
+        maxWidth: 300,
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.md,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    filterModalTitle: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+        marginBottom: SPACING.sm,
+    },
+    filterOption: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        borderRadius: BORDER_RADIUS.sm,
+    },
+    filterOptionText: {
+        fontSize: FONT_SIZES.sm,
     },
     modalOverlay: {
         flex: 1,

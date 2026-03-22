@@ -1,2 +1,3 @@
-import PrinterSettingsScreen from '../../src/screens/PrinterSettingsScreen';
-export default PrinterSettingsScreen;
+import PrinterConnectionScreen from '../../src/screens/PrinterConnectionScreen';
+// Deprecated: use printer-connection or receipt-config instead
+export default PrinterConnectionScreen;

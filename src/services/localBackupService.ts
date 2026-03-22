@@ -1,18 +1,29 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { AlertButton } from '../components/CustomAlertModal';
 import { format } from 'date-fns';
 import { checkpointDatabase } from './dbService';
 
 const DB_NAME = 'gold_estimation.db';
 const DB_PATH = `${FileSystem.documentDirectory}SQLite/${DB_NAME}`;
 
-export const backupDatabaseLocal = async (deviceName: string = 'device', t: (key: string) => string = (k) => k) => {
+export const backupDatabaseLocal = async (
+    deviceName: string = 'device',
+    t: (key: string) => string = (k) => k,
+    showAlert?: (title: string, message: string, type?: 'success' | 'error' | 'warning' | 'info', buttons?: AlertButton[]) => void
+) => {
+    const triggerAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+        if (showAlert) {
+            showAlert(title, message, type);
+        }
+    };
+
     try {
         const info = await FileSystem.getInfoAsync(DB_PATH);
         if (!info.exists) {
-            Alert.alert(t('error'), t('db_not_found'));
+            triggerAlert(t('error'), t('db_not_found'), 'error');
             return false;
         }
 
@@ -38,7 +49,7 @@ export const backupDatabaseLocal = async (deviceName: string = 'device', t: (key
                         const base64 = await FileSystem.readAsStringAsync(backupUri, { encoding: FileSystem.EncodingType.Base64 });
                         const uri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, backupFileName, 'application/octet-stream');
                         await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
-                        Alert.alert(t('success'), t('local_backup_success_saf') || 'Backup saved to folder successfully.');
+                        triggerAlert(t('success'), t('local_backup_success_saf') || 'Backup saved to folder successfully.', 'success');
                         return true;
                     } catch (safError) {
                         console.log('SAF error (fallback to Sharing):', String(safError));
@@ -62,17 +73,25 @@ export const backupDatabaseLocal = async (deviceName: string = 'device', t: (key
             });
             return true;
         } else {
-            Alert.alert(t('error'), t('sharing_not_available'));
+            triggerAlert(t('error'), t('sharing_not_available'), 'error');
             return false;
         }
     } catch (error) {
         console.error('Local Backup Error:', error);
-        Alert.alert(t('error'), t('local_backup_failed'));
+        triggerAlert(t('error'), t('local_backup_failed'), 'error');
         return false;
     }
 };
 
-export const restoreDatabaseLocal = async (t: (key: string) => string = (k) => k) => {
+export const restoreDatabaseLocal = async (
+    t: (key: string) => string = (k) => k,
+    showAlert?: (title: string, message: string, type?: 'success' | 'error' | 'warning' | 'info', buttons?: AlertButton[]) => void
+) => {
+    const triggerAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons?: AlertButton[]) => {
+        if (showAlert) {
+            showAlert(title, message, type, buttons);
+        }
+    };
     try {
         const result = await DocumentPicker.getDocumentAsync({
             type: ['application/x-sqlite3', 'application/octet-stream', 'application/sql', 'application/db'],
@@ -83,7 +102,7 @@ export const restoreDatabaseLocal = async (t: (key: string) => string = (k) => k
 
         const asset = result.assets[0];
         if (!asset.name.toLowerCase().endsWith('.db')) {
-            Alert.alert(t('error'), t('invalid_db_file'));
+            triggerAlert(t('error'), t('invalid_db_file'), 'error');
             return false;
         }
 
@@ -120,15 +139,16 @@ export const restoreDatabaseLocal = async (t: (key: string) => string = (k) => k
             to: DB_PATH
         });
 
-        Alert.alert(
+        triggerAlert(
             t('success'),
             t('restore_success') + ' ' + t('restart_for_changes'),
+            'success',
             [{ text: 'OK' }]
         );
         return true;
     } catch (error) {
         console.error('Local Restore Error:', error);
-        Alert.alert(t('error'), t('local_restore_failed'));
+        triggerAlert(t('error'), t('local_restore_failed'), 'error');
         return false;
     }
 };

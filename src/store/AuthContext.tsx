@@ -1,31 +1,90 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
-import { Alert } from 'react-native';
-import { validateUser } from '../services/dbService';
+import { AppState } from 'react-native';
+import { clearAuthStorage, fetchProfile, getAuthToken, type AuthUser, loginUser, checkAuthStatus, logoutUser, verifySession } from '../services/authService';
+import { useGeneralSettings } from './GeneralSettingsContext';
+import { setUnauthorizedHandler } from '../services/apiClient';
+import { useRouter } from 'expo-router';
+import { cloudBackup } from '../services/cloudBackupService';
 
 interface AuthContextType {
     isAuthenticated: boolean;
-    login: (username?: string, password?: string) => Promise<boolean>;
-    logout: () => void;
+    login: (phone?: string, password?: string) => Promise<boolean>;
+    logout: () => Promise<void>;
     biometricLogin: () => Promise<void>;
     isBiometricSupported: boolean;
     isSuperAdmin: boolean;
     completeLogin: () => void;
-    validateCredentialsOnly: (username?: string, password?: string) => Promise<boolean>;
+    validateCredentialsOnly: (phone?: string, password?: string) => Promise<boolean>;
     hasMPin: boolean;
     setHasMPin: (value: boolean) => void;
+    currentUser: AuthUser | null;
+    refreshProfile: () => Promise<void>;
+    validateSubscription: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export const useAuth = () => useContext(AuthContext);
 
+const hasSuperAdminAccess = (profile: AuthUser | null, phone?: string) => {
+    const role = String(profile?.role || profile?.user_type || profile?.account_type || '').toLowerCase();
+    return role === 'super_admin' || role === 'admin' || phone === 'sys_admin';
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
     const [hasMPin, setHasMPin] = useState(false);
+    const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+    const router = useRouter();
+
+    const { updateFeatureFlags, showAlert, t } = useGeneralSettings();
+
+    // Helper to merge subscription and user data into currentUser and persist
+    const updateUserWithStatus = useCallback((res: any) => {
+        const user = res?.user || res?.data?.user || (res?.phone ? res : null);
+        const subscriptionUpdate = {
+            isSubscriptionValid: res?.isSubscriptionValid,
+            is_trial: res?.is_trial,
+            status: res?.status,
+            subscription_valid_upto: res?.subscription_valid_upto,
+        };
+        
+        setCurrentUser(prev => {
+            const updated = { ...prev, ...subscriptionUpdate, ...(user || {}) };
+            SecureStore.setItemAsync('auth_user', JSON.stringify(updated)).catch(() => {});
+            return updated as any;
+        });
+
+        const features = res?.features || res?.user?.features || res?.data?.features || res;
+        if (features) {
+            updateFeatureFlags({
+                isChitEnabled: !!(features.chit || features.feature_chit),
+                isPurchaseEnabled: !!(features.purchase || features.feature_purchase),
+                isEstimationEnabled: !!(features.estimation || features.feature_estimation),
+                isAdvanceEnabled: !!(features.advance_chit || features.feature_advance_chit),
+                isRepairEnabled: !!(features.repair || features.feature_repair),
+            });
+        }
+    }, [updateFeatureFlags]);
+
+    const logout = useCallback(async () => {
+        try {
+            await logoutUser();
+        } catch (e) {
+            console.log('Logout API call failed, proceeding with local cleanup');
+        }
+        await SecureStore.deleteItemAsync('user_mpin');
+        cloudBackup.logout();
+        setIsAuthenticated(false);
+        setHasMPin(false);
+        setCurrentUser(null);
+        setIsSuperAdmin(false);
+        router.replace('/login');
+    }, [router]);
 
     // Check biometric hardware support and existing mPIN on mount
     useEffect(() => {
@@ -39,99 +98,183 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 if (storedPin) {
                     setHasMPin(true);
                 }
+
+                const token = await getAuthToken();
+                if (token) {
+                    const isValid = await verifySession();
+                    if (!isValid) {
+                        await logout();
+                        return;
+                    }
+                    const profile = await fetchProfile();
+                    setCurrentUser(profile);
+                    setIsSuperAdmin(hasSuperAdminAccess(profile, profile?.username));
+                    setIsAuthenticated(true);
+                    
+                    // Also refresh status on mount if token exists
+                    checkAuthStatus().then(updateUserWithStatus).catch(() => {});
+                }
             } catch {
                 console.log('Biometric/SecureStore check failed');
             }
         })();
-    }, []);
+    }, [logout, updateUserWithStatus]);
 
-    // Validates credentials without setting isAuthenticated
-    const validateCredentialsOnly = async (username?: string, password?: string): Promise<boolean> => {
+    // Sync status and features on foreground
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            if (nextAppState === 'active' && isAuthenticated) {
+                checkAuthStatus().then(res => {
+                    updateUserWithStatus(res);
+                }).catch(e => {
+                    const isExpired = e.message?.includes('expired');
+                    const title = isExpired ? t('session_expired_title') : 'Access Denied';
+                    if (e?.message?.includes('Account deactivated') || isExpired) {
+                        showAlert(title, e.message, 'error', [{ text: t('ok'), onPress: logout }]);
+                    }
+                });
+            }
+        });
+        return () => subscription.remove();
+    }, [isAuthenticated, updateUserWithStatus, showAlert, t, logout]);
+
+    const validateCredentialsOnly = useCallback(async (phone?: string, password?: string): Promise<boolean> => {
         try {
-            if (!username || !password) return false;
+            if (!phone || !password) return false;
 
-            // Validate against Super Admin Logic
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0');
-            const dd = String(today.getDate()).padStart(2, '0');
-            const dynamicPassword = `${yyyy}${mm}${dd}`;
+            const loginRes = await loginUser({ phone, password });
+            if (!loginRes) return false;
 
-            if (username === 'sys_admin' && password === dynamicPassword) {
-                setIsSuperAdmin(true);
-                return true;
+            const profile = await fetchProfile();
+            setCurrentUser(profile);
+            setIsSuperAdmin(hasSuperAdminAccess(profile, profile?.username));
+
+            try {
+                const statusRes = await checkAuthStatus();
+                updateUserWithStatus(statusRes);
+            } catch (e) { /* ignore on init */ }
+
+            return true;
+        } catch (e: any) {
+            if (e?.message?.includes('deactivated')) {
+                showAlert('Access Denied', 'Account deactivated. Please contact admin.', 'error');
             }
-
-            // Validate against DB
-            const isValid = await validateUser(username, password);
-            if (isValid) {
-                setIsSuperAdmin(false);
-                return true;
-            }
-            return false;
-        } catch (e) {
-            console.error('Validation error:', e);
             return false;
         }
-    };
+    }, [updateUserWithStatus, showAlert]);
 
-    // Original login method keeps its existing signature for backward compatibility,
-    // but ideally we rely on validateCredentialsOnly -> completeLogin now
-    const login = async (username?: string, password?: string): Promise<boolean> => {
-        const isValid = await validateCredentialsOnly(username, password);
+    const login = useCallback(async (phone?: string, password?: string): Promise<boolean> => {
+        const isValid = await validateCredentialsOnly(phone, password);
         if (isValid) {
             setIsAuthenticated(true);
             return true;
         }
         return false;
-    };
+    }, [validateCredentialsOnly]);
 
-    const completeLogin = () => {
+    const completeLogin = useCallback(() => {
         setIsAuthenticated(true);
-    };
+    }, []);
 
-    const biometricLogin = async () => {
+    const biometricLogin = useCallback(async () => {
         if (!isBiometricSupported) {
-            Alert.alert('Not Supported', 'Biometric authentication is not available or enrolled on this device.');
+            showAlert('Not Supported', 'Biometric authentication is not available or enrolled on this device.', 'warning');
+            return;
+        }
+
+        const mpin = await SecureStore.getItemAsync('user_mpin');
+        if (!mpin) {
+            showAlert('mPIN Not Set', 'Please login with password first to enable biometric access.', 'info');
             return;
         }
 
         try {
             const result = await LocalAuthentication.authenticateAsync({
-                promptMessage: 'Authenticate to access Estimation',
+                promptMessage: 'Authenticate to Login',
                 fallbackLabel: 'Use Passcode',
             });
 
             if (result.success) {
-                completeLogin();
-            }
-        } catch {
-            console.error('Authentication error');
-            Alert.alert('Error', 'An error occurred during authentication.');
-        }
-    };
+                fetchProfile().then(profile => {
+                    setCurrentUser(profile);
+                    setIsSuperAdmin(hasSuperAdminAccess(profile, profile?.username));
+                }).catch(() => { });
 
-    const logout = async () => {
-        setIsAuthenticated(false);
-        // We do NOT clear mPIN here on regular logout (so they can log back in with PIN).
-        // If they want to "Switch User", that logic clears the PIN from SecureStore explicitly in LoginScreen.
-    };
+                setIsAuthenticated(true);
+            }
+        } catch (error) {
+            showAlert('Error', 'An error occurred during authentication.', 'error');
+        }
+    }, [isBiometricSupported, showAlert]);
+
+    const refreshProfile = useCallback(async () => {
+        try {
+            const res = await checkAuthStatus();
+            updateUserWithStatus(res);
+        } catch (e: any) {
+            const isExpired = e.message?.includes('expired');
+            const title = isExpired ? t('session_expired_title') : 'Access Denied';
+            if (e.message?.includes('Account deactivated') || isExpired) {
+                showAlert(title, e.message, 'error', [{ text: t('ok'), onPress: logout }]);
+            }
+        }
+    }, [updateUserWithStatus, showAlert, logout, t]);
+
+    useEffect(() => {
+        setUnauthorizedHandler((error) => {
+            const message = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Access Denied';
+            const isExpired = message.toLowerCase().includes('expired') || message.toLowerCase().includes('logged_out');
+            const title = isExpired ? t('session_expired_title') : 'Access Denied';
+            
+            if (isAuthenticated) {
+                showAlert(title, message, 'error', [{ text: t('ok'), onPress: logout }]);
+            }
+        });
+        return () => setUnauthorizedHandler(() => {});
+    }, [isAuthenticated, logout, showAlert, t]);
+
+    const validateSubscription = useCallback(() => {
+        if (!currentUser) return false;
+        if (isSuperAdmin) return true;
+        if (currentUser.isSubscriptionValid) return true;
+
+        const title = t('subscription_required') || 'Subscription Required';
+        const message = currentUser.is_trial 
+            ? t('subscription_demo_expired_msg') || 'Your demo/trial period has ended. Please subscribe to continue using the printing service.'
+            : t('subscription_expired_print_msg') || 'Your subscription has expired or is not active. Please subscribe to continue printing receipts.';
+
+        showAlert(title, message, 'warning', [
+            { text: t('cancel') || 'Cancel', style: 'cancel' },
+            { 
+                text: t('upgrade_now') || 'Upgrade Now', 
+                onPress: () => router.push('/help' as any)
+            }
+        ]);
+
+        return false;
+    }, [currentUser, isSuperAdmin, t, showAlert, router]);
+
+    const contextValue = useMemo(() => ({
+        isAuthenticated,
+        login,
+        logout,
+        biometricLogin,
+        isBiometricSupported,
+        isSuperAdmin,
+        completeLogin,
+        validateCredentialsOnly,
+        hasMPin,
+        setHasMPin,
+        currentUser,
+        refreshProfile,
+        validateSubscription,
+    }), [
+        isAuthenticated, login, logout, biometricLogin, isBiometricSupported,
+        isSuperAdmin, completeLogin, validateCredentialsOnly, hasMPin, currentUser, refreshProfile, validateSubscription
+    ]);
 
     return (
-        <AuthContext.Provider
-            value={{
-                isAuthenticated,
-                login,
-                logout,
-                biometricLogin,
-                isBiometricSupported,
-                isSuperAdmin,
-                completeLogin,
-                validateCredentialsOnly,
-                hasMPin,
-                setHasMPin
-            }}
-        >
+        <AuthContext.Provider value={contextValue}>
             {children}
         </AuthContext.Provider>
     );

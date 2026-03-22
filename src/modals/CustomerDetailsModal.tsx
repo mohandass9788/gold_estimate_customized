@@ -9,8 +9,7 @@ import {
     Keyboard,
     KeyboardAvoidingView as RNKeyboardAvoidingView,
     Platform,
-    ScrollView as RNScrollView,
-    Alert as RNAlert
+    ScrollView as RNScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
@@ -23,7 +22,6 @@ import { getCustomerByMobile } from '../services/dbService';
 const View = RNView as any;
 const Text = RNText as any;
 const ScrollView = RNScrollView as any;
-const Alert = RNAlert as any;
 const Icon = Ionicons as any;
 const TouchableOpacity = RNRTouchableOpacity as any;
 const Modal = RNModal as any;
@@ -38,7 +36,7 @@ interface CustomerDetailsModalProps {
 }
 
 export default function CustomerDetailsModal({ visible, onClose, onSubmit, initialData }: CustomerDetailsModalProps) {
-    const { theme, t } = useGeneralSettings();
+    const { theme, t, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [name, setName] = useState(initialData?.name || '');
@@ -59,7 +57,7 @@ export default function CustomerDetailsModal({ visible, onClose, onSubmit, initi
 
     const handleSubmit = () => {
         if (!name || !mobile) {
-            Alert.alert(t('error') || 'Error', t('field_required'));
+            showAlert(t('error') || 'Error', t('field_required'), 'error');
             return;
         }
         onSubmit({ name, mobile, email, address });
@@ -69,46 +67,58 @@ export default function CustomerDetailsModal({ visible, onClose, onSubmit, initi
     return (
         <Modal visible={visible} animationType="slide" transparent>
             <View style={styles.overlay}>
-                <View style={[styles.modalContainer, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.title, { color: activeColors.primary }]}>{t('customer_info')}</Text>
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                    style={styles.keyboardView}
+                >
+                    <View style={[styles.modalContainer, { backgroundColor: activeColors.cardBg }]}>
+                        <Text style={[styles.title, { color: activeColors.primary }]}>{t('customer_info')}</Text>
 
-                    <ScrollView>
-                        <InputField
-                            label={t('phone_number') + " *"}
-                            value={mobile}
-                            onChangeText={handleMobileChange}
-                            placeholder={t('enter_mobile') || "Enter Mobile"}
-                            keyboardType="phone-pad"
-                            maxLength={10}
-                        />
-                        <InputField
-                            label={t('customer_name') + " *"}
-                            value={name}
-                            onChangeText={setName}
-                            placeholder={t('enter_name') || "Enter Name"}
-                        />
-                        <InputField
-                            label={t('email') + " (" + (t('optional') || 'Optional') + ")"}
-                            value={email}
-                            onChangeText={setEmail}
-                            placeholder={t('enter_email') || "Enter Email"}
-                            keyboardType="email-address"
-                        />
-                        <InputField
-                            label={(t('address') || "Address") + " (" + (t('optional') || 'Optional') + ")"}
-                            value={address}
-                            onChangeText={setAddress}
-                            placeholder={t('enter_address') || "Enter Address"}
-                        />
-                    </ScrollView>
+                        <ScrollView 
+                            style={styles.formScroll} 
+                            contentContainerStyle={styles.scrollContent}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            <InputField
+                                label={t('phone_number') + " *"}
+                                value={mobile}
+                                onChangeText={handleMobileChange}
+                                placeholder={t('enter_mobile') || "Enter Mobile"}
+                                keyboardType="phone-pad"
+                                maxLength={10}
+                            />
+                            <InputField
+                                label={t('customer_name') + " *"}
+                                value={name}
+                                onChangeText={setName}
+                                placeholder={t('enter_name') || "Enter Name"}
+                            />
+                            <InputField
+                                label={t('email') + " (" + (t('optional') || 'Optional') + ")"}
+                                value={email}
+                                onChangeText={setEmail}
+                                placeholder={t('enter_email') || "Enter Email"}
+                                keyboardType="email-address"
+                            />
+                            <InputField
+                                label={(t('address') || "Address") + " (" + (t('optional') || 'Optional') + ")"}
+                                value={address}
+                                onChangeText={setAddress}
+                                placeholder={t('enter_address') || "Enter Address"}
+                                multiline
+                                numberOfLines={3}
+                            />
+                            <View style={{ height: 20 }} />
+                        </ScrollView>
 
-                    <View style={styles.buttonRow}>
-                        <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
-                            <Text style={[styles.cancelText, { color: activeColors.textLight }]}>{t('cancel') || 'Cancel'}</Text>
-                        </TouchableOpacity>
-                        <PrimaryButton title={t('save') || "Save"} onPress={handleSubmit} style={styles.saveButton} />
+                        <View style={styles.buttonRow}>
+                            <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
+                                <Text style={[styles.cancelText, { color: activeColors.textLight }]}>{t('cancel') || 'Cancel'}</Text>
+                            </TouchableOpacity>
+                            <PrimaryButton title={t('save') || "Save"} onPress={handleSubmit} style={styles.saveButton} />
+                        </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </View>
         </Modal>
     );
@@ -149,5 +159,15 @@ const styles = StyleSheet.create({
     },
     saveButton: {
         minWidth: 120,
+    },
+    keyboardView: {
+        width: '100%',
+        alignItems: 'center',
+    },
+    formScroll: {
+        maxHeight: 400,
+    },
+    scrollContent: {
+        paddingBottom: SPACING.md,
     }
 });

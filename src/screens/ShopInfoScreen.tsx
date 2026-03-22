@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableWithoutFeedback as RNRTouchableWithoutFeedback, Keyboard, Platform, Image as RNImage, TouchableOpacity as RNRTouchableOpacity } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableWithoutFeedback as RNRTouchableWithoutFeedback, Keyboard, Platform, Image as RNImage, TouchableOpacity as RNRTouchableOpacity } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../components/ScreenContainer';
@@ -8,7 +8,9 @@ import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
+import { useAuth } from '../store/AuthContext';
 import { useRouter } from 'expo-router';
+import { updateProfile } from '../services/authService';
 import CategoryManagementModal from '../modals/CategoryManagementModal';
 
 // Fix for React 19 type mismatch
@@ -21,10 +23,12 @@ const TouchableOpacity = RNRTouchableOpacity as any;
 
 export default function ShopInfoScreen() {
     const router = useRouter();
+    const { currentUser, refreshProfile } = useAuth();
     const { theme, t, showAlert, shopDetails, updateShopDetails, deviceName, updateDeviceName } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [shopName, setShopName] = useState(shopDetails.name);
+    const [ownerName, setOwnerName] = useState(currentUser?.name || '');
     const [shopAddress, setShopAddress] = useState(shopDetails.address);
     const [shopPhone, setShopPhone] = useState(shopDetails.phone);
     const [shopGst, setShopGst] = useState(shopDetails.gstNumber);
@@ -54,10 +58,22 @@ export default function ShopInfoScreen() {
         }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!shopName.trim()) {
             showAlert(t('error'), t('shop_name_required') || 'Shop Name is required', 'error');
             return;
+        }
+
+        try {
+            // Update Backend Profile
+            await updateProfile({
+                name: ownerName,
+                shop_name: shopName
+            });
+            await refreshProfile();
+        } catch (e) {
+            console.error('Failed to update backend profile:', e);
+            // We continue to save local settings anyway
         }
 
         updateShopDetails({
@@ -95,6 +111,12 @@ export default function ShopInfoScreen() {
                             placeholder={t('enter_shop_name')}
                             value={shopName}
                             onChangeText={setShopName}
+                        />
+                        <InputField
+                            label={t('owner_name') || 'Owner Name'}
+                            placeholder={t('enter_owner_name') || 'Enter owner name'}
+                            value={ownerName}
+                            onChangeText={setOwnerName}
                         />
                         <InputField
                             label={t('shop_address')}
@@ -156,15 +178,6 @@ export default function ShopInfoScreen() {
                             onChangeText={setGstPercentage}
                             keyboardType="numeric"
                         />
-                        <TouchableOpacity
-                            style={[styles.manageButton, { borderColor: activeColors.primary }]}
-                            onPress={() => setIsCategoryModalVisible(true)}
-                        >
-                            <Ionicons name="list-outline" size={20} color={activeColors.primary} />
-                            <Text style={[styles.manageButtonText, { color: activeColors.primary }]}>
-                                {t('manage_purchase_categories') || 'Manage Purchase Categories'}
-                            </Text>
-                        </TouchableOpacity>
                     </View>
 
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
@@ -175,6 +188,7 @@ export default function ShopInfoScreen() {
                             value={shopPhone}
                             onChangeText={setShopPhone}
                             keyboardType="phone-pad"
+                            maxLength={10}
                         />
                         <InputField
                             label={t('gst_number')}
@@ -194,10 +208,8 @@ export default function ShopInfoScreen() {
                         />
                         <InputField
                             label={t('device_name') || 'Device Name / Hardware ID'}
-                            placeholder={t('enter_device_name')}
                             value={localDeviceName}
-                            onChangeText={setLocalDeviceName}
-                            helperText="This persists across uninstalls and links to this hardware."
+                            editable={false}
                         />
                     </View>
 

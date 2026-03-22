@@ -10,11 +10,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
-import { useGeneralSettings } from '../store/GeneralSettingsContext';
 
 export interface AlertButton {
     text: string;
-    onPress: () => void;
+    onPress?: () => void;
     style?: 'default' | 'cancel' | 'destructive';
 }
 
@@ -26,6 +25,8 @@ interface CustomAlertModalProps {
     buttons?: AlertButton[];
     onClose: () => void;
     theme: 'light' | 'dark';
+    t?: (key: string) => string;
+    showCloseIcon?: boolean;
 }
 
 const { width } = Dimensions.get('window');
@@ -37,9 +38,10 @@ export default function CustomAlertModal({
     type = 'info',
     buttons = [],
     onClose,
-    theme
+    theme,
+    t,
+    showCloseIcon = false,
 }: CustomAlertModalProps) {
-    const { t } = useGeneralSettings();
     const [fadeAnim] = React.useState(new Animated.Value(0));
     const [scaleAnim] = React.useState(new Animated.Value(0.8));
 
@@ -97,6 +99,15 @@ export default function CustomAlertModal({
                         }
                     ]}
                 >
+                    {showCloseIcon && (
+                        <TouchableOpacity 
+                            style={styles.closeButtonAbsolute} 
+                            onPress={onClose}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Ionicons name="close" size={24} color={subTextColor} />
+                        </TouchableOpacity>
+                    )}
                     <View style={styles.header}>
                         <Ionicons name={iconName} size={50} color={iconColor} />
                         <Text style={[styles.title, { color: textColor }]}>{title}</Text>
@@ -106,7 +117,7 @@ export default function CustomAlertModal({
                         <Text style={[styles.message, { color: subTextColor }]}>{message}</Text>
                     </View>
 
-                    <View style={styles.footer}>
+                        <View style={styles.footer}>
                         {buttons.length > 0 ? (
                             buttons.map((btn, index) => (
                                 <TouchableOpacity
@@ -118,7 +129,7 @@ export default function CustomAlertModal({
                                         index < buttons.length - 1 && styles.buttonMargin
                                     ]}
                                     onPress={() => {
-                                        btn.onPress();
+                                        btn.onPress?.();
                                         onClose();
                                     }}
                                 >
@@ -137,7 +148,7 @@ export default function CustomAlertModal({
                             ))
                         ) : (
                             <TouchableOpacity style={styles.button} onPress={onClose}>
-                                <Text style={styles.buttonText}>{t('ok') || 'OK'}</Text>
+                                <Text style={styles.buttonText}>{(t && t('ok')) || 'OK'}</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -212,5 +223,11 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: FONT_SIZES.md,
         color: COLORS.primary,
+    },
+    closeButtonAbsolute: {
+        position: 'absolute',
+        top: 15,
+        right: 15,
+        zIndex: 10,
     },
 });

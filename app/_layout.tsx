@@ -19,11 +19,45 @@ import { GeneralSettingsProvider } from '../src/store/GeneralSettingsContext';
 import { ActivationProvider } from '../src/store/ActivationContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import CustomSplashScreen from '../src/components/CustomSplashScreen';
+import { registerForPushNotificationsAsync } from '../src/services/notificationService';
+
+// Safely require expo-notifications
+let Notifications: any;
+try {
+    Notifications = require('expo-notifications');
+} catch (e) {
+    console.warn('Notifications not available in this environment');
+}
 
 export default function RootLayout() {
     const [showSplash, setShowSplash] = useState(true);
+    const notificationListener = useRef<any>(undefined);
+    const responseListener = useRef<any>(undefined);
+
+    useEffect(() => {
+        if (Notifications) {
+            registerForPushNotificationsAsync();
+
+            notificationListener.current = Notifications.addNotificationReceivedListener((notification: any) => {
+                console.log('Notification Received:', notification);
+            });
+
+            responseListener.current = Notifications.addNotificationResponseReceivedListener((response: any) => {
+                console.log('Notification Tapped:', response);
+            });
+        }
+
+        return () => {
+            if (notificationListener.current && notificationListener.current.remove) {
+                notificationListener.current.remove();
+            }
+            if (responseListener.current && responseListener.current.remove) {
+                responseListener.current.remove();
+            }
+        };
+    }, []);
 
     return (
         <SafeAreaProvider>

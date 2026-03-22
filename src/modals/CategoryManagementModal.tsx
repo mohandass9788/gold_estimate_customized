@@ -6,7 +6,6 @@ import {
     Modal as RNModal,
     TouchableOpacity as RNRTouchableOpacity,
     FlatList as RNFlatList,
-    Alert,
     TextInput as RNTextInput,
     KeyboardAvoidingView as RNKeyboardAvoidingView,
     Platform,
@@ -46,7 +45,7 @@ interface CategoryManagementModalProps {
 }
 
 export default function CategoryManagementModal({ visible, onClose }: CategoryManagementModalProps) {
-    const { theme, t } = useGeneralSettings();
+    const { theme, t, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [categories, setCategories] = useState<DBPurchaseCategory[]>([]);
@@ -103,16 +102,17 @@ export default function CategoryManagementModal({ visible, onClose }: CategoryMa
             setNewCategoryName('');
             loadCategories();
         } catch (error) {
-            Alert.alert(t('error'), t('add_failed') || 'Failed to add category. It might already exist.');
+            showAlert(t('error'), t('add_failed') || 'Failed to add category. It might already exist.', 'error');
         }
     };
 
     const handleDeleteCategory = (cat: DBPurchaseCategory) => {
-        Alert.alert(
+        showAlert(
             t('confirm_delete'),
             t('confirm_delete_msg', { name: cat.name }) || `Are you sure you want to delete "${cat.name}" and all its sub-categories?`,
+            'warning',
             [
-                { text: t('cancel'), style: 'cancel' },
+                { text: t('cancel'), style: 'cancel', onPress: () => { } },
                 {
                     text: t('delete'),
                     style: 'destructive',
@@ -124,7 +124,7 @@ export default function CategoryManagementModal({ visible, onClose }: CategoryMa
                             }
                             loadCategories();
                         } catch (error) {
-                            Alert.alert(t('error'), t('delete_failed') || 'Failed to delete category.');
+                            showAlert(t('error'), t('delete_failed') || 'Failed to delete category.', 'error');
                         }
                     }
                 }
@@ -139,7 +139,7 @@ export default function CategoryManagementModal({ visible, onClose }: CategoryMa
             setNewSubCategoryName('');
             loadSubCategories(selectedCategory.id);
         } catch (error) {
-            Alert.alert(t('error'), t('add_failed') || 'Failed to add sub-category.');
+            showAlert(t('error'), t('add_failed') || 'Failed to add sub-category.', 'error');
         }
     };
 
@@ -150,7 +150,7 @@ export default function CategoryManagementModal({ visible, onClose }: CategoryMa
                 loadSubCategories(selectedCategory.id);
             }
         } catch (error) {
-            Alert.alert(t('error'), t('delete_failed') || 'Failed to delete sub-category.');
+            showAlert(t('error'), t('delete_failed') || 'Failed to delete sub-category.', 'error');
         }
     };
 

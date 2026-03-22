@@ -311,7 +311,8 @@ export const getEstimationReceiptThermalPayload = async (
     config?: ReceiptConfig,
     estimationNumber?: number,
     t?: TFunction,
-    skipFooter: boolean = false
+    skipFooter: boolean = false,
+    summaryOnly: boolean = false
 ): Promise<string> => {
     const shopName = shopDetails?.name || await getSetting('shop_name') || 'GOLD ESTIMATION';
     const deviceName = await getSetting('device_name') || '';
@@ -354,9 +355,9 @@ export const getEstimationReceiptThermalPayload = async (
     };
     const footerMessage = shopDetails?.footerMessage;
 
-    if (paperWidth === '80mm') return getConsolidated80mmPayload(data as any, shopName, deviceName, employeeName || '', config, goldRate, silverRate, estimationNumber, skipFooter, footerMessage);
-    if (paperWidth === '112mm') return getConsolidated112mmPayload(data as any, shopName, deviceName, employeeName || '', config, goldRate, silverRate, estimationNumber, skipFooter, footerMessage);
-    return getConsolidated58mmPayload(data as any, shopName, deviceName, employeeName || '', config, goldRate, silverRate, estimationNumber, skipFooter, footerMessage);
+    if (paperWidth === '80mm') return getConsolidated80mmPayload(data as any, shopName, deviceName, employeeName || '', config, goldRate, silverRate, estimationNumber, skipFooter, footerMessage, summaryOnly);
+    if (paperWidth === '112mm') return getConsolidated112mmPayload(data as any, shopName, deviceName, employeeName || '', config, goldRate, silverRate, estimationNumber, skipFooter, footerMessage, summaryOnly);
+    return getConsolidated58mmPayload(data as any, shopName, deviceName, employeeName || '', config, goldRate, silverRate, estimationNumber, skipFooter, footerMessage, summaryOnly);
 };
 
 export const printEstimationReceipt = async (
@@ -369,14 +370,15 @@ export const printEstimationReceipt = async (
     employeeName?: string,
     config?: ReceiptConfig,
     estimationNumber?: number,
-    t?: TFunction
+    t?: TFunction,
+    summaryOnly: boolean = false
 ): Promise<void> => {
     const { type, printer } = await getPrinterConfig();
     if (type === 'thermal' && printer?.address) {
         const connected = await ensureThermalConnection(printer.address);
         if (connected) {
             // Get payload WITH footer
-            const payload = await getEstimationReceiptThermalPayload(items, purchaseItems, chitItems, advanceItems, shopDetails, customerName, employeeName, config, estimationNumber, t, false);
+            const payload = await getEstimationReceiptThermalPayload(items, purchaseItems, chitItems, advanceItems, shopDetails, customerName, employeeName, config, estimationNumber, t, false, summaryOnly);
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
 
             // Print combined content

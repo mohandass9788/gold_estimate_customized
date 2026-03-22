@@ -54,6 +54,7 @@ export default function TabsLayout() {
                 name="scan"
                 options={{
                     title: '',
+                    href: featureFlags.isEstimationEnabled ? '/(tabs)/scan' : null,
                     tabBarIcon: ({ color, size }) => (
                         <ViewAny style={[styles.liftedButton, { borderColor: activeColors.cardBg }]}>
                             <Icon name="scan" color={COLORS.white} size={30} />

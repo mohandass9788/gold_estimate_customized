@@ -36,7 +36,7 @@ export const reportActivation = async (customDeviceName: string): Promise<boolea
 
         // Reporting via API as "auto trigger"
         // If they want email, we could try to send a body to an API that sends the mail
-        const response = await apiClient.post('/report/activation', {
+        const response = await apiClient.post('/api/report/activation', {
             ...details,
             reportedAt: new Date().toISOString(),
             targetEmail: 'nexooai@gmail.com'

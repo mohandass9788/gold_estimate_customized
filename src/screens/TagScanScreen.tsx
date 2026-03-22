@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, Alert } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -21,7 +21,7 @@ const Text = RNText as any;
 export default function TagScanScreen() {
     const router = useRouter();
     const { addTagItem, state } = useEstimation();
-    const { theme, t, serverApiUrl } = useGeneralSettings();
+    const { theme, t, serverApiUrl, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [permission, requestPermission] = useCameraPermissions();
@@ -56,7 +56,7 @@ export default function TagScanScreen() {
                     return;
                 }
 
-                Alert.alert(t('error') || 'Error', t('invalid_repair_qr') || 'Invalid repair QR', [
+                showAlert(t('error') || 'Error', t('invalid_repair_qr') || 'Invalid repair QR', 'error', [
                     { text: t('scan_again') || 'Scan Again', onPress: () => setScanned(false) }
                 ]);
                 return;
@@ -65,21 +65,11 @@ export default function TagScanScreen() {
             const product = await fetchTagDetailsFromApi(data, 'ajithkumar', serverApiUrl);
             console.log("Mapped Product:", product);
 
-            // Navigate to UnifiedEstimationScreen with scanned data
-            // Since we are in a tab navigator (likely), and we want to go 'back' or 'to' the estimation screen.
-            // Dashboard sends us to '/(tabs)/scan'. 
-            // UnifiedEstimationScreen seems to be the index of tabs or another tab?
-            // If it's the index '/', we should navigate to it.
-
-            // router.dismiss() failed because we might not be in a stack that supports dismissal in this context,
-            // or we are the last screen in that stack?
-            // Safe bet: Navigate explicitly to the target screen.
-
             router.navigate({ pathname: '/(tabs)/manual', params: { scannedData: JSON.stringify(product) } });
 
         } catch (error) {
             console.error("API Call Failed:", error);
-            Alert.alert('Error', 'Product not found or invalid tag.', [
+            showAlert('Error', 'Product not found or invalid tag.', 'error', [
                 { text: t('scan_again') || 'Scan Again', onPress: () => setScanned(false) }
             ]);
         } finally {

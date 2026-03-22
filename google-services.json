@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "802653638917",
+    "project_id": "goldestimate",
+    "storage_bucket": "goldestimate.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:802653638917:android:5a0a5c4c6fc8d4b76ee76c",
+        "android_client_info": {
+          "package_name": "com.nexooai.goldestimate"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArZv5WddhyFd1IS9F71YydtE9MXdSw_OA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

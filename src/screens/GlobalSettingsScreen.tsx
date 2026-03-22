@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, Alert, TouchableWithoutFeedback as RNRTouchableWithoutFeedback, Keyboard, Platform, ActivityIndicator as RNActivityIndicator, KeyboardAvoidingView as KeyboardAvoidingViewRN, FlatList as RNFlatList, TextInput as RNTextInput } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableWithoutFeedback as RNRTouchableWithoutFeedback, Keyboard, Platform, ActivityIndicator as RNActivityIndicator, KeyboardAvoidingView as KeyboardAvoidingViewRN, FlatList as RNFlatList, TextInput as RNTextInput } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import HeaderBar from '../components/HeaderBar';
 import InputField from '../components/InputField';
@@ -19,7 +19,7 @@ const KeyboardAvoidingView = KeyboardAvoidingViewRN as any;
 const FlatList = RNFlatList as any;
 
 export default function GlobalSettingsScreen() {
-    const { t, theme } = useGeneralSettings();
+    const { t, theme, showAlert } = useGeneralSettings();
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     const [gstPercentage, setGstPercentage] = useState('3');
@@ -46,9 +46,9 @@ export default function GlobalSettingsScreen() {
             await setSetting('gst_percentage', gstPercentage);
             await setSetting('shop_name', shopName);
             await setSetting('shop_address', shopAddress);
-            Alert.alert(t('success'), t('settings_saved'));
+            showAlert(t('success'), t('settings_saved'), 'success');
         } catch (error) {
-            Alert.alert(t('error'), t('settings_save_failed'));
+            showAlert(t('error'), t('settings_save_failed'), 'error');
         }
     };
 

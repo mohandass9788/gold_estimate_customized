@@ -16,6 +16,7 @@ import PrintPreviewModal from '../modals/PrintPreviewModal';
 import ItemDetailModal from '../modals/ItemDetailModal';
 import { printEstimationReceipt, getEstimationReceiptThermalPayload, printPurchaseItem, printChitItem, printAdvanceItem } from '../services/printService';
 import { Ionicons } from '@expo/vector-icons';
+import { useSubscriptionRestricted } from '../hooks/useSubscriptionRestricted';
 
 // Fix for React 19 type mismatch
 const View = RNView as any;
@@ -72,61 +73,79 @@ export default function EstimationSummaryScreen() {
 
     const selectedCount = selectedItemIds.length + selectedPurchaseIds.length + selectedChitIds.length + selectedAdvanceIds.length;
 
-    const handlePrintRequest = async (isSeparate: boolean = false) => {
-        const selectedItems = state.items.filter(i => selectedItemIds.includes(i.id));
-        const selectedPurchases = state.purchaseItems.filter(i => selectedPurchaseIds.includes(i.id));
-        const selectedChits = state.chitItems.filter(i => selectedChitIds.includes(i.id));
-        const selectedAdvances = state.advanceItems.filter(i => selectedAdvanceIds.includes(i.id));
+    const { verifyAccess } = useSubscriptionRestricted();
 
-        if (selectedCount === 0) {
-            showAlert(t('error') || 'Error', t('select_at_least_one') || 'Please select at least one item to print', 'error');
-            return;
-        }
+    const handlePrintRequest = async (isSeparate: boolean = false, summaryOnly: boolean = false) => {
+        verifyAccess(() => {
+            const selectedItems = state.items.filter(i => selectedItemIds.includes(i.id));
+            const selectedPurchases = state.purchaseItems.filter(i => selectedPurchaseIds.includes(i.id));
+            const selectedChits = state.chitItems.filter(i => selectedChitIds.includes(i.id));
+            const selectedAdvances = state.advanceItems.filter(i => selectedAdvanceIds.includes(i.id));
 
-        requestPrint(async (details) => {
-            if (!state.printDetails) {
-                setPrintDetails(details);
+            if (selectedCount === 0) {
+                showAlert(t('error') || 'Error', t('select_at_least_one') || 'Please select at least one item to print', 'error');
+                return;
             }
-            setPrintDetailsState(details); // rename local state slightly to avoid conflict
-            try {
-                if (isSeparate) {
-                    showAlert(t('printing') || 'Printing', t('printing_separately') || 'Printing items separately...', 'info');
 
-                    const sharedShop = {
+            requestPrint(async (details) => {
+                if (!state.printDetails) {
+                    setCustomer({ 
+                        name: details.customerName, 
+                        mobile: details.mobile, 
+                        address: details.place 
+                    } as any);
+                    setPrintDetails(details);
+                }
+                setPrintDetailsState(details);
+                try {
+                    if (isSeparate) {
+                        showAlert(t('printing') || 'Printing', t('printing_separately') || 'Printing items separately...', 'info');
+
+                        const sharedShop = {
+                            ...shopDetails,
+                            customerAddress: details.place || state.customer?.address || '',
+                            customerMobile: details.mobile || state.customer?.mobile || ''
+                        };
+
+                        for (const item of selectedItems) {
+                            await printEstimationReceipt([item], [], [], [], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t, summaryOnly);
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+                        }
+                        // Purchases, Chits, Advances don't really have "summary only" yet in the same way, 
+                        // but we treat them as individual prints anyway.
+                        for (const item of selectedPurchases) {
+                            await printPurchaseItem(item, sharedShop, details.employeeName, receiptConfig, t, details.customerName, details.mobile, details.place);
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+                        }
+                        // ... chits and advances ...
+                        return;
+                    }
+
+                    const sharedShopMerged = {
                         ...shopDetails,
                         customerAddress: details.place || state.customer?.address || '',
                         customerMobile: details.mobile || state.customer?.mobile || ''
                     };
 
-                    // Direct thermal print for each individual item
-                    for (const item of selectedItems) {
-                        await printEstimationReceipt([item], [], [], [], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t);
-                        await new Promise(resolve => setTimeout(resolve, 1500));
+                    if (selectedCount === 1 && !summaryOnly) {
+                        await printEstimationReceipt(
+                            selectedItems,
+                            selectedPurchases,
+                            selectedChits,
+                            selectedAdvances,
+                            sharedShopMerged,
+                            details.customerName,
+                            details.employeeName,
+                            receiptConfig,
+                            undefined,
+                            t,
+                            summaryOnly
+                        );
+                        return;
                     }
-                    for (const item of selectedPurchases) {
-                        await printPurchaseItem(item, sharedShop, details.employeeName, receiptConfig, t, details.customerName, details.mobile, details.place);
-                        await new Promise(resolve => setTimeout(resolve, 1500));
-                    }
-                    for (const item of selectedChits) {
-                        await printChitItem(item, sharedShop, details.employeeName, receiptConfig, t, details.customerName, details.mobile, details.place);
-                        await new Promise(resolve => setTimeout(resolve, 1500));
-                    }
-                    for (const item of selectedAdvances) {
-                        await printAdvanceItem(item, sharedShop, details.employeeName, receiptConfig, t, details.customerName, details.mobile, details.place);
-                        await new Promise(resolve => setTimeout(resolve, 1500));
-                    }
-                    return;
-                }
 
-                const sharedShopMerged = {
-                    ...shopDetails,
-                    customerAddress: details.place || state.customer?.address || '',
-                    customerMobile: details.mobile || state.customer?.mobile || ''
-                };
-
-                if (selectedCount === 1) {
-                    // Direct print if single item
-                    await printEstimationReceipt(
+                    // Show preview for merged/summary print
+                    const payload = await getEstimationReceiptThermalPayload(
                         selectedItems,
                         selectedPurchases,
                         selectedChits,
@@ -136,30 +155,17 @@ export default function EstimationSummaryScreen() {
                         details.employeeName,
                         receiptConfig,
                         undefined,
-                        t
+                        t,
+                        false,
+                        summaryOnly
                     );
-                    return;
+                    setPreviewPayload(payload);
+                    setShowPreviewModal(true);
+                } catch (error: any) {
+                    showAlert(t('error') || 'Error', error.message || t('print_failed') || 'Failed to print', 'error');
                 }
-
-                // Show preview for merged print
-                const payload = await getEstimationReceiptThermalPayload(
-                    selectedItems,
-                    selectedPurchases,
-                    selectedChits,
-                    selectedAdvances,
-                    sharedShopMerged,
-                    details.customerName,
-                    details.employeeName,
-                    receiptConfig,
-                    undefined,
-                    t
-                );
-                setPreviewPayload(payload);
-                setShowPreviewModal(true);
-            } catch (error: any) {
-                showAlert(t('error') || 'Error', error.message || t('print_failed') || 'Failed to print', 'error');
-            }
-        }, false, undefined, state.printDetails);
+            }, false, undefined, state.printDetails);
+        });
     };
 
     const handleWidthChange = async (width: '58mm' | '80mm' | '112mm') => {
@@ -398,35 +404,60 @@ export default function EstimationSummaryScreen() {
 
                             <SummaryCard totals={state.totals} />
 
-                            <View style={styles.actionButtons}>
-                                {selectedCount > 1 ? (
-                                    <>
-                                        <PrimaryButton
-                                            title={t('merge_print') || "Merge Print"}
-                                            onPress={() => handlePrintRequest(false)}
-                                            style={styles.actionButton}
-                                        />
-                                        <PrimaryButton
-                                            title={t('separate_print') || "Separate Print"}
-                                            variant="outline"
-                                            onPress={() => handlePrintRequest(true)}
-                                            style={styles.actionButton}
-                                        />
-                                    </>
-                                ) : (
-                                    <PrimaryButton
-                                        title={t('print') || "Print Receipt"}
-                                        onPress={() => handlePrintRequest(false)}
-                                        isLoading={isPrinting}
-                                        style={styles.actionButton}
-                                        disabled={selectedCount === 0}
-                                    />
+                            <View style={styles.printFormatSection}>
+                                <Text style={[styles.sectionTitle, { color: activeColors.primary, marginBottom: SPACING.md }]}>
+                                    {t('print_format_selection')}
+                                </Text>
+
+                                <TouchableOpacity
+                                    style={[styles.formatCard, { backgroundColor: activeColors.cardBg }]}
+                                    onPress={() => handlePrintRequest(false, true)}
+                                >
+                                    <View style={[styles.formatIconContainer, { backgroundColor: activeColors.primary + '15' }]}>
+                                        <Icon name="list-outline" size={24} color={activeColors.primary} />
+                                    </View>
+                                    <View style={styles.formatTextContainer}>
+                                        <Text style={[styles.formatTitle, { color: activeColors.text }]}>{t('summary_only')}</Text>
+                                        <Text style={[styles.formatDesc, { color: activeColors.textLight }]}>{t('summary_only_desc')}</Text>
+                                    </View>
+                                    <Icon name="chevron-forward" size={20} color={activeColors.border} />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.formatCard, { backgroundColor: activeColors.cardBg }]}
+                                    onPress={() => handlePrintRequest(false, false)}
+                                >
+                                    <View style={[styles.formatIconContainer, { backgroundColor: COLORS.success + '15' }]}>
+                                        <Icon name="reader-outline" size={24} color={COLORS.success} />
+                                    </View>
+                                    <View style={styles.formatTextContainer}>
+                                        <Text style={[styles.formatTitle, { color: activeColors.text }]}>{t('consolidated')}</Text>
+                                        <Text style={[styles.formatDesc, { color: activeColors.textLight }]}>{t('consolidated_desc')}</Text>
+                                    </View>
+                                    <Icon name="chevron-forward" size={20} color={activeColors.border} />
+                                </TouchableOpacity>
+
+                                {selectedCount > 1 && (
+                                    <TouchableOpacity
+                                        style={[styles.formatCard, { backgroundColor: activeColors.cardBg }]}
+                                        onPress={() => handlePrintRequest(true, false)}
+                                    >
+                                        <View style={[styles.formatIconContainer, { backgroundColor: COLORS.warning + '15' }]}>
+                                            <Icon name="copy-outline" size={24} color={COLORS.warning} />
+                                        </View>
+                                        <View style={styles.formatTextContainer}>
+                                            <Text style={[styles.formatTitle, { color: activeColors.text }]}>{t('individual')}</Text>
+                                            <Text style={[styles.formatDesc, { color: activeColors.textLight }]}>{t('individual_desc')}</Text>
+                                        </View>
+                                        <Icon name="chevron-forward" size={20} color={activeColors.border} />
+                                    </TouchableOpacity>
                                 )}
+
                                 <PrimaryButton
                                     title="Convert to Bill"
                                     variant="secondary"
                                     onPress={() => showAlert('Coming Soon', 'Billing feature is under development.', 'info')}
-                                    style={styles.actionButton}
+                                    style={{ marginTop: SPACING.md }}
                                 />
                             </View>
                         </View>
@@ -515,5 +546,40 @@ const styles = StyleSheet.create({
     },
     actionIconBtn: {
         padding: SPACING.xs,
+    },
+    printFormatSection: {
+        marginTop: SPACING.lg,
+    },
+    formatCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: SPACING.md,
+        borderRadius: BORDER_RADIUS.lg,
+        marginBottom: SPACING.md,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    formatIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: BORDER_RADIUS.md,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: SPACING.md,
+    },
+    formatTextContainer: {
+        flex: 1,
+    },
+    formatTitle: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+        marginBottom: 2,
+    },
+    formatDesc: {
+        fontSize: FONT_SIZES.xs,
+        lineHeight: 16,
     }
 });
