@@ -62,7 +62,7 @@ export default function GlobalSettingsScreen() {
                     keyboardShouldPersistTaps="handled"
                 >
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('business_info')}</Text>
+                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('business_info')}</Text>
                         <InputField
                             label={t('shop_name')}
                             value={shopName}
@@ -79,7 +79,7 @@ export default function GlobalSettingsScreen() {
                     </View>
 
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('tax_settings')}</Text>
+                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('tax_settings')}</Text>
                         <InputField
                             label={t('default_gst')}
                             value={gstPercentage}
@@ -90,7 +90,7 @@ export default function GlobalSettingsScreen() {
                     </View>
 
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('product_management')}</Text>
+                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('product_management')}</Text>
                         <PrimaryButton
                             title={t('manage_purchase_categories')}
                             variant="outline"

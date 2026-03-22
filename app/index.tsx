@@ -10,7 +10,7 @@ const ActivityIndicator = RNActivityIndicator as any;
 
 export default function Index() {
     const router = useRouter();
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, isMpinRequired } = useAuth();
     const { isActivated, isCheckingActivation } = useActivation();
     const segments = useSegments();
     const rootNavigationState = useRootNavigationState();
@@ -36,12 +36,16 @@ export default function Index() {
         }
 
         // If activated, handle auth
-        if (isAuthenticated && !inAuthGroup) {
-            router.replace('/(tabs)/');
+        if (isAuthenticated) {
+            if (isMpinRequired && !segments.includes('mpin')) {
+                router.replace('/mpin');
+            } else if (!inAuthGroup) {
+                router.replace('/(tabs)/');
+            }
         } else if (!isAuthenticated) {
             router.replace('/login');
         }
-    }, [isAuthenticated, isActivated, isCheckingActivation, isNavigationReady, segments]);
+    }, [isAuthenticated, isActivated, isMpinRequired, isCheckingActivation, isNavigationReady, segments]);
 
     return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>

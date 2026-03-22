@@ -32,6 +32,7 @@ export default function SettingsScreen() {
     const router = useRouter();
     const { logout, isSuperAdmin, currentUser } = useAuth();
     const { theme, toggleTheme, language, setLanguage, t, shopDetails, updateShopDetails, deviceName, updateDeviceName, deviceId, updateDeviceId, serverApiUrl, updateServerApiUrl, receiptConfig, updateReceiptConfig } = useGeneralSettings();
+    const { isBiometricSupported, isBiometricEnabled, setIsBiometricEnabled } = useAuth();
     const [showEditIdModal, setShowEditIdModal] = useState(false);
     const [showEditServerUrlModal, setShowEditServerUrlModal] = useState(false);
     const [tempDeviceId, setTempDeviceId] = useState('');
@@ -44,11 +45,11 @@ export default function SettingsScreen() {
 
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
-    const SettingItem = ({ icon, label, onPress, color = activeColors.text, rightElement }: any) => (
+    const SettingItem = ({ icon, label, onPress, color, rightElement }: any) => (
         <TouchableOpacity style={[styles.item, { borderBottomColor: activeColors.border }]} onPress={onPress}>
             <View style={styles.itemLeft}>
-                <Icon name={icon} size={22} color={color} />
-                <Text style={[styles.itemLabel, { color }]}>{label}</Text>
+                <Icon name={icon} size={22} color={color || activeColors.primary} />
+                <Text style={[styles.itemLabel, { color: activeColors.text }]}>{label}</Text>
             </View>
             <View style={styles.itemRight}>
                 {rightElement ? rightElement : <Icon name="chevron-forward" size={20} color={activeColors.textLight} />}
@@ -104,7 +105,7 @@ export default function SettingsScreen() {
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('account')}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('account')}</Text>
                     <SettingItem
                         icon="person-outline"
                         label={t('profile_security')}
@@ -127,7 +128,7 @@ export default function SettingsScreen() {
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('business_branding')}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('business_branding')}</Text>
                     <SettingItem
                         icon="business-outline"
                         label={t('shop_business_settings') || 'Shop & Business Settings'}
@@ -137,7 +138,7 @@ export default function SettingsScreen() {
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('data_management') || 'Data Management'}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('data_management') || 'Data Management'}</Text>
                     <SettingItem
                         icon="people-circle-outline"
                         label={t('customers') || 'Customer Database'}
@@ -171,7 +172,7 @@ export default function SettingsScreen() {
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('printer_configuration') || 'Printer Configuration'}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('printer_configuration') || 'Printer Configuration'}</Text>
                     <SettingItem
                         icon="bluetooth-outline"
                         label={t('printer_connection')}
@@ -187,7 +188,7 @@ export default function SettingsScreen() {
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('app_configuration')}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('app_configuration')}</Text>
                     <SettingItem
                         icon={theme === 'light' ? "sunny-outline" : "moon-outline"}
                         label={t('theme')}
@@ -215,11 +216,26 @@ export default function SettingsScreen() {
                             </View>
                         }
                     />
+                    {isBiometricSupported && (
+                        <SettingItem
+                            icon="finger-print-outline"
+                            label={t('enable_biometric_login') || 'Enable Biometric Login'}
+                            onPress={() => setIsBiometricEnabled(!isBiometricEnabled)}
+                            color="#00BCD4"
+                            rightElement={
+                                <View style={[styles.toggleBadge, { backgroundColor: (isBiometricEnabled ? COLORS.success : activeColors.textLight) + '15' }]}>
+                                    <Text style={{ color: isBiometricEnabled ? COLORS.success : activeColors.textLight, fontWeight: 'bold', fontSize: 12 }}>
+                                        {isBiometricEnabled ? t('active') || 'ON' : t('inactive') || 'OFF'}
+                                    </Text>
+                                </View>
+                            }
+                        />
+                    )}
                 </View>
 
                 {isSuperAdmin && (
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('super_admin')}</Text>
+                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('super_admin')}</Text>
                         <SettingItem
                             icon="shield-checkmark-outline"
                             label={t('sys_admin_menu')}
@@ -230,7 +246,7 @@ export default function SettingsScreen() {
                 )}
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('system_api_settings') || 'System & API Settings'}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('system_api_settings') || 'System & API Settings'}</Text>
                     <SettingItem
                         icon="cloud-upload-outline"
                         label={t('backup_restore') || 'Backup & Restore'}
@@ -244,7 +260,7 @@ export default function SettingsScreen() {
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('support')}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('support')}</Text>
                     <SettingItem
                         icon="help-circle-outline"
                         label={t('help_support')}
@@ -254,7 +270,7 @@ export default function SettingsScreen() {
                 </View>
 
                 <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('policies') || 'Policies'}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('policies') || 'Policies'}</Text>
                     <SettingItem
                         icon="shield-outline"
                         label={t('privacy_policy') || 'Privacy Policy'}
@@ -272,7 +288,14 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                     style={[styles.logoutBtn, { backgroundColor: activeColors.error + '10', borderColor: activeColors.error }]}
                     onPress={() => {
-                        logout();
+                        Alert.alert(
+                            t('logout_confirm_title') || 'Logout',
+                            t('logout_confirm_msg') || 'Are you sure you want to logout?',
+                            [
+                                { text: t('cancel'), style: 'cancel' },
+                                { text: t('confirm'), onPress: logout, style: 'destructive' }
+                            ]
+                        );
                     }}
                 >
                     <Icon name="log-out-outline" size={22} color={activeColors.error} />

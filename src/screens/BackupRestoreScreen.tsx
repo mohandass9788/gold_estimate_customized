@@ -128,7 +128,7 @@ export default function BackupRestoreScreen() {
                 </View>
 
                 <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('server_sync') || 'Server Synchronization'}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('server_sync') || 'Server Synchronization'}</Text>
                     {lastSync && <Text style={[styles.lastSync, { color: activeColors.textLight }]}>{t('last_sync') || 'Last'}: {lastSync}</Text>}
                 </View>
                 
@@ -149,7 +149,7 @@ export default function BackupRestoreScreen() {
                 />
 
                 <View style={[styles.sectionHeader, { marginTop: SPACING.lg }]}>
-                    <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('local_management') || 'Local Management'}</Text>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('local_management') || 'Local Management'}</Text>
                 </View>
 
                 <ActionCard 

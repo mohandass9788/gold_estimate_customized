@@ -259,6 +259,15 @@ export default function LoginScreen() {
                                     {t('no_account_yet') || "Don't have an account?"} <Text style={styles.registerLinkTextBold}>{t('create_account_link') || "Create Account"}</Text>
                                 </Text>
                             </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.registerLink, { marginTop: SPACING.md }]}
+                                onPress={() => router.push('/activation')}
+                            >
+                                <Text style={[styles.registerLinkText, { color: COLORS.primary }]}>
+                                    {t('go_to_activation') || "Go to Activation Page"}
+                                </Text>
+                            </TouchableOpacity>
                         </>
                     )}
 
@@ -333,6 +342,15 @@ export default function LoginScreen() {
                             >
                                 <Text style={styles.registerLinkText}>
                                     {t('no_account_yet') || "Don't have an account?"} <Text style={styles.registerLinkTextBold}>{t('create_account_link') || "Create Account"}</Text>
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.registerLink, { marginTop: SPACING.md }]}
+                                onPress={() => router.push('/activation')}
+                            >
+                                <Text style={[styles.registerLinkText, { color: COLORS.primary }]}>
+                                    {t('go_to_activation') || "Go to Activation Page"}
                                 </Text>
                             </TouchableOpacity>
                         </>

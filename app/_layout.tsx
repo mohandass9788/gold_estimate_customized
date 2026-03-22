@@ -17,10 +17,12 @@ import { AuthProvider } from '../src/store/AuthContext';
 import { EstimationProvider } from '../src/store/EstimationContext';
 import { GeneralSettingsProvider } from '../src/store/GeneralSettingsContext';
 import { ActivationProvider } from '../src/store/ActivationContext';
+import { TutorialProvider } from '../src/store/TutorialContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import React, { useState, useEffect, useRef } from 'react';
 import CustomSplashScreen from '../src/components/CustomSplashScreen';
+import { FloatingVideoPopup } from '../src/components/FloatingVideoPopup';
 import { registerForPushNotificationsAsync } from '../src/services/notificationService';
 
 // Safely require expo-notifications
@@ -63,15 +65,20 @@ export default function RootLayout() {
         <SafeAreaProvider>
             <GeneralSettingsProvider>
                 <ActivationProvider>
-                    <AuthProvider>
-                        <EstimationProvider>
-                            {showSplash ? (
-                                <CustomSplashScreen onFinish={() => setShowSplash(false)} />
-                            ) : (
-                                <Stack screenOptions={{ headerShown: false }} />
-                            )}
-                        </EstimationProvider>
-                    </AuthProvider>
+                    <TutorialProvider>
+                        <AuthProvider>
+                            <EstimationProvider>
+                                {showSplash ? (
+                                    <CustomSplashScreen onFinish={() => setShowSplash(false)} />
+                                ) : (
+                                    <>
+                                        <Stack screenOptions={{ headerShown: false }} />
+                                        <FloatingVideoPopup />
+                                    </>
+                                )}
+                            </EstimationProvider>
+                        </AuthProvider>
+                    </TutorialProvider>
                 </ActivationProvider>
             </GeneralSettingsProvider>
         </SafeAreaProvider>

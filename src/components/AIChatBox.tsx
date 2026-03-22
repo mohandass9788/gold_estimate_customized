@@ -114,7 +114,7 @@ export default function AIChatBox({ isExternalOpen, onExternalClose }: AIChatBox
 
         setMessages(prev => [...prev, {
             id: Date.now().toString(),
-            text: t('chatbot_submission_success', { phone }) || `Perfect! Your details have been submitted. Our team will call you shortly on ${phone}.\n\nStarting your 1-day demo now...`,
+            text: t('chatbot_submission_success', { phone }) || `Perfect! Your call request has been submitted. Our team will reach you shortly on ${phone}.\n\nStarting your 1-day demo now...`,
             sender: 'ai'
         }]);
         setStep('done');

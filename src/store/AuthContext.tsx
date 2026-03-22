@@ -3,6 +3,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { AppState } from 'react-native';
 import { clearAuthStorage, fetchProfile, getAuthToken, type AuthUser, loginUser, checkAuthStatus, logoutUser, verifySession } from '../services/authService';
+import { registerForPushNotificationsAsync } from '../services/notificationService';
 import { useGeneralSettings } from './GeneralSettingsContext';
 import { setUnauthorizedHandler } from '../services/apiClient';
 import { useRouter } from 'expo-router';
@@ -14,6 +15,8 @@ interface AuthContextType {
     logout: () => Promise<void>;
     biometricLogin: () => Promise<void>;
     isBiometricSupported: boolean;
+    isBiometricEnabled: boolean;
+    setIsBiometricEnabled: (enabled: boolean) => Promise<void>;
     isSuperAdmin: boolean;
     completeLogin: () => void;
     validateCredentialsOnly: (phone?: string, password?: string) => Promise<boolean>;
@@ -22,6 +25,9 @@ interface AuthContextType {
     currentUser: AuthUser | null;
     refreshProfile: () => Promise<void>;
     validateSubscription: () => boolean;
+    isMpinRequired: boolean;
+    setIsMpinRequired: (value: boolean) => void;
+    verifyMpin: (pin: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -36,9 +42,11 @@ const hasSuperAdminAccess = (profile: AuthUser | null, phone?: string) => {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+    const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
     const [hasMPin, setHasMPin] = useState(false);
     const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+    const [isMpinRequired, setIsMpinRequired] = useState(false);
     const router = useRouter();
 
     const { updateFeatureFlags, showAlert, t } = useGeneralSettings();
@@ -99,6 +107,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setHasMPin(true);
                 }
 
+                const biometricEnabled = await SecureStore.getItemAsync('isBiometricEnabled');
+                setIsBiometricEnabled(biometricEnabled === 'true');
+
                 const token = await getAuthToken();
                 if (token) {
                     const isValid = await verifySession();
@@ -110,6 +121,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setCurrentUser(profile);
                     setIsSuperAdmin(hasSuperAdminAccess(profile, profile?.username));
                     setIsAuthenticated(true);
+                    
+                    // If user has mPIN, set requirement to true on launch
+                    if (storedPin) {
+                        setIsMpinRequired(true);
+                    }
                     
                     // Also refresh status on mount if token exists
                     checkAuthStatus().then(updateUserWithStatus).catch(() => {});
@@ -141,8 +157,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const validateCredentialsOnly = useCallback(async (phone?: string, password?: string): Promise<boolean> => {
         try {
             if (!phone || !password) return false;
+            
+            // Fetch push token before login for unified integration
+            const pushToken = await registerForPushNotificationsAsync();
 
-            const loginRes = await loginUser({ phone, password });
+            const loginRes = await loginUser({ phone, password, push_token: pushToken });
             if (!loginRes) return false;
 
             const profile = await fetchProfile();
@@ -166,13 +185,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const login = useCallback(async (phone?: string, password?: string): Promise<boolean> => {
         const isValid = await validateCredentialsOnly(phone, password);
         if (isValid) {
+            setIsMpinRequired(false);
             setIsAuthenticated(true);
             return true;
         }
         return false;
     }, [validateCredentialsOnly]);
 
+    const handleSetBiometricEnabled = async (enabled: boolean) => {
+        await SecureStore.setItemAsync('isBiometricEnabled', enabled ? 'true' : 'false');
+        setIsBiometricEnabled(enabled);
+    };
+
     const completeLogin = useCallback(() => {
+        setIsMpinRequired(false);
         setIsAuthenticated(true);
     }, []);
 
@@ -200,12 +226,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setIsSuperAdmin(hasSuperAdminAccess(profile, profile?.username));
                 }).catch(() => { });
 
+                setIsMpinRequired(false);
                 setIsAuthenticated(true);
             }
         } catch (error) {
             showAlert('Error', 'An error occurred during authentication.', 'error');
         }
     }, [isBiometricSupported, showAlert]);
+
+    const verifyMpin = useCallback(async (pin: string): Promise<boolean> => {
+        const storedPin = await SecureStore.getItemAsync('user_mpin');
+        if (storedPin === pin) {
+            setIsMpinRequired(false);
+            return true;
+        }
+        return false;
+    }, []);
 
     const refreshProfile = useCallback(async () => {
         try {
@@ -260,6 +296,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         logout,
         biometricLogin,
         isBiometricSupported,
+        isBiometricEnabled,
+        setIsBiometricEnabled: handleSetBiometricEnabled,
         isSuperAdmin,
         completeLogin,
         validateCredentialsOnly,
@@ -268,9 +306,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         currentUser,
         refreshProfile,
         validateSubscription,
+        isMpinRequired,
+        setIsMpinRequired,
+        verifyMpin,
     }), [
-        isAuthenticated, login, logout, biometricLogin, isBiometricSupported,
-        isSuperAdmin, completeLogin, validateCredentialsOnly, hasMPin, currentUser, refreshProfile, validateSubscription
+        isAuthenticated, login, logout, biometricLogin, isBiometricSupported, isBiometricEnabled,
+        isSuperAdmin, completeLogin, validateCredentialsOnly, hasMPin, currentUser, refreshProfile, validateSubscription,
+        isMpinRequired, verifyMpin
     ]);
 
     return (

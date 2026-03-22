@@ -10,6 +10,7 @@ const AUTH_USER_KEY = 'auth_user';
 export interface LoginPayload {
     phone: string;
     password: string;
+    push_token?: string; // [NEW] Optional push token for unified login
 }
 
 export interface RegisterPayload {
@@ -179,7 +180,7 @@ export const logoutUser = async () => {
     }
 };
 
-export const loginUser = async ({ phone, password }: LoginPayload) => {
+export const loginUser = async ({ phone, password, push_token }: LoginPayload) => {
     try {
         const [deviceId, deviceName] = await Promise.all([
             getStoredDeviceId(),
@@ -191,6 +192,7 @@ export const loginUser = async ({ phone, password }: LoginPayload) => {
             password,
             device_id: deviceId,
             device_name: deviceName,
+            push_token, // [NEW] Pass the push token directly
         };
 
         console.log('[auth] POST /api/auth/login payload:', maskSensitivePayload(payload));
@@ -265,6 +267,21 @@ export const requestCall = async (payload: { name: string; phone: string; source
         return response.data;
     } catch (error: any) {
         throw new Error(extractMessage(error, 'Failed to submit call request'));
+    }
+};
+
+/**
+ * Syncs the latest Expo push token with the backend.
+ * Path: /api/sync/device-token
+ */
+export const updateDeviceToken = async (pushToken: string) => {
+    try {
+        console.log('[auth] POST /api/sync/device-token token:', pushToken);
+        const response = await apiClient.post('/api/sync/device-token', { pushToken });
+        return response.data;
+    } catch (error: any) {
+        console.warn('[auth] Failed to sync device token:', error?.message);
+        throw error;
     }
 };
 

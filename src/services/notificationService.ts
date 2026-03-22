@@ -1,6 +1,7 @@
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { updateDeviceToken } from './authService';
 
 // Use a more defensive way to import expo-notifications to avoid crashes if native module is missing
 let Notifications: any;
@@ -59,6 +60,14 @@ export async function registerForPushNotificationsAsync() {
         }
         token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
         console.log('Push Token:', token);
+        
+        // Sync token with server if we have it
+        if (token) {
+          updateDeviceToken(token).catch(() => {
+            // Silently fail or log if the user is not logged in yet
+            console.log('Push token obtained but server sync skipped (possibly logged out)');
+          });
+        }
     } catch (e) {
         console.error('Error getting push token:', e);
     }

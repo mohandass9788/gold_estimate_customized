@@ -105,7 +105,7 @@ export default function ShopInfoScreen() {
                     showsVerticalScrollIndicator={false}
                 >
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('basic_branding') || 'Basic Branding'}</Text>
+                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('basic_branding') || 'Basic Branding'}</Text>
                         <InputField
                             label={t('shop_name')}
                             placeholder={t('enter_shop_name')}
@@ -170,7 +170,7 @@ export default function ShopInfoScreen() {
                     </View>
 
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('tax_inventory') || 'Tax & Inventory'}</Text>
+                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('tax_inventory') || 'Tax & Inventory'}</Text>
                         <InputField
                             label={t('default_gst') || 'Default GST (%)'}
                             placeholder="3"
@@ -181,7 +181,7 @@ export default function ShopInfoScreen() {
                     </View>
 
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('contact_tax') || 'Contact & Tax'}</Text>
+                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('contact_tax') || 'Contact & Tax'}</Text>
                         <InputField
                             label={t('phone_number')}
                             placeholder={t('enter_phone')}
@@ -199,7 +199,7 @@ export default function ShopInfoScreen() {
                     </View>
 
                     <View style={[styles.section, { backgroundColor: activeColors.cardBg }]}>
-                        <Text style={[styles.sectionTitle, { color: activeColors.primary }]}>{t('receipt_settings') || 'Receipt Settings'}</Text>
+                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>{t('receipt_settings') || 'Receipt Settings'}</Text>
                         <InputField
                             label={t('footer_message')}
                             placeholder={t('thank_you_msg')}
