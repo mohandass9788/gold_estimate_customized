@@ -34,7 +34,9 @@ type Action =
     | { type: 'CLEAR_FORM' }
     | { type: 'LOAD_ESTIMATION'; payload: { items: EstimationItem[], purchaseItems: PurchaseItem[], chitItems: ChitItem[], advanceItems: AdvanceItem[], customer: Customer | null, id: string, estimationNumber: number, orderId?: string | null, printDetails?: { customerName: string; mobile: string; place: string; employeeName: string } } }
     | { type: 'CLEAR_ESTIMATION' }
-    | { type: 'SET_PRINT_DETAILS'; payload: { customerName: string; mobile: string; place: string; employeeName: string } };
+    | { type: 'SET_PRINT_DETAILS'; payload: { customerName: string; mobile: string; place: string; employeeName: string } | undefined }
+    | { type: 'SET_CURRENT_ORDER_ID'; payload: string }
+    | { type: 'SET_CURRENT_ID'; payload: string };
 
 const initialState: EstimationState = {
     items: [],
@@ -189,6 +191,16 @@ const estimationReducer = (state: EstimationState, action: Action): EstimationSt
                 ...state,
                 printDetails: action.payload
             };
+        case 'SET_CURRENT_ORDER_ID':
+            return {
+                ...state,
+                currentOrderId: action.payload
+            };
+        case 'SET_CURRENT_ID':
+            return {
+                ...state,
+                currentId: action.payload
+            };
         default:
             return state;
     }
@@ -210,7 +222,8 @@ interface EstimationContextType {
     clearEstimation: () => void;
     saveCurrentEstimation: (estimationNumber: number) => Promise<void>;
     loadEstimationIntoContext: (estimation: DBEstimation, orderId?: string) => void;
-    setPrintDetails: (details: { customerName: string; mobile: string; place: string; employeeName: string }) => void;
+    setPrintDetails: (details: { customerName: string; mobile: string; place: string; employeeName: string } | undefined) => void;
+    setCurrentOrderId: (orderId: string) => void;
 }
 
 const EstimationContext = createContext<EstimationContextType>({} as EstimationContextType);
@@ -278,41 +291,22 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
     const setCustomer = (customer: Customer) => dispatch({ type: 'SET_CUSTOMER', payload: customer });
     const clearForm = () => dispatch({ type: 'CLEAR_FORM' });
     const resetEstimation = () => dispatch({ type: 'CLEAR_ESTIMATION' });
-    const setPrintDetails = (details: { customerName: string; mobile: string; place: string; employeeName: string }) => dispatch({ type: 'SET_PRINT_DETAILS', payload: details });
+    const setPrintDetails = (details: { customerName: string; mobile: string; place: string; employeeName: string } | undefined) => dispatch({ type: 'SET_PRINT_DETAILS', payload: details });
+    const setCurrentOrderId = (orderId: string) => dispatch({ type: 'SET_CURRENT_ORDER_ID', payload: orderId });
 
     const clearEstimation = async () => {
-        if (state.items.length > 0) {
-            // Use existing number if editing, otherwise get next
-            const estNum = state.currentEstimationNumber || await getNextEstimationNumber();
-            const estId = state.currentId || Date.now().toString();
-
-            // Auto-save to history when clearing/completing
-            const dbEstimate: DBEstimation = {
-                id: estId,
-                customerName: state.customer?.name || `Estimation #${estNum}`,
-                customerMobile: state.customer?.mobile || 'N/A',
-                date: new Date().toISOString(),
-                items: JSON.stringify(state.items),
-                purchaseItems: JSON.stringify(state.purchaseItems),
-                chitItems: JSON.stringify(state.chitItems),
-                advanceItems: JSON.stringify(state.advanceItems),
-                totalWeight: state.totals.totalWeight,
-                grandTotal: state.totals.grandTotal,
-                estimationNumber: estNum
-            };
-            await saveEstimation(dbEstimate);
-            const history = await getRecentEstimations(10);
-            dispatch({ type: 'SET_HISTORY', payload: history });
-        }
         dispatch({ type: 'CLEAR_ESTIMATION' });
     };
 
     const saveCurrentEstimation = async (estimationNumber: number) => {
+        // Use currentId or generate a stable one
         const estId = state.currentId || Date.now().toString();
+        
         const dbEstimate: DBEstimation = {
             id: estId,
-            customerName: state.customer?.name || `Estimation #${estimationNumber}`,
-            customerMobile: state.customer?.mobile || 'N/A',
+            customerName: state.customer?.name || state.printDetails?.customerName || `Estimation #${estimationNumber}`,
+            customerMobile: state.customer?.mobile || state.printDetails?.mobile || '',
+            customerAddress: state.customer?.address || state.printDetails?.place || '',
             date: new Date().toISOString(),
             items: JSON.stringify(state.items),
             purchaseItems: JSON.stringify(state.purchaseItems),
@@ -322,7 +316,13 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
             grandTotal: state.totals.grandTotal,
             estimationNumber: estimationNumber
         };
+        
         await saveEstimation(dbEstimate);
+
+        // Update state with the ID we used
+        if (!state.currentId || state.currentId !== estId) {
+            dispatch({ type: 'SET_CURRENT_ID', payload: estId });
+        }
         // Local Server Sync
         if (useLocalServerForScanning && localServerUrl && localSaveEndpoint) {
             try {
@@ -343,9 +343,13 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
         const purchaseItems = JSON.parse(estimation.purchaseItems || '[]');
         const chitItems = JSON.parse(estimation.chitItems || '[]');
         const advanceItems = JSON.parse(estimation.advanceItems || '[]');
-        const customer = estimation.customerName && estimation.customerName.indexOf('Estimation #') === -1 ? {
+
+        // [FIX] Improved customer mapping
+        const isEstimationPlaceholder = estimation.customerName && estimation.customerName.indexOf('Estimation #') !== -1;
+        const customer = (estimation.customerName && !isEstimationPlaceholder) ? {
             name: estimation.customerName,
-            mobile: estimation.customerMobile === 'N/A' ? '' : estimation.customerMobile
+            mobile: (estimation.customerMobile === 'N/A' || !estimation.customerMobile) ? '' : estimation.customerMobile,
+            address: estimation.customerAddress || ''
         } : null;
 
         dispatch({
@@ -359,12 +363,12 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                 id: estimation.id,
                 estimationNumber: (estimation.estimationNumber !== null && estimation.estimationNumber !== undefined) ? estimation.estimationNumber : 0,
                 orderId,
-                printDetails: estimation.customerName ? {
-                    customerName: customer ? customer.name : estimation.customerName,
-                    mobile: customer ? customer.mobile : estimation.customerMobile || '',
-                    place: '',
+                printDetails: {
+                    customerName: estimation.customerName || '',
+                    mobile: estimation.customerMobile || '',
+                    place: estimation.customerAddress || '',
                     employeeName: ''
-                } : undefined
+                }
             }
         });
     };
@@ -388,6 +392,7 @@ export const EstimationProvider = ({ children }: { children: React.ReactNode }) 
                 saveCurrentEstimation,
                 loadEstimationIntoContext,
                 setPrintDetails,
+                setCurrentOrderId,
             }}
         >
             {children}

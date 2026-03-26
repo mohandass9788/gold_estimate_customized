@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, ActivityIndicator as RNActivityIndicator, Platform, PermissionsAndroid, NativeModules } from 'react-native';
+import { View as RNView, Text as RNText, StyleSheet, ScrollView as RNScrollView, TouchableOpacity as RNRTouchableOpacity, ActivityIndicator as RNActivityIndicator, Platform, PermissionsAndroid, NativeModules, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import ScreenContainer from '../components/ScreenContainer';
@@ -32,12 +32,6 @@ export default function PrinterConnectionScreen() {
 
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
-    useEffect(() => {
-        if (printerType === 'thermal') {
-            handleScanDevices();
-        }
-    }, [printerType]);
-
     // Silence NativeEventEmitter warnings
     useEffect(() => {
         const modules = [NativeModules.RNBLEPrinter, NativeModules.RNUSBPrinter, NativeModules.RNNetPrinter];
@@ -65,6 +59,7 @@ export default function PrinterConnectionScreen() {
     const handleScanDevices = async () => {
         setIsScanning(true);
         setLastError(null);
+        setDevices([]);
         try {
             const hasPermission = await requestBluetoothPermissions();
             if (!hasPermission) {
@@ -121,6 +116,7 @@ export default function PrinterConnectionScreen() {
                 };
                 setConnectedPrinter(printerData);
                 setIsPrinterConnected(true);
+                setPrinterType('thermal');
                 showAlert('Printer Connected', `${printerData.name} is ready for use.`, 'success');
 
                 // Prompt user to select paper size
@@ -143,6 +139,7 @@ export default function PrinterConnectionScreen() {
             showAlert('Connection Error', 'Failed to connect to this printer. Ensure it is turned ON and pairable.', 'error');
         } finally {
             setConnectingDeviceId(null);
+            setDevices([]); // Close modal
         }
     };
 
@@ -182,155 +179,151 @@ export default function PrinterConnectionScreen() {
             />
             <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.section}>
-                    <View style={[styles.configCard, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border, padding: SPACING.md }]}>
-                        {/* Printer Type Toggle */}
-                        <View style={styles.toggleContainer}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.toggleButton,
-                                    { backgroundColor: printerType === 'thermal' ? activeColors.primary : activeColors.background, borderColor: activeColors.border }
-                                ]}
-                                onPress={() => setPrinterType('thermal')}
-                            >
-                                <Text style={[styles.toggleButtonText, { color: printerType === 'thermal' ? '#FFF' : activeColors.text }]}>{t('thermal_printer')}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[
-                                    styles.toggleButton,
-                                    { backgroundColor: printerType === 'system' ? activeColors.primary : activeColors.background, borderColor: activeColors.border }
-                                ]}
-                                onPress={() => setPrinterType('system')}
-                            >
-                                <Text style={[styles.toggleButtonText, { color: printerType === 'system' ? '#FFF' : activeColors.text }]}>{t('system_printer')}</Text>
-                            </TouchableOpacity>
-                        </View>
+                    <View style={[styles.configCard, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border, padding: SPACING.xl, alignItems: 'center' }]}>
+                        <Icon 
+                            name={connectedPrinter ? "print" : "print-outline"} 
+                            size={80} 
+                            color={connectedPrinter ? COLORS.success : activeColors.textLight} 
+                            style={{ marginBottom: SPACING.lg }}
+                        />
+                        
+                        <Text style={[styles.statusTitle, { color: activeColors.text }]}>
+                            {connectedPrinter ? t('printer_connected') : t('printer_not_connected')}
+                        </Text>
 
-                        {printerType === 'system' ? (
-                            <View style={[styles.infoCard, { backgroundColor: activeColors.primary + '10', borderColor: activeColors.primary + '20', marginBottom: 0 }]}>
-                                <Icon name="print-outline" size={32} color={activeColors.primary} />
-                                <View style={styles.infoTextContainer}>
-                                    <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('system_printing_active')}</Text>
-                                    <Text style={[styles.infoText, { color: activeColors.textLight }]}>
-                                        {t('system_printing_desc')}
-                                    </Text>
+                        {connectedPrinter ? (
+                            <View style={[styles.connectedBox, { backgroundColor: activeColors.background, borderColor: COLORS.success }]}>
+                                <View style={styles.deviceInfo}>
+                                    <Text style={[styles.deviceName, { color: activeColors.text }]}>{connectedPrinter.name}</Text>
+                                    <Text style={[styles.deviceAddress, { color: activeColors.textLight }]}>{connectedPrinter.address}</Text>
                                 </View>
+                                <TouchableOpacity 
+                                    onPress={() => {
+                                        setConnectedPrinter(null);
+                                        setIsPrinterConnected(false);
+                                    }}
+                                    style={styles.disconnectButton}
+                                >
+                                    <Icon name="close-circle" size={24} color={COLORS.error} />
+                                </TouchableOpacity>
                             </View>
                         ) : (
-                            <View>
-                                <View style={[styles.infoCard, { backgroundColor: COLORS.success + '10', borderColor: COLORS.success + '20' }]}>
-                                    <Icon name="bluetooth-outline" size={32} color={COLORS.success} />
-                                    <View style={styles.infoTextContainer}>
-                                        <Text style={[styles.infoTitle, { color: activeColors.text }]}>{t('thermal_printing_active')}</Text>
-                                    </View>
-                                </View>
-
-                                <View style={[styles.statusBar, { backgroundColor: isBluetoothEnabled ? COLORS.success + '10' : COLORS.error + '10' }]}>
-                                    <View style={styles.row}>
-                                        <Icon
-                                            name={isBluetoothEnabled ? "bluetooth" : "bluetooth-outline"}
-                                            size={20}
-                                            color={isBluetoothEnabled ? COLORS.success : COLORS.error}
-                                        />
-                                        <Text style={[styles.statusText, { color: isBluetoothEnabled ? COLORS.success : COLORS.error }]}>
-                                            {isBluetoothEnabled ? t('bluetooth_on') : t('bluetooth_off')}
-                                        </Text>
-                                    </View>
-                                    {!isBluetoothEnabled && (
-                                        <TouchableOpacity style={styles.inlineButton} onPress={openBluetoothSettings}>
-                                            <Text style={styles.inlineButtonText}>{t('enable')}</Text>
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
-
-                                <View style={styles.sectionHeaderRow}>
-                                    <Text style={[styles.sectionHeader, { color: activeColors.textLight, fontSize: 10 }]}>{t('available_bluetooth_devices') || 'Available Bluetooth Devices'}</Text>
-                                    <TouchableOpacity onPress={handleScanDevices} disabled={isScanning} style={styles.refreshButton}>
-                                        {isScanning ? <ActivityIndicator size="small" color={activeColors.primary} /> : <Icon name="refresh" size={20} color={activeColors.primary} />}
-                                    </TouchableOpacity>
-                                </View>
-
-                                {devices.length > 0 ? (
-                                    <View style={styles.deviceList}>
-                                        {devices.map((device, index) => {
-                                            const devId = device.inner_mac_address || device.device_id;
-                                            const isSelected = connectedPrinter?.address === devId;
-                                            const isConnecting = connectingDeviceId === devId;
-
-                                            return (
-                                                <TouchableOpacity
-                                                    key={index}
-                                                    style={[
-                                                        styles.deviceItem,
-                                                        {
-                                                            backgroundColor: activeColors.background,
-                                                            borderColor: isSelected ? activeColors.primary : activeColors.border,
-                                                            borderWidth: isSelected ? 2 : 1
-                                                        }
-                                                    ]}
-                                                    onPress={() => handleSelectDevice(device)}
-                                                    disabled={isConnecting}
-                                                >
-                                                    <View style={styles.deviceInfo}>
-                                                        <Text style={[styles.deviceName, { color: activeColors.text }]}>{device.device_name || 'Unknown Printer'}</Text>
-                                                        <Text style={[styles.deviceAddress, { color: activeColors.textLight }]}>{devId}</Text>
-                                                    </View>
-                                                    {isConnecting ? (
-                                                        <ActivityIndicator size="small" color={activeColors.primary} />
-                                                    ) : isSelected ? (
-                                                        <View style={styles.connectedBadge}>
-                                                            <Icon name="checkmark-circle" size={20} color={activeColors.primary} />
-                                                            <Text style={[styles.connectedText, { color: activeColors.primary }]}>{t('connected_status')}</Text>
-                                                        </View>
-                                                    ) : (
-                                                        <Icon name="chevron-forward" size={20} color={activeColors.border} />
-                                                    )}
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </View>
-                                ) : (
-                                    <View style={[styles.emptyState, { backgroundColor: activeColors.background, borderColor: activeColors.border }]}>
-                                        <Text style={[styles.emptyText, { color: activeColors.textLight }]}>
-                                            {isScanning ? t('scanning') : (lastError || t('no_printers_found'))}
-                                        </Text>
-                                        {!isScanning && (
-                                            <TouchableOpacity style={styles.retryButton} onPress={handleScanDevices}>
-                                                <Text style={styles.retryButtonText}>{t('retry')}</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                )}
-                            </View>
+                            <Text style={[styles.statusDesc, { color: activeColors.textLight }]}>
+                                {t('printer_not_connected_msg')}
+                            </Text>
                         )}
+
+                        <TouchableOpacity
+                            style={[styles.searchButton, { backgroundColor: activeColors.primary }]}
+                            onPress={handleScanDevices}
+                            disabled={isScanning}
+                        >
+                            {isScanning ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <>
+                                    <Icon name="search" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                                    <Text style={styles.searchButtonText}>{t('search') || 'Search Device'}</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
                     </View>
                 </View>
 
                 {/* Test Connection Button */}
-                <View style={[styles.configCard, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border, marginBottom: SPACING.xl }]}>
-                    <View style={styles.configItem}>
-                        <View style={styles.configTextLabel}>
-                            <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('test_connection')}</Text>
-                            <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('test_connection_desc') || 'Verify your printer settings by printing a test slip'}</Text>
+                {connectedPrinter && (
+                    <View style={[styles.configCard, { backgroundColor: activeColors.cardBg, borderColor: activeColors.border, marginBottom: SPACING.xl }]}>
+                        <View style={styles.configItem}>
+                            <View style={styles.configTextLabel}>
+                                <Text style={[styles.configLabel, { color: activeColors.text }]}>{t('test_connection')}</Text>
+                                <Text style={[styles.configDesc, { color: activeColors.textLight }]}>{t('test_connection_desc')}</Text>
+                            </View>
+                            <PrimaryButton
+                                title={isPrinting ? t('printing_progress') : t('send_test_print')}
+                                onPress={handleTestPrint}
+                                disabled={isPrinting}
+                                isLoading={isPrinting}
+                                style={{ minWidth: 150 }}
+                            />
                         </View>
-                        <PrimaryButton
-                            title={isPrinting ? t('printing_progress') : t('send_test_print')}
-                            onPress={handleTestPrint}
-                            disabled={isPrinting || (printerType === 'thermal' && !connectedPrinter)}
-                            isLoading={isPrinting}
-                            style={{ minWidth: 150 }}
-                        />
                     </View>
-                </View>
+                )}
 
                 <View style={styles.helpSection}>
                     <Text style={[styles.helpTitle, { color: activeColors.text }]}>{t('need_help')}</Text>
                     <Text style={[styles.helpText, { color: activeColors.textLight }]}>
-                        {printerType === 'system'
-                            ? t('system_help_text')
-                            : t('thermal_help_text')}
+                        {t('thermal_help_text')}
                     </Text>
                 </View>
             </ScrollView>
+
+            {/* Device Search Modal */}
+            <Modal
+                visible={isScanning || devices.length > 0}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => {
+                    setIsScanning(false);
+                    setDevices([]);
+                }}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: activeColors.cardBg }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>
+                                {t('available_bluetooth_devices')}
+                            </Text>
+                            <TouchableOpacity 
+                                onPress={() => {
+                                    setIsScanning(false);
+                                    setDevices([]);
+                                }}
+                            >
+                                <Icon name="close" size={24} color={activeColors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={styles.deviceListModal}>
+                            {isScanning && devices.length === 0 ? (
+                                <View style={styles.loadingContainer}>
+                                    <ActivityIndicator size="large" color={activeColors.primary} />
+                                    <Text style={[styles.loadingText, { color: activeColors.textLight }]}>{t('scanning')}</Text>
+                                </View>
+                            ) : devices.length > 0 ? (
+                                devices.map((device, index) => {
+                                    const devId = device.inner_mac_address || device.device_id;
+                                    const isConnecting = connectingDeviceId === devId;
+                                    return (
+                                        <TouchableOpacity
+                                            key={index}
+                                            style={[styles.deviceItemModal, { borderBottomColor: activeColors.border }]}
+                                            onPress={() => handleSelectDevice(device)}
+                                            disabled={isConnecting}
+                                        >
+                                            <View style={styles.deviceInfo}>
+                                                <Text style={[styles.deviceNameModal, { color: activeColors.text }]}>{device.device_name || 'Unknown Printer'}</Text>
+                                                <Text style={[styles.deviceAddressModal, { color: activeColors.textLight }]}>{devId}</Text>
+                                            </View>
+                                            {isConnecting ? (
+                                                <ActivityIndicator size="small" color={activeColors.primary} />
+                                            ) : (
+                                                <Icon name="chevron-forward" size={20} color={activeColors.border} />
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })
+                            ) : (
+                                <View style={styles.emptyStateModal}>
+                                    <Text style={[styles.emptyText, { color: activeColors.textLight }]}>{t('no_printers_found')}</Text>
+                                    <TouchableOpacity style={styles.retryButton} onPress={handleScanDevices}>
+                                        <Text style={styles.retryButtonText}>{t('retry')}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </ScreenContainer>
     );
 }
@@ -351,59 +344,58 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         overflow: 'hidden',
     },
-    toggleContainer: {
-        flexDirection: 'row',
-        marginBottom: SPACING.xl,
-        borderRadius: BORDER_RADIUS.lg,
-        overflow: 'hidden',
-    },
-    toggleButton: {
-        flex: 1,
-        paddingVertical: SPACING.md,
-        alignItems: 'center',
-        borderWidth: 1,
-    },
-    toggleButtonText: {
-        fontSize: FONT_SIZES.sm,
+    statusTitle: {
+        fontSize: FONT_SIZES.xl,
         fontWeight: 'bold',
+        marginBottom: SPACING.xs,
     },
-    infoCard: {
-        flexDirection: 'row',
-        padding: SPACING.lg,
-        borderRadius: BORDER_RADIUS.lg,
-        marginBottom: SPACING.xl,
-        borderWidth: 1,
-        alignItems: 'flex-start',
-    },
-    infoTextContainer: {
-        flex: 1,
-        marginLeft: SPACING.md,
-    },
-    infoTitle: {
-        fontSize: FONT_SIZES.md,
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    infoText: {
+    statusDesc: {
         fontSize: FONT_SIZES.sm,
-        lineHeight: 20,
+        textAlign: 'center',
+        marginBottom: SPACING.xl,
     },
-    statusBar: {
+    connectedBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         padding: SPACING.md,
         borderRadius: BORDER_RADIUS.md,
-        marginBottom: SPACING.lg,
+        borderWidth: 1,
+        width: '100%',
+        marginBottom: SPACING.xl,
     },
-    row: {
+    deviceInfo: {
+        flex: 1,
+    },
+    deviceName: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: 'bold',
+        marginBottom: 2,
+    },
+    deviceAddress: {
+        fontSize: 10,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    disconnectButton: {
+        padding: SPACING.xs,
+    },
+    searchButton: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 30,
+        borderRadius: 30,
+        width: '100%',
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
     },
-    statusText: {
-        fontSize: FONT_SIZES.sm,
+    searchButtonText: {
+        color: '#FFF',
+        fontSize: FONT_SIZES.md,
         fontWeight: 'bold',
-        marginLeft: SPACING.sm,
     },
     configItem: {
         flexDirection: 'row',
@@ -424,74 +416,71 @@ const styles = StyleSheet.create({
         fontSize: 11,
         lineHeight: 16,
     },
-    inlineButton: {
-        paddingHorizontal: SPACING.md,
-        paddingVertical: 6,
-        backgroundColor: '#fff',
-        borderRadius: BORDER_RADIUS.sm,
-        elevation: 1,
-    },
-    inlineButtonText: {
-        fontSize: FONT_SIZES.xs,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    sectionHeaderRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: SPACING.md,
-    },
-    sectionHeader: {
-        fontSize: FONT_SIZES.xs,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-    },
-    refreshButton: {
-        padding: 4,
-    },
-    deviceList: {
-        gap: SPACING.sm,
-    },
-    deviceItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: SPACING.md,
+    helpSection: {
+        marginTop: SPACING.xl,
+        padding: SPACING.lg,
         borderRadius: BORDER_RADIUS.lg,
+        backgroundColor: 'transparent',
     },
-    deviceInfo: {
-        flex: 1,
-    },
-    deviceName: {
+    helpTitle: {
         fontSize: FONT_SIZES.md,
         fontWeight: 'bold',
-        marginBottom: 2,
+        marginBottom: SPACING.sm,
     },
-    deviceAddress: {
-        fontSize: 10,
-        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    helpText: {
+        fontSize: FONT_SIZES.sm,
+        lineHeight: 22,
     },
-    connectedBadge: {
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        padding: SPACING.xl,
+        maxHeight: '80%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.xl,
+    },
+    modalTitle: {
+        fontSize: FONT_SIZES.lg,
+        fontWeight: 'bold',
+    },
+    deviceListModal: {
+        marginBottom: SPACING.xl,
+    },
+    deviceItemModal: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.primary + '15',
-        paddingHorizontal: SPACING.sm,
-        paddingVertical: 4,
-        borderRadius: 999,
+        justifyContent: 'space-between',
+        paddingVertical: SPACING.md,
+        borderBottomWidth: 1,
     },
-    connectedText: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        marginLeft: 4,
+    deviceNameModal: {
+        fontSize: FONT_SIZES.md,
+        fontWeight: '600',
     },
-    emptyState: {
-        padding: SPACING.xl,
-        borderRadius: BORDER_RADIUS.lg,
+    deviceAddressModal: {
+        fontSize: FONT_SIZES.xs,
+        marginTop: 2,
+    },
+    loadingContainer: {
+        padding: SPACING.xxl,
         alignItems: 'center',
-        borderWidth: 1,
-        borderStyle: 'dashed',
+    },
+    loadingText: {
+        marginTop: SPACING.md,
+        fontSize: FONT_SIZES.sm,
+    },
+    emptyStateModal: {
+        padding: SPACING.xxl,
+        alignItems: 'center',
     },
     emptyText: {
         fontSize: FONT_SIZES.sm,
@@ -508,20 +497,5 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: FONT_SIZES.xs,
         fontWeight: 'bold',
-    },
-    helpSection: {
-        marginTop: SPACING.xl,
-        padding: SPACING.lg,
-        borderRadius: BORDER_RADIUS.lg,
-        backgroundColor: 'transparent',
-    },
-    helpTitle: {
-        fontSize: FONT_SIZES.md,
-        fontWeight: 'bold',
-        marginBottom: SPACING.sm,
-    },
-    helpText: {
-        fontSize: FONT_SIZES.sm,
-        lineHeight: 22,
     },
 });

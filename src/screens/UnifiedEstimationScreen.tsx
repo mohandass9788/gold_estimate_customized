@@ -22,6 +22,7 @@ import { EstimationItem, PurchaseItem, ChitItem, AdvanceItem, LessWeightType } f
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { printEstimationItem, printPurchaseItem, printEstimationReceipt, printChitItem, printAdvanceItem } from '../services/printService';
 import ItemDetailModal from '../modals/ItemDetailModal';
+import PrintFormatSelectionModal from '../components/PrintFormatSelectionModal';
 import StatusSnackbar from '../components/StatusSnackbar';
 
 // Fix for React 19 type mismatch
@@ -38,7 +39,24 @@ type Mode = 'TAG' | 'MANUAL' | 'PURCHASE' | 'CHIT' | 'ADVANCE';
 export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initialMode?: Mode }) {
     const router = useRouter();
     const params = useLocalSearchParams();
-    const { state, addTagItem, addManualItem, addPurchaseItem, addChitItem, addAdvanceItem, removeItem, resetEstimation, clearEstimation, saveCurrentEstimation } = useEstimation();
+    const {
+        state,
+        addTagItem,
+        addManualItem,
+        addPurchaseItem,
+        addChitItem,
+        addAdvanceItem,
+        removeItem,
+        resetEstimation,
+        clearEstimation,
+        saveCurrentEstimation,
+        setCurrentOrderId,
+        setPrintDetails: setContextPrintDetails
+    } = useEstimation();
+    
+    // Derived print details from context
+    const printDetails = state.printDetails;
+    const setPrintDetails = setContextPrintDetails;
     const {
         receiptConfig, currentEmployeeName, shopDetails, deviceName,
         isPrinterConnected, printerType, t, showAlert, theme, requestPrint,
@@ -69,6 +87,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [isPrinting, setIsPrinting] = useState(false);
     const [showPrintPreview, setShowPrintPreview] = useState(false);
+    const [showPrintFormatModal, setShowPrintFormatModal] = useState(false);
     const [previewContent, setPreviewContent] = useState<string>('');
     const [previewType, setPreviewType] = useState<'merged' | 'separate'>('merged');
     const [itemsToPrint, setItemsToPrint] = useState<EstimationItem[]>([]);
@@ -105,7 +124,8 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     };
 
     // Form State
-    const [printDetails, setPrintDetails] = useState<any>(null);
+    // Form State (No longer local, using context)
+    // const [printDetails, setPrintDetails] = useState<any>(null);
 
     // Purchase Panel State
     const [categories, setCategories] = useState<DBPurchaseCategory[]>([]);
@@ -257,7 +277,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     const handlePrintAllConsolidated = async () => {
         if (!validateSubscription()) return;
-        
+
         verifyAccess(async () => {
             if (state.items.length === 0 && state.purchaseItems.length === 0 && state.chitItems.length === 0 && state.advanceItems.length === 0) {
                 showAlert(t('no_items') || 'No items to print', '', 'info');
@@ -286,72 +306,101 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
     const handlePrintSelected = async () => {
         if (!validateSubscription()) return;
-        
+
         verifyAccess(async () => {
             if (selectedItems.size === 0) {
                 showAlert(t('no_items_selected') || 'No Items Selected', '', 'info');
                 return;
             }
 
-        // Fetch the next estimation number for today if we don't already have one
-        const currentEstNum = state.currentEstimationNumber;
-        const nextNum = (currentEstNum !== null && currentEstNum !== undefined && currentEstNum !== 0)
-            ? currentEstNum
-            : await getNextEstimationNumber();
-        setEstimationNum(nextNum);
+            // Fetch the next estimation number for today if we don't already have one
+            const currentEstNum = state.currentEstimationNumber;
+            const nextNum = (currentEstNum !== null && currentEstNum !== undefined && currentEstNum !== 0)
+                ? currentEstNum
+                : await getNextEstimationNumber();
+            setEstimationNum(nextNum);
 
-        requestPrint(async (details) => {
-            setPrintDetails(details);
-            const items = state.items.filter(item => selectedItems.has(item.id));
-            const purchases = state.purchaseItems.filter(item => selectedItems.has(item.id));
-            const chits = state.chitItems.filter(item => selectedItems.has(item.id));
-            const advances = state.advanceItems.filter(item => selectedItems.has(item.id));
+            requestPrint(async (details) => {
+                setPrintDetails(details);
+                const items = state.items.filter(item => selectedItems.has(item.id));
+                const purchases = state.purchaseItems.filter(item => selectedItems.has(item.id));
+                const chits = state.chitItems.filter(item => selectedItems.has(item.id));
+                const advances = state.advanceItems.filter(item => selectedItems.has(item.id));
 
-            setItemsToPrint(items);
-            setPurchaseItemsToPrint(purchases);
-            setChitItemsToPrint(chits);
-            setAdvanceItemsToPrint(advances);
+                setItemsToPrint(items);
+                setPurchaseItemsToPrint(purchases);
+                setChitItemsToPrint(chits);
+                setAdvanceItemsToPrint(advances);
 
-            // Validation: If both product items and deduction items are selected, merged printing is not allowed
-            const hasProducts = items.length > 0 || purchases.length > 0;
-            const hasDeductions = chits.length > 0 || advances.length > 0;
+                // Validation: If both product items and deduction items are selected, merged printing is not allowed
+                const hasProducts = items.length > 0 || purchases.length > 0;
+                const hasDeductions = chits.length > 0 || advances.length > 0;
 
-            // If ONLY Chit or Advance items are selected, default to separate/one-by-one
-            if (hasDeductions && !hasProducts) {
-                setPreviewType('separate');
-                setShowPrintPreview(true);
-                return;
-            }
+                // If ONLY Chit or Advance items are selected, default to separate/one-by-one
+                if (hasDeductions && !hasProducts) {
+                    setPreviewType('separate');
+                    setShowPrintPreview(true);
+                    return;
+                }
 
-            showAlert(
-                t('print'),
-                'Choose print format:',
-                'info',
-                [
-                    {
-                        text: t('merged_receipt') || 'Single Receipt (Merged)',
-                        onPress: () => {
-                            setPreviewType('merged');
-                            setShowPrintPreview(true);
-                        }
-                    },
-                    {
-                        text: t('separate_receipts') || 'Separate Receipts',
-                        onPress: () => {
-                            setPreviewType('separate');
-                            setShowPrintPreview(true);
-                        }
-                    },
-                    { text: t('cancel'), style: 'cancel' }
-                ]
-            );
-        }, false, {
-            customerName: printDetails?.customerName || state.customer?.name || '',
-            mobile: printDetails?.mobile || state.customer?.mobile || '',
-            place: printDetails?.place || state.customer?.address || '',
-            employeeName: printDetails?.employeeName || currentEmployeeName || ''
+                setShowPrintFormatModal(true);
+            }, false, {
+                customerName: printDetails?.customerName || state.customer?.name || '',
+                mobile: printDetails?.mobile || state.customer?.mobile || '',
+                place: printDetails?.place || state.customer?.address || '',
+                employeeName: printDetails?.employeeName || currentEmployeeName || ''
             }, printDetails);
         });
+    };
+
+    const saveHistory = async (items: EstimationItem[], purchases: PurchaseItem[], chits: ChitItem[], advances: AdvanceItem[], currentEstNum: number | null) => {
+        try {
+            const totalGross = items.reduce((sum, item) => sum + (item.totalValue || 0), 0);
+            const purchaseTotal = purchases.reduce((sum, i) => sum + (i.amount || 0), 0);
+            const chitTotal = chits.reduce((sum, i) => sum + (i.amount || 0), 0);
+            const advanceTotal = advances.reduce((sum, i) => sum + (i.amount || 0), 0);
+            const netPayable = totalGross - (purchaseTotal + chitTotal + advanceTotal);
+
+            const { saveOrder, getNextOrderId, saveCustomer } = require('../services/dbService');
+            // Use existing orderId if we are editing an order, otherwise generate new
+            const orderId = state.currentOrderId || await getNextOrderId();
+
+            const orderData = {
+                orderId,
+                customerName: printDetails?.customerName || '',
+                customerMobile: printDetails?.mobile || state.customer?.mobile || '',
+                customerAddress: printDetails?.place || state.customer?.address || '',
+                employeeName: printDetails?.employeeName || currentEmployeeName,
+                date: new Date().toISOString(),
+                grossTotal: totalGross,
+                netPayable,
+                status: 'completed',
+                estimationNumber: currentEstNum || undefined
+            };
+
+            const orderItems: any[] = [
+                ...items.map(i => ({ type: 'PRODUCT' as const, data: i })),
+                ...purchases.map(i => ({ type: 'PURCHASE' as const, data: i })),
+                ...chits.map(i => ({ type: 'CHIT' as const, data: i })),
+                ...advances.map(i => ({ type: 'ADVANCE' as const, data: i }))
+            ];
+
+            await saveOrder(orderData, orderItems);
+            setCurrentOrderId(orderId);
+
+            if (printDetails?.mobile && printDetails?.customerName) {
+                await saveCustomer(printDetails.customerName, printDetails.mobile, printDetails.place || '');
+            }
+
+            // Also update recent activity estimation history
+            if (currentEstNum) {
+                await saveCurrentEstimation(currentEstNum);
+            }
+            return true;
+        } catch (saveError) {
+            console.error('Error saving history:', saveError);
+            return false;
+        }
     };
 
     const confirmPrint = async () => {
@@ -364,13 +413,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     purchaseItemsToPrint,
                     chitItemsToPrint,
                     advanceItemsToPrint,
-                    {
-                        ...shopDetails,
-                        deviceName,
-                        customerAddress: printDetails?.place || state.customer?.address || '',
-                        customerMobile: printDetails?.mobile || state.customer?.mobile || ''
-                    },
+                    shopDetails,
                     printDetails?.customerName || '',
+                    printDetails?.mobile || state.customer?.mobile || '',
+                    printDetails?.place || state.customer?.address || '',
                     printDetails?.employeeName || currentEmployeeName,
                     receiptConfig,
                     estimationNum || undefined,
@@ -378,47 +424,9 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 );
 
                 // Save Order to History
-                try {
-                    const totalGross = itemsToPrint.reduce((sum, item) => sum + item.totalValue, 0);
-                    const purchaseTotal = purchaseItemsToPrint.reduce((sum, i) => sum + i.amount, 0);
-                    const chitTotal = chitItemsToPrint.reduce((sum, i) => sum + i.amount, 0);
-                    const advanceTotal = advanceItemsToPrint.reduce((sum, i) => sum + i.amount, 0);
-                    const netPayable = totalGross - (purchaseTotal + chitTotal + advanceTotal);
+                const saved = await saveHistory(itemsToPrint, purchaseItemsToPrint, chitItemsToPrint, advanceItemsToPrint, estimationNum);
 
-                    const { saveOrder, getNextOrderId, saveCustomer } = require('../services/dbService');
-                    // Use existing orderId if we are editing an order, otherwise generate new
-                    const orderId = state.currentOrderId || await getNextOrderId();
-
-                    const orderData = {
-                        orderId,
-                        customerName: printDetails?.customerName || '',
-                        customerMobile: printDetails?.mobile || state.customer?.mobile || '',
-                        employeeName: printDetails?.employeeName || currentEmployeeName,
-                        date: new Date().toISOString(),
-                        grossTotal: totalGross,
-                        netPayable,
-                        status: 'completed',
-                        estimationNumber: estimationNum
-                    };
-
-                    const orderItems: any[] = [
-                        ...itemsToPrint.map(i => ({ type: 'PRODUCT' as const, data: i })),
-                        ...purchaseItemsToPrint.map(i => ({ type: 'PURCHASE' as const, data: i })),
-                        ...chitItemsToPrint.map(i => ({ type: 'CHIT' as const, data: i })),
-                        ...advanceItemsToPrint.map(i => ({ type: 'ADVANCE' as const, data: i }))
-                    ];
-
-                    await saveOrder(orderData, orderItems);
-
-                    if (printDetails?.mobile && printDetails?.customerName) {
-                        await saveCustomer(printDetails.customerName, printDetails.mobile, printDetails.place || '');
-                    }
-
-                    // Also update recent activity estimation history
-                    if (estimationNum) {
-                        await saveCurrentEstimation(estimationNum);
-                    }
-
+                if (saved) {
                     showAlert(
                         t('print_success') || 'Print Success',
                         t('print_success_msg') || 'Receipt printed and order saved. If you want to clear data?',
@@ -433,13 +441,11 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                                 text: t('ok') || 'OK',
                                 onPress: () => {
                                     clearEstimation();
-                                    setPrintDetails(null);
+                                    setPrintDetails(undefined);
                                 }
                             }
                         ]
                     );
-                } catch (saveError) {
-                    console.error('Error saving order:', saveError);
                 }
             } else {
                 // Print each grouping independently for separate bills
@@ -449,13 +455,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         [],
                         [],
                         [],
-                        {
-                            ...shopDetails,
-                            deviceName,
-                            customerAddress: printDetails?.place || state.customer?.address || '',
-                            customerMobile: printDetails?.mobile || state.customer?.mobile || ''
-                        },
+                        shopDetails,
                         printDetails?.customerName || '',
+                        printDetails?.mobile || state.customer?.mobile || '',
+                        printDetails?.place || state.customer?.address || '',
                         printDetails?.employeeName || currentEmployeeName,
                         receiptConfig,
                         estimationNum || undefined,
@@ -469,13 +472,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         purchaseItemsToPrint,
                         [],
                         [],
-                        {
-                            ...shopDetails,
-                            deviceName,
-                            customerAddress: printDetails?.place || state.customer?.address || '',
-                            customerMobile: printDetails?.mobile || state.customer?.mobile || ''
-                        },
+                        shopDetails,
                         printDetails?.customerName || '',
+                        printDetails?.mobile || state.customer?.mobile || '',
+                        printDetails?.place || state.customer?.address || '',
                         printDetails?.employeeName || currentEmployeeName,
                         receiptConfig,
                         estimationNum || undefined,
@@ -486,6 +486,9 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                 // Print each Chit and Advance item as a completely separate receipt
                 for (const item of chitItemsToPrint) await printChitItem(item, shopDetails, printDetails?.employeeName || currentEmployeeName, receiptConfig, t, printDetails?.customerName, printDetails?.mobile, printDetails?.place);
                 for (const item of advanceItemsToPrint) await printAdvanceItem(item, shopDetails, printDetails?.employeeName || currentEmployeeName, receiptConfig, t, printDetails?.customerName, printDetails?.mobile, printDetails?.place);
+
+                // Save Order to History
+                await saveHistory(itemsToPrint, purchaseItemsToPrint, chitItemsToPrint, advanceItemsToPrint, estimationNum);
             }
             setSelectedItems(new Set());
             if (previewType !== 'merged') {
@@ -503,7 +506,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                             text: t('ok') || 'OK',
                             onPress: () => {
                                 clearEstimation();
-                                setPrintDetails(null);
+                                setPrintDetails(undefined);
                             }
                         }
                     ]
@@ -608,23 +611,29 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
 
         const categoryName = categories.find(c => c.id.toString() === purchaseCategoryId)?.name || '';
 
-        const baseAmount = purchaseNetWeight * rateValNum;
-        const amount = purchaseLessType === 'amount'
-            ? Math.max(0, baseAmount - (parseFloat(purchaseLess) || 0))
-            : baseAmount;
+        // [FIX] Ensuring robust Number casting to prevent atomic-reset to 0 on rapid updates
+        const rateValNumClean = Number(purchaseRate) || 0;
+        const grossValNumClean = Number(purchaseGross) || 0;
+        const lessValNumClean = Number(purchaseLess) || 0;
+        const netWeightNum = calculateNetWeight(grossValNumClean, lessValNumClean, purchaseLessType);
+        
+        const baseAmount = Number((netWeightNum * rateValNumClean).toFixed(2));
+        const amount = Number(purchaseLessType === 'amount'
+            ? Math.max(0, baseAmount - lessValNumClean)
+            : baseAmount);
 
         const item: PurchaseItem = {
             id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             category: categoryName,
-            purity: parseFloat(purchasePurity),
-            pcs: parseInt(purchasePcs) || 1,
-            grossWeight: gWeightNum,
-            lessWeight: parseFloat(purchaseLess) || 0,
-            lessWeightType: purchaseLessType,
-            netWeight: purchaseNetWeight,
-            rate: rateValNum,
-            amount,
             metal: purchaseMetal,
+            purity: Number(purchasePurity) || 22,
+            pcs: Number(purchasePcs) || 1,
+            grossWeight: grossValNumClean,
+            lessWeight: lessValNumClean,
+            lessWeightType: purchaseLessType,
+            netWeight: netWeightNum,
+            rate: rateValNumClean,
+            amount: Number(amount.toFixed(0))
         };
 
         addPurchaseItem(item);
@@ -677,7 +686,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                     style: 'destructive',
                     onPress: () => {
                         resetEstimation();
-                        setPrintDetails(null);
+                        setPrintDetails(undefined);
                         setPurchaseCategoryId('');
                         setPurchaseGross('');
                         setPurchaseLess('0');
@@ -885,105 +894,123 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
     // DetailViewModal local component removed in favor of imported ItemDetailModal
 
     const PrintPreviewModal = () => (
-        <Modal
-            visible={showPrintPreview}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => setShowPrintPreview(false)}
-        >
-            <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
-                <View style={[styles.previewModalContent, { backgroundColor: activeColors.cardBg }]}>
-                    <View style={styles.modalHeader}>
-                        <Text style={[styles.modalTitle, { color: activeColors.text }]}>{t('print_preview')}</Text>
-                        <TouchableOpacity onPress={() => setShowPrintPreview(false)}>
-                            <Icon name="close" size={24} color={activeColors.text} />
-                        </TouchableOpacity>
-                    </View>
+        <>
+            <PrintFormatSelectionModal
+                visible={showPrintFormatModal}
+                onClose={() => setShowPrintFormatModal(false)}
+                onSelectMerged={() => {
+                    setPreviewType('merged');
+                    setShowPrintPreview(true);
+                }}
+                onSelectSeparate={() => {
+                    setPreviewType('separate');
+                    setShowPrintPreview(true);
+                }}
+                theme={theme}
+                t={t}
+            />
 
-                    <ScrollView style={styles.previewBody} showsVerticalScrollIndicator={false}>
-                        <View style={[styles.previewReceipt, { backgroundColor: '#FFF', borderColor: '#DDD', borderWidth: 1, borderRadius: 8, padding: 15 }]}>
-                            <View style={[styles.previewHeader, { alignItems: 'center', marginBottom: 12 }]}>
-                                <Text style={[styles.previewShopName, { color: '#000', fontSize: 18, fontWeight: 'bold', textTransform: 'uppercase' }]}>{shopDetails.name}</Text>
-                                <Text style={[styles.previewShopInfo, { color: '#444', fontSize: 10 }]}>{shopDetails.address}</Text>
-                                <Text style={[styles.previewShopInfo, { color: '#444', fontSize: 10 }]}>{shopDetails.phone}</Text>
-                                {shopDetails.gstNumber ? <Text style={[styles.previewShopInfo, { color: '#444', fontSize: 10 }]}>GSTIN: {shopDetails.gstNumber}</Text> : null}
-                            </View>
+            <Modal
+                key="preview-modal"
+                visible={showPrintPreview}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowPrintPreview(false)}
+            >
+                <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <View style={[styles.previewModalContent, { backgroundColor: activeColors.cardBg }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>{t('print_preview')}</Text>
+                            <TouchableOpacity onPress={() => setShowPrintPreview(false)}>
+                                <Icon name="close" size={24} color={activeColors.text} />
+                            </TouchableOpacity>
+                        </View>
 
-                            <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderStyle: 'dashed', paddingVertical: 8, marginVertical: 10, borderColor: '#000' }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>Gold 22K: Rs.{state.goldRate?.rate22k}</Text>
-                                    <Text style={{ fontSize: 10 }}>Date: {new Date().toLocaleDateString()}</Text>
+                        <ScrollView style={styles.previewBody} showsVerticalScrollIndicator={false}>
+                            <View style={[styles.previewReceipt, { backgroundColor: '#FFF', borderColor: '#DDD', borderWidth: 1, borderRadius: 8, padding: 15 }]}>
+                                <View style={[styles.previewHeader, { alignItems: 'center', marginBottom: 12 }]}>
+                                    <Text style={[styles.previewShopName, { color: '#000', fontSize: 18, fontWeight: 'bold', textTransform: 'uppercase' }]}>{shopDetails.name}</Text>
+                                    <Text style={[styles.previewShopInfo, { color: '#444', fontSize: 10 }]}>{shopDetails.address}</Text>
+                                    <Text style={[styles.previewShopInfo, { color: '#444', fontSize: 10 }]}>{shopDetails.phone}</Text>
+                                    {shopDetails.gstNumber ? <Text style={[styles.previewShopInfo, { color: '#444', fontSize: 10 }]}>GSTIN: {shopDetails.gstNumber}</Text> : null}
                                 </View>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                                    <Text style={{ fontSize: 10 }}>Silver: Rs.{state.goldRate?.silver} /g</Text>
+
+                                <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderStyle: 'dashed', paddingVertical: 8, marginVertical: 10, borderColor: '#000' }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold' }}>Gold 22K: Rs.{state.goldRate?.rate22k}</Text>
+                                        <Text style={{ fontSize: 10 }}>Date: {new Date().toLocaleDateString()}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                                        <Text style={{ fontSize: 10 }}>Silver: Rs.{state.goldRate?.silver} /g</Text>
+                                    </View>
                                 </View>
-                            </View>
 
-                            {printDetails?.customerName && (
-                                <View style={{ borderBottomWidth: 0.5, borderColor: '#EEE', paddingBottom: 8, marginBottom: 12 }}>
-                                    <Text style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 2 }}>Name: {printDetails.customerName.toUpperCase()}</Text>
-                                    {printDetails.mobile ? <Text style={{ fontSize: 9 }}>Phone: {printDetails.mobile}</Text> : null}
-                                    {printDetails.place ? <Text style={{ fontSize: 9 }}>Place: {printDetails.place.toUpperCase()}</Text> : null}
+                                {printDetails?.customerName && (
+                                    <View style={{ borderBottomWidth: 0.5, borderColor: '#EEE', paddingBottom: 8, marginBottom: 12 }}>
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 2 }}>Name: {printDetails.customerName.toUpperCase()}</Text>
+                                        {printDetails.mobile ? <Text style={{ fontSize: 9 }}>Phone: {printDetails.mobile}</Text> : null}
+                                        {printDetails.place ? <Text style={{ fontSize: 9 }}>Place: {printDetails.place.toUpperCase()}</Text> : null}
+                                    </View>
+                                )}
+
+                                <View style={{ borderBottomWidth: 1, borderStyle: 'dashed', paddingBottom: 4, marginBottom: 8 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{t('items_and_details').toUpperCase()}</Text>
                                 </View>
-                            )}
 
-                            <View style={{ borderBottomWidth: 1, borderStyle: 'dashed', paddingBottom: 4, marginBottom: 8 }}>
-                                <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{t('items_and_details').toUpperCase()}</Text>
-                            </View>
+                                {itemsToPrint.map((item) => (
+                                    <View key={item.id} style={{ marginBottom: 10 }}>
+                                        <Text style={{ fontSize: 11, fontWeight: 'bold' }}>{item.name.toUpperCase()} | {item.pcs} PCS</Text>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+                                            <Text style={{ fontSize: 9 }}>G.WT: {item.grossWeight.toFixed(3)}g</Text>
+                                            <Text style={{ fontSize: 9 }}>N.WT: {item.netWeight.toFixed(3)}g</Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                            <Text style={{ fontSize: 9 }}>VA: {item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`} ({(item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage).toFixed(3)}g)</Text>
+                                            <Text style={{ fontSize: 9 }}>MC: {item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge}`)}</Text>
+                                        </View>
+                                    </View>
+                                ))}
 
-                            {itemsToPrint.map((item) => (
-                                <View key={item.id} style={{ marginBottom: 10 }}>
-                                    <Text style={{ fontSize: 11, fontWeight: 'bold' }}>{item.name.toUpperCase()} | {item.pcs} PCS</Text>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
-                                        <Text style={{ fontSize: 9 }}>G.WT: {item.grossWeight.toFixed(3)}g</Text>
-                                        <Text style={{ fontSize: 9 }}>N.WT: {item.netWeight.toFixed(3)}g</Text>
+                                <View style={{ borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 8, marginVertical: 10, borderColor: '#000' }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold' }}>TOTAL G.WT:</Text>
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{itemsToPrint.reduce((s, i) => s + i.grossWeight, 0).toFixed(3)}g</Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                        <Text style={{ fontSize: 9 }}>VA: {item.wastageType === 'percentage' ? `${item.wastage}%` : `${item.wastage}g`} ({(item.wastageType === 'percentage' ? (item.netWeight * item.wastage / 100) : item.wastage).toFixed(3)}g)</Text>
-                                        <Text style={{ fontSize: 9 }}>MC: {item.makingChargeType === 'percentage' ? `${item.makingCharge}%` : (item.makingChargeType === 'perGram' ? `${item.makingCharge}/g` : `Rs.${item.makingCharge}`)}</Text>
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold' }}>TOTAL N.WT:</Text>
+                                        <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{itemsToPrint.reduce((s, i) => s + i.netWeight, 0).toFixed(3)}g</Text>
                                     </View>
                                 </View>
-                            ))}
 
-                            <View style={{ borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 8, marginVertical: 10, borderColor: '#000' }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>TOTAL G.WT:</Text>
-                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{itemsToPrint.reduce((s, i) => s + i.grossWeight, 0).toFixed(3)}g</Text>
+                                <View style={{ alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderStyle: 'dashed', marginBottom: 10 }}>
+                                    <Text style={{ fontSize: 16, fontWeight: 'bold' }}>NET PAYABLE: Rs.{Math.round(
+                                        itemsToPrint.reduce((s, i) => s + i.totalValue, 0) -
+                                        (purchaseItemsToPrint.reduce((s, i) => s + i.amount, 0) +
+                                            chitItemsToPrint.reduce((s, i) => s + i.amount, 0) +
+                                            advanceItemsToPrint.reduce((s, i) => s + i.amount, 0))
+                                    ).toLocaleString()}</Text>
                                 </View>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>TOTAL N.WT:</Text>
-                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{itemsToPrint.reduce((s, i) => s + i.netWeight, 0).toFixed(3)}g</Text>
+
+                                <View style={{ alignItems: 'flex-end', marginTop: 10 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>EMPLOYEE: {printDetails?.employeeName || currentEmployeeName}</Text>
                                 </View>
-                            </View>
 
-                            <View style={{ alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderStyle: 'dashed', marginBottom: 10 }}>
-                                <Text style={{ fontSize: 16, fontWeight: 'bold' }}>NET PAYABLE: Rs.{Math.round(
-                                    itemsToPrint.reduce((s, i) => s + i.totalValue, 0) -
-                                    (purchaseItemsToPrint.reduce((s, i) => s + i.amount, 0) +
-                                        chitItemsToPrint.reduce((s, i) => s + i.amount, 0) +
-                                        advanceItemsToPrint.reduce((s, i) => s + i.amount, 0))
-                                ).toLocaleString()}</Text>
+                                <Text style={{ textAlign: 'center', marginTop: 20, fontSize: 11, fontWeight: 'bold', fontStyle: 'italic' }}>
+                                    {shopDetails.footerMessage || '*** THANK YOU VISIT AGAIN ***'}
+                                </Text>
                             </View>
-
-                            <View style={{ alignItems: 'flex-end', marginTop: 10 }}>
-                                <Text style={{ fontSize: 10, fontWeight: 'bold' }}>EMPLOYEE: {printDetails?.employeeName || currentEmployeeName}</Text>
-                            </View>
-
-                            <Text style={{ textAlign: 'center', marginTop: 20, fontSize: 11, fontWeight: 'bold', fontStyle: 'italic' }}>
-                                {shopDetails.footerMessage || '*** THANK YOU VISIT AGAIN ***'}
-                            </Text>
+                        </ScrollView>
+                        <View style={styles.modalFooter}>
+                            <PrimaryButton
+                                title={t('print')}
+                                onPress={confirmPrint}
+                                isLoading={isPrinting}
+                            />
                         </View>
-                    </ScrollView>
-                    <View style={styles.modalFooter}>
-                        <PrimaryButton
-                            title={t('print')}
-                            onPress={confirmPrint}
-                            isLoading={isPrinting}
-                        />
                     </View>
                 </View>
-            </View>
-        </Modal>
+            </Modal>
+        </>
     );
 
     const DetailRow = ({ label, value }: { label: string; value: string }) => (
@@ -1031,12 +1058,10 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         initialData={editingItem}
                         onScanPress={() => router.push('/(tabs)/scan')}
                         onAdd={(item) => {
-                            verifyAccess(() => {
-                                if (mode === 'TAG') addTagItem(item);
-                                else addManualItem(item);
-                                setEditingItem(null);
-                                showTopSnackbar(t('item_added_to_list') || 'Item added to list', 'success');
-                            });
+                            if (mode === 'TAG') addTagItem(item);
+                            else addManualItem(item);
+                            setEditingItem(null);
+                            showTopSnackbar(t('item_added_to_list') || 'Item added to list', 'success');
                         }}
                         onClear={() => setEditingItem(null)}
                     />
@@ -1057,7 +1082,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         />
                         <PrimaryButton
                             title={t('add_chit')}
-                            onPress={() => verifyAccess(handleAddChit)}
+                            onPress={handleAddChit}
                             style={{ marginTop: SPACING.md }}
                         />
                     </View>
@@ -1078,7 +1103,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         />
                         <PrimaryButton
                             title={t('add_advance')}
-                            onPress={() => verifyAccess(handleAddAdvance)}
+                            onPress={handleAddAdvance}
                             style={{ marginTop: SPACING.md }}
                         />
                     </View>
@@ -1171,7 +1196,7 @@ export default function UnifiedEstimationScreen({ initialMode = 'TAG' }: { initi
                         </View>
                         <PrimaryButton
                             title={t('add_purchase')}
-                            onPress={() => verifyAccess(handleAddPurchase)}
+                            onPress={handleAddPurchase}
                             style={{ marginTop: SPACING.md }}
                         />
                     </View>

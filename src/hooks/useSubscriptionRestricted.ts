@@ -29,7 +29,7 @@ export function useSubscriptionRestricted() {
                 });
             }
 
-            if (res?.user?.isSubscriptionValid) {
+            if (res?.data?.user?.isSubscriptionValid || res?.isSubscriptionValid || res?.user?.isSubscriptionValid) {
                 await refreshProfile();
                 showAlert(
                     t('activation_success') || 'Activation Successful', 

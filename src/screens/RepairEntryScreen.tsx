@@ -64,7 +64,7 @@ export default function RepairEntryScreen() {
         if (repairIdParam) {
             loadRepairData(repairIdParam);
         } else {
-            generateRepairId();
+            resetForm();
         }
         loadProducts();
         loadRepairTypes();
@@ -699,23 +699,22 @@ export default function RepairEntryScreen() {
                     visible={showPreview}
                     onClose={() => {
                         setShowPreview(false);
-                        if (!repairIdParam) {
-                            resetForm();
-                        } else {
-                            router.replace('/(tabs)/repairs');
-                        }
+                        router.replace('/(tabs)/repairs');
                     }}
                     onPrint={async () => {
                         if (!validateSubscription()) return;
                         if (savedRepairData) {
                             try {
-                                await printRepair(savedRepairData, shopDetails, empId, receiptConfig, t);
-                                if (!repairIdParam) {
-                                    resetForm();
-                                } else {
-                                    setShowPreview(false);
-                                    router.replace('/(tabs)/repairs');
-                                }
+                                // Redirect and close immediately for snappy feel
+                                setShowPreview(false);
+                                
+                                // Print in background after a tiny delay
+                                setTimeout(() => {
+                                    printRepair(savedRepairData, shopDetails, empId, receiptConfig, t)
+                                        .catch(err => console.error('Background entry print failed:', err));
+                                }, 100);
+
+                                router.replace('/(tabs)/repairs');
                             } catch (printError: any) {
                                 showAlert(t('error'), printError.message || t('print_failed'), 'error');
                             }

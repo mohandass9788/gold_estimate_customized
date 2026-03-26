@@ -93,16 +93,20 @@ export default function RepairDeliveryModal({ visible, repair, onClose, onSucces
                 mobile: shopPhone
             };
 
-            await printRepairDelivery(repair, extraNum, hasExistingGst ? (repair.gstAmount || 0) : finalGstAmount, shopDetails, undefined, receiptConfig);
-
-            setLoading(false);
+            // Optimistic UI: Update state and close modal instantly
             setIsPrinted(true);
+            setLoading(false);
+            
+            // Close modal instantly via parent state update
+            onSuccess();
+            setShowConfirm(false);
+            setIsPrinted(false);
 
+            // Trigger print in background with small delay to ensure UI thread is free for animations
             setTimeout(() => {
-                setShowConfirm(false);
-                setIsPrinted(false);
-                onSuccess();
-            }, 1200);
+                printRepairDelivery(repair, extraNum, hasExistingGst ? (repair.gstAmount || 0) : finalGstAmount, shopDetails, undefined, receiptConfig)
+                    .catch(err => console.error('Background print failed:', err));
+            }, 100);
 
         } catch (error) {
             console.error('Delivery failed:', error);

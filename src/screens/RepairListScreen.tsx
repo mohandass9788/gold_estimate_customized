@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, ScrollView } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useGeneralSettings } from '../store/GeneralSettingsContext';
 import { getRepairs, getRepairById, DBRepair, deleteRepair } from '../services/dbService';
@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import RepairDeliveryModal from '../modals/RepairDeliveryModal';
 import RepairDetailsPreviewModal from '../modals/RepairDetailsPreviewModal';
 import { printRepair, getRepairReceiptThermalPayload } from '../services/printService';
+import StatusSnackbar from '../components/StatusSnackbar';
 
 export default function RepairListScreen() {
     const router = useRouter();
@@ -31,12 +32,30 @@ export default function RepairListScreen() {
     const [isPreviewVisible, setIsPreviewVisible] = useState(false);
     const [previewData, setPreviewData] = useState<DBRepair | null>(null);
     const [previewPayload, setPreviewPayload] = useState('');
+    const [topSnackbar, setTopSnackbar] = useState<{ visible: boolean; message: string; type: 'success' | 'info' | 'warning' | 'error' }>({
+        visible: false,
+        message: '',
+        type: 'info',
+    });
+
+    const showTopSnackbar = (message: string, type: 'success' | 'info' | 'warning' | 'error' = 'info') => {
+        setTopSnackbar({ visible: false, message: '', type });
+        setTimeout(() => {
+            setTopSnackbar({ visible: true, message, type });
+        }, 10);
+    };
 
     const activeColors = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
     useEffect(() => {
         loadRepairs();
     }, [statusFilter]);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            loadRepairs(true); // Silent refresh on focus
+        }, [statusFilter])
+    );
 
     useEffect(() => {
         if (!params.scanId) return;
@@ -67,8 +86,8 @@ export default function RepairListScreen() {
         handleScannedRepair();
     }, [params.scanId, router, t]);
 
-    const loadRepairs = async () => {
-        setLoading(true);
+    const loadRepairs = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const status = (statusFilter === 'ALL' || statusFilter === 'RECEIVED') ? undefined : statusFilter;
             const data = await getRepairs(100, status);
@@ -82,7 +101,7 @@ export default function RepairListScreen() {
         } catch (error) {
             console.error('Failed to load repairs:', error);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -207,7 +226,16 @@ export default function RepairListScreen() {
 
     const handleView = async (item: DBRepair) => {
         try {
-            const payload = await getRepairReceiptThermalPayload(item as any, shopDetails, undefined, receiptConfig, t);
+            const isDelivery = item.status === 'DELIVERED';
+            const payload = await getRepairReceiptThermalPayload(
+                item as any, 
+                shopDetails, 
+                undefined, 
+                receiptConfig, 
+                t, 
+                isDelivery,
+                false
+            );
             setPreviewPayload(payload);
             setPreviewData(item);
             setIsPreviewVisible(true);
@@ -222,12 +250,14 @@ export default function RepairListScreen() {
             await updateReceiptConfig({ paperWidth: width });
             if (previewData) {
                 const updatedConfig = { ...receiptConfig, paperWidth: width };
+                const isDelivery = previewData.status === 'DELIVERED';
                 const payload = await getRepairReceiptThermalPayload(
                     previewData as any,
                     shopDetails,
                     undefined,
                     updatedConfig,
-                    t
+                    t,
+                    isDelivery
                 );
                 setPreviewPayload(payload);
             }
@@ -346,17 +376,43 @@ export default function RepairListScreen() {
                 onClose={() => setIsDeliveryModalVisible(false)}
                 onSuccess={() => {
                     setIsDeliveryModalVisible(false);
-                    loadRepairs();
+                    loadRepairs(true); // Silent refresh
                 }}
             />
 
             <RepairDetailsPreviewModal
                 visible={isPreviewVisible}
                 onClose={() => setIsPreviewVisible(false)}
-                onPrint={() => {
+                onPrint={async () => {
                     if (!validateSubscription()) return;
                     if (previewData) {
-                        printRepair(previewData as any, shopDetails, undefined, receiptConfig, t);
+                        try {
+                            // Show immediate feedback
+                            showTopSnackbar(t('printing_started') || 'Printing started...', 'info');
+                            
+                            // Close instantly for snappy feel
+                            setIsPreviewVisible(false);
+                            loadRepairs(true); // Silent refresh immediately
+                            
+                            // Print in background with a tiny delay to allow modal to close/state to update
+                            setTimeout(() => {
+                                printRepair(
+                                    previewData as any, 
+                                    shopDetails, 
+                                    undefined, 
+                                    receiptConfig, 
+                                    t
+                                )
+                                    .then(() => showTopSnackbar(t('print_success') || 'Print sent successfully', 'success'))
+                                    .catch(err => {
+                                        console.error('Background preview print failed:', err);
+                                        showTopSnackbar(t('print_failed') || 'Print failed', 'error');
+                                    });
+                            }, 100);
+                        } catch (error: any) {
+                            console.error('Failed to print preview:', error);
+                            showTopSnackbar(t('print_error') || 'Failed to trigger print', 'error');
+                        }
                     }
                 }}
                 repairData={previewData as any}
@@ -388,6 +444,14 @@ export default function RepairListScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <StatusSnackbar
+                visible={topSnackbar.visible}
+                message={topSnackbar.message}
+                type={topSnackbar.type}
+                onClose={() => setTopSnackbar(prev => ({ ...prev, visible: false }))}
+                position="top"
+            />
         </ScreenContainer>
     );
 }

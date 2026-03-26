@@ -12,7 +12,7 @@ export const LIGHT_COLORS = {
     white: '#FFFFFF',
     gold: '#CBA135',
     goldGradient: ['#E6C27A', '#CBA135', '#B08826'], // Richer 3-stop gold
-    premiumGradient: ['#E6C27A', '#CBA135'], 
+    premiumGradient: ['#E6C27A', '#CBA135'],
     glassBg: 'rgba(255, 255, 255, 0.85)',
     shadowColor: '#000000',
 };

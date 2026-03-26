@@ -207,16 +207,24 @@ export const getMarketRatesHTML = (rates: { rate24k: string, rate22k: string, si
 };
 
 export const getCustomerInfoHTML = (customer: { name?: string, mobile?: string, address?: string }, t: TFunction, config?: ReceiptConfig) => {
-    if (!customer.name && !customer.mobile && !customer.address) return '';
+    const isPlaceholder = (val?: string) => !val || val.trim() === '' || val === 'N/A' || val === 'NA' || val === 'undefined' || val === 'null';
+    const isEstimationName = (name?: string) => name && name.toUpperCase().includes('ESTIMATION #');
+
     const showName = config ? config.showCustomerName : true;
     const showMobile = config ? config.showCustomerMobile : true;
     const showAddress = config ? config.showCustomerAddress : true;
 
+    const name = (showName && !isPlaceholder(customer.name) && !isEstimationName(customer.name)) ? customer.name : '';
+    const mobile = (showMobile && !isPlaceholder(customer.mobile)) ? customer.mobile : '';
+    const address = (showAddress && !isPlaceholder(customer.address)) ? customer.address : '';
+
+    if (!name && !mobile && !address) return '';
+
     return `
         <div class="customer-block">
-            ${(customer.name && showName) ? `<div class="row"><span><b>Name:</b> ${customer.name.toUpperCase()}</span></div>` : ''}
-            ${(customer.mobile && showMobile) ? `<div class="row"><span><b>Phone:</b> ${customer.mobile}</span></div>` : ''}
-            ${(customer.address && showAddress) ? `<div class="row"><span><b>Place:</b> ${customer.address.toUpperCase()}</span></div>` : ''}
+            ${name ? `<div class="row"><span><b>Name:</b> ${name.toUpperCase()}</span></div>` : ''}
+            ${mobile ? `<div class="row"><span><b>Phone:</b> ${mobile}</span></div>` : ''}
+            ${address ? `<div class="row"><span><b>Place:</b> ${address.toUpperCase()}</span></div>` : ''}
         </div>
     `;
 };

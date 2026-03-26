@@ -24,18 +24,23 @@ export const getPurchase112mmPayload = (
     payload += `${thermalCommands.center}${thermalCommands.boldOn}PURCHASE (OLD GOLD)${thermalCommands.boldOff}\x0a`;
     payload += divider;
 
-    payload += getThermalCustomer({ name: (item as any).customerName }, width, config);
+    payload += getThermalCustomer({ 
+        name: (item as any).customerName,
+        mobile: (item as any).customerMobile,
+        address: (item as any).customerAddress
+    }, width, config);
 
     // Header
-    payload += `${padR('ITEM', 22)}${padR('G.WT', 14)}${padR('RATE', 12)}${padL('AMOUNT', 16)}\x0a`;
+    // 24 (Name) + 14 (Weight) + 12 (Rate) + 14 (Amount) = 64
+    payload += `${padR('ITEM', 24)}${padR('G.WT', 14)}${padR('RATE', 12)}${padL('AMOUNT', 14)}\x0a`;
     payload += divider;
 
     // Item Row
     const amountStr = formatCurrency(item.amount);
     const weightStr = `${item.grossWeight.toFixed(3)}g`;
     const rateStr = `${item.rate}`;
-    const itemName = item.category.toUpperCase().substring(0, 21);
-    payload += `${padR(itemName, 22)}${padR(weightStr, 14)}${padR(rateStr, 12)}${padL(amountStr, 16)}\x0a`;
+    const itemName = item.category.toUpperCase().substring(0, 23);
+    payload += `${padR(itemName, 24)}${padR(weightStr, 14)}${padR(rateStr, 12)}${padL(amountStr, 14)}\x0a`;
 
     // Grand Total (Keeping Rs. here)
     payload += divider;

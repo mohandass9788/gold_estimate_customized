@@ -28,18 +28,19 @@ export const getPurchase58mmPayload = (
 
     // Header (Small Font)
     payload += thermalCommands.smallOn;
-    payload += `${padR('ITEM', 12)}${padR('G.WT', 9)}${padR('RATE', 9)}${padL('AMOUNT', 12)}\x0a`;
+    payload += `${padR('ITEM', 10)}${padR('WT', 7)}${padR('RATE', 7)}${padL('AMOUNT', 8)}\x0a`;
     payload += thermalCommands.smallOff;
     payload += divider;
 
     // Item Row
     payload += thermalCommands.smallOn;
     const amountStr = formatCurrency(item.amount);
-    const weightStr = `${item.grossWeight.toFixed(3)}g`;
+    const weightStr = `${item.grossWeight.toFixed(2)}`;
     const rateStr = `${item.rate}`;
-    const itemName = item.category.toUpperCase().substring(0, 11);
+    const itemName = item.category.toUpperCase().substring(0, 10);
 
-    payload += `${thermalCommands.boldOn}${padR(itemName, 12)}${thermalCommands.boldOff}${padR(weightStr, 9)}${padR(rateStr, 9)}${padL(amountStr, 12)}\x0a`;
+    // 10 (Name) + 7 (Weight) + 7 (Rate) + 8 (Amount) = 32
+    payload += `${thermalCommands.boldOn}${padR(itemName, 10)}${thermalCommands.boldOff}${padR(weightStr, 7)}${padR(rateStr, 7)}${padL(amountStr, 8)}\x0a`;
 
     payload += thermalCommands.smallOff;
 

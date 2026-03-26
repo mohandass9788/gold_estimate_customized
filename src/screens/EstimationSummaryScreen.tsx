@@ -108,7 +108,21 @@ export default function EstimationSummaryScreen() {
                         };
 
                         for (const item of selectedItems) {
-                            await printEstimationReceipt([item], [], [], [], sharedShop, details.customerName, details.employeeName, receiptConfig, undefined, t, summaryOnly);
+                            await printEstimationReceipt(
+                                [item],
+                                [],
+                                [],
+                                [],
+                                shopDetails,
+                                details.customerName,
+                                details.mobile,
+                                details.place,
+                                details.employeeName,
+                                receiptConfig,
+                                undefined,
+                                t,
+                                summaryOnly
+                            );
                             await new Promise(resolve => setTimeout(resolve, 1500));
                         }
                         // Purchases, Chits, Advances don't really have "summary only" yet in the same way, 
@@ -133,8 +147,10 @@ export default function EstimationSummaryScreen() {
                             selectedPurchases,
                             selectedChits,
                             selectedAdvances,
-                            sharedShopMerged,
+                            shopDetails,
                             details.customerName,
+                            details.mobile,
+                            details.place,
                             details.employeeName,
                             receiptConfig,
                             undefined,
@@ -152,6 +168,8 @@ export default function EstimationSummaryScreen() {
                         selectedAdvances,
                         sharedShopMerged,
                         details.customerName,
+                        details.mobile,
+                        details.place,
                         details.employeeName,
                         receiptConfig,
                         undefined,
@@ -184,6 +202,8 @@ export default function EstimationSummaryScreen() {
                 selectedAdvances,
                 shopDetails,
                 state.customer?.name,
+                state.customer?.mobile,
+                state.customer?.address,
                 printDetailsState?.employeeName || currentEmployeeName,
                 newConfig,
                 undefined,
@@ -209,12 +229,10 @@ export default function EstimationSummaryScreen() {
                 selectedPurchases,
                 selectedChits,
                 selectedAdvances,
-                {
-                    ...shopDetails,
-                    customerAddress: printDetailsState?.place || state.customer?.address || '',
-                    customerMobile: printDetailsState?.mobile || state.customer?.mobile || ''
-                },
-                printDetailsState?.customerName || '',
+                shopDetails,
+                printDetailsState?.customerName || state.customer?.name,
+                printDetailsState?.mobile || state.customer?.mobile,
+                printDetailsState?.place || state.customer?.address,
                 printDetailsState?.employeeName || currentEmployeeName,
                 receiptConfig,
                 undefined,

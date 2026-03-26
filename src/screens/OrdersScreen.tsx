@@ -122,8 +122,8 @@ export default function OrdersScreen() {
     const filteredOrders = useMemo(() => {
         if (!searchQuery.trim()) return orders;
         const query = searchQuery.toLowerCase();
-        return orders.filter(order => 
-            order.id.toLowerCase().includes(query) || 
+        return orders.filter(order =>
+            order.id.toLowerCase().includes(query) ||
             (order.customerName && order.customerName.toLowerCase().includes(query)) ||
             (order.estimationNumber && order.estimationNumber.toString().includes(query))
         );
@@ -172,10 +172,11 @@ export default function OrdersScreen() {
 
     const handlePrint = async (orderId: string) => {
         if (!validateSubscription()) return;
-        
+
         try {
             setIsPrinting(true);
             const order = orders.find(o => o.id === orderId);
+            console.log(order, "---------------order---------->")
             if (!order) return;
 
             const products = JSON.parse(order.items || '[]');
@@ -190,6 +191,8 @@ export default function OrdersScreen() {
                 advances,
                 shopDetails,
                 order.customerName,
+                order.customerMobile,
+                order.customerAddress,
                 currentEmployeeName || t('admin') || 'Admin',
                 receiptConfig,
                 order.estimationNumber,
@@ -533,18 +536,18 @@ export default function OrdersScreen() {
                         </TouchableOpacity>
                     )}
                 </View>
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                     style={[styles.filterButton, { backgroundColor: activeColors.primary }]}
                     onPress={() => setShowFilterModal(true)}
                 >
                     <Icon name="filter-outline" size={18} color={COLORS.white} />
                     <Text style={styles.filterButtonText}>
-                        {dateFilter === 'all' ? t('all') : 
-                         dateFilter === 'today' ? t('today') : 
-                         dateFilter === 'yesterday' ? t('yesterday') : 
-                         dateFilter === '7days' ? t('last_7_days') : 
-                         dateFilter === '30days' ? t('last_month') : t('custom_range')}
+                        {dateFilter === 'all' ? t('all') :
+                            dateFilter === 'today' ? t('today') :
+                                dateFilter === 'yesterday' ? t('yesterday') :
+                                    dateFilter === '7days' ? t('last_7_days') :
+                                        dateFilter === '30days' ? t('last_month') : t('custom_range')}
                     </Text>
                     <Icon name="chevron-down" size={14} color={COLORS.white} />
                 </TouchableOpacity>
@@ -562,10 +565,10 @@ export default function OrdersScreen() {
                             { id: '30days', label: t('last_month') },
                             { id: 'custom', label: t('custom_range') },
                         ].map((item) => (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 key={item.id}
                                 style={[
-                                    styles.filterOption, 
+                                    styles.filterOption,
                                     dateFilter === item.id && { backgroundColor: activeColors.primary + '15' }
                                 ]}
                                 onPress={() => {
@@ -574,7 +577,7 @@ export default function OrdersScreen() {
                                 }}
                             >
                                 <Text style={[
-                                    styles.filterOptionText, 
+                                    styles.filterOptionText,
                                     { color: activeColors.text },
                                     dateFilter === item.id && { color: activeColors.primary, fontWeight: 'bold' }
                                 ]}>

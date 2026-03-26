@@ -55,14 +55,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const updateUserWithStatus = useCallback((res: any) => {
         const user = res?.user || res?.data?.user || (res?.phone ? res : null);
         const subscriptionUpdate = {
-            isSubscriptionValid: res?.isSubscriptionValid,
-            is_trial: res?.is_trial,
-            status: res?.status,
-            subscription_valid_upto: res?.subscription_valid_upto,
+            isSubscriptionValid: res?.isSubscriptionValid ?? res?.data?.isSubscriptionValid,
+            is_trial: res?.is_trial ?? res?.data?.is_trial,
+            status: res?.status ?? res?.data?.status,
+            subscription_valid_upto: res?.subscription_valid_upto ?? res?.data?.subscription_valid_upto,
         };
         
         setCurrentUser(prev => {
-            const updated = { ...prev, ...subscriptionUpdate, ...(user || {}) };
+            const updated = { ...prev, ...(user || {}), ...subscriptionUpdate };
+            // Persist the full merged user object
             SecureStore.setItemAsync('auth_user', JSON.stringify(updated)).catch(() => {});
             return updated as any;
         });
@@ -143,7 +144,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 checkAuthStatus().then(res => {
                     updateUserWithStatus(res);
                 }).catch(e => {
-                    const isExpired = e.message?.includes('expired');
+                    const isExpired = e.message?.includes('expired') || e.message?.includes('logged_out');
                     const title = isExpired ? t('session_expired_title') : 'Access Denied';
                     if (e?.message?.includes('Account deactivated') || isExpired) {
                         showAlert(title, e.message, 'error', [{ text: t('ok'), onPress: logout }]);
@@ -164,14 +165,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const loginRes = await loginUser({ phone, password, push_token: pushToken });
             if (!loginRes) return false;
 
-            const profile = await fetchProfile();
-            setCurrentUser(profile);
-            setIsSuperAdmin(hasSuperAdminAccess(profile, profile?.username));
+            // loginUser already returns some profile data, but let's refresh fully
+            const profile = await fetchProfile() || (loginRes?.user || loginRes?.data?.user);
+            
+            // Critical: checkAuthStatus returns subscription data which login might miss
+            const statusRes = await checkAuthStatus().catch(() => null);
+            
+            if (statusRes) {
+                updateUserWithStatus({ ...profile, ...statusRes });
+            } else {
+                setCurrentUser(profile);
+            }
 
-            try {
-                const statusRes = await checkAuthStatus();
-                updateUserWithStatus(statusRes);
-            } catch (e) { /* ignore on init */ }
+            setIsSuperAdmin(hasSuperAdminAccess(profile, profile?.username));
 
             return true;
         } catch (e: any) {
@@ -242,13 +248,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
         return false;
     }, []);
-
     const refreshProfile = useCallback(async () => {
         try {
-            const res = await checkAuthStatus();
-            updateUserWithStatus(res);
+            const profile = await fetchProfile();
+            const statusRes = await checkAuthStatus();
+            updateUserWithStatus({ ...profile, ...statusRes });
         } catch (e: any) {
-            const isExpired = e.message?.includes('expired');
+            const isExpired = e.message?.includes('expired') || e.message?.includes('logged_out');
             const title = isExpired ? t('session_expired_title') : 'Access Denied';
             if (e.message?.includes('Account deactivated') || isExpired) {
                 showAlert(title, e.message, 'error', [{ text: t('ok'), onPress: logout }]);

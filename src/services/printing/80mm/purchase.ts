@@ -24,7 +24,11 @@ export const getPurchase80mmPayload = (
     payload += `${thermalCommands.center}${thermalCommands.boldOn}PURCHASE (OLD GOLD)${thermalCommands.boldOff}\x0a`;
     payload += divider;
 
-    payload += getThermalCustomer({ name: (item as any).customerName, mobile: (item as any).customerMobile, address: (item as any).customerAddress }, width, config);
+    payload += getThermalCustomer({ 
+        name: (item as any).customerName, 
+        mobile: (item as any).customerMobile, 
+        address: (item as any).customerAddress 
+    }, width, config);
 
     // Header
     payload += `${padR('ITEM', 15)}${padR('G.WT', 11)}${padR('RATE', 8)}${padL('AMOUNT', 14)}\x0a`;

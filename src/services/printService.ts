@@ -66,6 +66,21 @@ import {
     getReceiptFooterHTML
 } from './receiptTemplates';
 
+/**
+ * Sanitizes customer data by removing placeholders like "Estimation #" or "N/A".
+ */
+const sanitizeCustomerData = (name?: string, mobile?: string, address?: string) => {
+    // Standardize placeholders
+    const isPlaceholder = (val?: string) => !val || val.trim() === '' || val === 'N/A' || val === 'NA' || val === 'undefined' || val === 'null';
+    const isEstimation = name && name.toUpperCase().includes('ESTIMATION #');
+
+    return {
+        name: (isEstimation || isPlaceholder(name)) ? '' : name || '',
+        mobile: isPlaceholder(mobile) ? '' : mobile || '',
+        address: isPlaceholder(address) ? '' : address || ''
+    };
+};
+
 const getPrinterConfig = async () => {
     const type = await getSetting('printer_type') || 'system';
     const savedPrinter = await getSetting('connected_printer');
@@ -153,7 +168,10 @@ export const printEstimationItem = async (
     employeeName?: string,
     config?: ReceiptConfig,
     t?: TFunction,
-    estimationNumber?: number
+    estimationNumber?: number,
+    customerName?: string,
+    customerMobile?: string,
+    customerAddress?: string
 ): Promise<void> => {
     const { type, printer } = await getPrinterConfig();
     if (type === 'thermal' && printer?.address) {
@@ -168,6 +186,8 @@ export const printEstimationItem = async (
             const sRate = await getSetting('rate_silver');
             const goldRate = gRate ? parseFloat(gRate) : undefined;
             const silverRate = sRate ? parseFloat(sRate) : undefined;
+
+            const sanitized = sanitizeCustomerData(customerName, customerMobile, customerAddress);
 
             let payload = '';
             const footerMessage = shopDetails?.footerMessage;
@@ -307,6 +327,8 @@ export const getEstimationReceiptThermalPayload = async (
     advanceItems: AdvanceItem[] = [],
     shopDetails: any,
     customerName?: string,
+    customerMobile?: string,
+    customerAddress?: string,
     employeeName?: string,
     config?: ReceiptConfig,
     estimationNumber?: number,
@@ -335,11 +357,7 @@ export const getEstimationReceiptThermalPayload = async (
         purchaseItems,
         chitItems,
         advanceItems,
-        customer: {
-            name: customerName,
-            mobile: shopDetails?.customerMobile,
-            address: shopDetails?.customerAddress
-        },
+        customer: sanitizeCustomerData(customerName, customerMobile, customerAddress),
         totals: {
             estimationTotal,
             purchaseTotal,
@@ -367,6 +385,8 @@ export const printEstimationReceipt = async (
     advanceItems: AdvanceItem[] = [],
     shopDetails: any,
     customerName?: string,
+    customerMobile?: string,
+    customerAddress?: string,
     employeeName?: string,
     config?: ReceiptConfig,
     estimationNumber?: number,
@@ -378,7 +398,7 @@ export const printEstimationReceipt = async (
         const connected = await ensureThermalConnection(printer.address);
         if (connected) {
             // Get payload WITH footer
-            const payload = await getEstimationReceiptThermalPayload(items, purchaseItems, chitItems, advanceItems, shopDetails, customerName, employeeName, config, estimationNumber, t, false, summaryOnly);
+            const payload = await getEstimationReceiptThermalPayload(items, purchaseItems, chitItems, advanceItems, shopDetails, customerName, customerMobile, customerAddress, employeeName, config, estimationNumber, t, false, summaryOnly);
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
 
             // Print combined content
@@ -411,6 +431,10 @@ export const printRepair = async (
             return;
         }
     }
+    // Minimal HTML Print logic for Repair
+    const _t = t || ((key: string) => key);
+    const html = `<html><body><h2>REPAIR</h2><p>ID: ${repair.id}</p><p>Item: ${repair.itemName}</p></body></html>`;
+    await Print.printAsync({ html });
 };
 
 export const getRepairReceiptThermalPayload = async (
@@ -432,10 +456,14 @@ export const getRepairReceiptThermalPayload = async (
     const silverRate = sRate ? parseFloat(sRate) : undefined;
 
     const footerMessage = shopDetails?.footerMessage;
+    const sanitizedRepair = {
+        ...repair,
+        ...sanitizeCustomerData(repair.customerName, repair.customerMobile, repair.customerAddress)
+    };
 
-    if (paperWidth === '80mm') return getRepair80mmPayload(repair, 0, 0, shopName, deviceName, employeeName || '', config, goldRate, silverRate, isDelivery, skipFooter, footerMessage);
-    if (paperWidth === '112mm') return getRepair112mmPayload(repair, 0, 0, shopName, deviceName, employeeName || '', config, goldRate, silverRate, isDelivery, skipFooter, footerMessage);
-    return getRepair58mmPayload(repair, 0, 0, shopName, deviceName, employeeName || '', config, goldRate, silverRate, isDelivery, skipFooter, footerMessage);
+    if (paperWidth === '80mm') return getRepair80mmPayload(sanitizedRepair, 0, 0, shopName, deviceName, employeeName || '', config, goldRate, silverRate, isDelivery, skipFooter, footerMessage);
+    if (paperWidth === '112mm') return getRepair112mmPayload(sanitizedRepair, 0, 0, shopName, deviceName, employeeName || '', config, goldRate, silverRate, isDelivery, skipFooter, footerMessage);
+    return getRepair58mmPayload(sanitizedRepair, 0, 0, shopName, deviceName, employeeName || '', config, goldRate, silverRate, isDelivery, skipFooter, footerMessage);
 };
 
 export const printRepairDelivery = async (
@@ -460,16 +488,23 @@ export const printRepairDelivery = async (
             const goldRate = gRate ? parseFloat(gRate) : undefined;
             const silverRate = sRate ? parseFloat(sRate) : undefined;
 
+            const sanitizedRepair = {
+                ...repair,
+                ...sanitizeCustomerData(repair.customerName, repair.customerMobile, repair.customerAddress)
+            };
+
             let payload = '';
-            if (paperWidth === '80mm') payload = getRepair80mmPayload(repair, extraAmount, gstAmount, shopName, deviceName, employeeName || '', config, goldRate, silverRate, true, false, footerMessage);
-            else if (paperWidth === '112mm') payload = getRepair112mmPayload(repair, extraAmount, gstAmount, shopName, deviceName, employeeName || '', config, goldRate, silverRate, true, false, footerMessage);
-            else payload = getRepair58mmPayload(repair, extraAmount, gstAmount, shopName, deviceName, employeeName || '', config, goldRate, silverRate, true, false, footerMessage);
+            if (paperWidth === '80mm') payload = getRepair80mmPayload(sanitizedRepair, extraAmount, gstAmount, shopName, deviceName, employeeName || '', config, goldRate, silverRate, true, false, footerMessage);
+            else if (paperWidth === '112mm') payload = getRepair112mmPayload(sanitizedRepair, extraAmount, gstAmount, shopName, deviceName, employeeName || '', config, goldRate, silverRate, true, false, footerMessage);
+            else payload = getRepair58mmPayload(sanitizedRepair, extraAmount, gstAmount, shopName, deviceName, employeeName || '', config, goldRate, silverRate, true, false, footerMessage);
 
             const { BLEPrinter } = require('react-native-thermal-receipt-printer');
             BLEPrinter.printText(payload);
             return;
         }
     }
+    const html = `<html><body><h2>REPAIR DELIVERY</h2><p>ID: ${repair.id}</p><p>Item: ${repair.itemName}</p></body></html>`;
+    await Print.printAsync({ html });
 };
 
 export const printQRCodeImage = async (text: string, printerType: string = 'thermal', qrEndpointUrl?: string, paperWidth: string = '58mm'): Promise<boolean> => {

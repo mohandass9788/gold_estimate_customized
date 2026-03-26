@@ -140,7 +140,7 @@ export default function ShopInfoScreen() {
                             <Text style={styles.helperText}>{t('logo_helper_text')}</Text>
                         </View>
 
-                        <View style={{ flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.md }}>
+                        <View style={{ flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.md, display: 'none' }}>
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.fieldLabel, { color: activeColors.text }]}>{t('app_icon') || 'App Icon'}</Text>
                                 <TouchableOpacity onPress={() => pickImage('icon')} style={[styles.logoPicker, { width: '100%', borderColor: activeColors.border, backgroundColor: activeColors.background }]}>
@@ -209,7 +209,7 @@ export default function ShopInfoScreen() {
                         <InputField
                             label={t('device_name') || 'Device Name / Hardware ID'}
                             value={localDeviceName}
-                            editable={false}
+                            editable={true}
                         />
                     </View>
 

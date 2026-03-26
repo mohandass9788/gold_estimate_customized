@@ -55,6 +55,7 @@ export interface DBEstimation {
     id: string;
     customerName: string;
     customerMobile: string;
+    customerAddress?: string;
     date: string;
     items: string; // JSON stringified ExecutionItem[]
     purchaseItems?: string; // JSON stringified PurchaseItem[]
@@ -186,6 +187,7 @@ export const initDatabase = async () => {
                     id TEXT PRIMARY KEY,
                     customerName TEXT,
                     customerMobile TEXT,
+                    customerAddress TEXT,
                     date TEXT NOT NULL,
                     items TEXT NOT NULL,
                     purchaseItems TEXT,
@@ -204,6 +206,7 @@ export const initDatabase = async () => {
                     orderId TEXT NOT NULL UNIQUE,
                     customerName TEXT,
                     customerMobile TEXT,
+                    customerAddress TEXT,
                     employeeName TEXT NOT NULL,
                     date TEXT NOT NULL,
                     grossTotal REAL NOT NULL,
@@ -245,6 +248,21 @@ export const initDatabase = async () => {
                     address1 TEXT
                 );
             `);
+
+            // Migration for customerAddress in estimations and orders
+            const estMigInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(estimations);');
+            const estMigCols = estMigInfo.map(c => c.name);
+            if (!estMigCols.includes('customerAddress')) {
+                console.log('Migrating: Adding customerAddress to estimations');
+                await db.execAsync('ALTER TABLE estimations ADD COLUMN customerAddress TEXT;');
+            }
+
+            const transMigInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(orders);');
+            const transMigCols = transMigInfo.map(c => c.name);
+            if (!transMigCols.includes('customerAddress')) {
+                console.log('Migrating: Adding customerAddress to orders');
+                await db.execAsync('ALTER TABLE orders ADD COLUMN customerAddress TEXT;');
+            }
 
             // Create Companies table
             await db.execAsync(`
@@ -584,11 +602,12 @@ export const deleteSubProduct = async (id: number): Promise<void> => {
 export const saveEstimation = async (estimation: DBEstimation): Promise<void> => {
     if (!db) await initDatabase();
     await db!.runAsync(
-        'INSERT OR REPLACE INTO estimations (id, customerName, customerMobile, date, items, purchaseItems, chitItems, advanceItems, totalWeight, grandTotal, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
+        'INSERT OR REPLACE INTO estimations (id, customerName, customerMobile, customerAddress, date, items, purchaseItems, chitItems, advanceItems, totalWeight, grandTotal, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
         [
             estimation.id,
             estimation.customerName,
             estimation.customerMobile,
+            estimation.customerAddress || null,
             estimation.date,
             estimation.items,
             estimation.purchaseItems || '[]',
@@ -765,6 +784,7 @@ export interface DBOrder {
     orderId: string;
     customerName: string;
     customerMobile: string;
+    customerAddress?: string;
     employeeName: string;
     date: string;
     grossTotal: number;
@@ -790,8 +810,8 @@ export const saveOrder = async (
         await db!.withTransactionAsync(async () => {
             // Use INSERT OR REPLACE to update existing orders instead of creating duplicates
             await db!.runAsync(
-                'INSERT OR REPLACE INTO orders (orderId, customerName, customerMobile, employeeName, date, grossTotal, netPayable, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?);',
-                [order.orderId, order.customerName, order.customerMobile, order.employeeName, order.date, order.grossTotal, order.netPayable, order.estimationNumber || null]
+                'INSERT OR REPLACE INTO orders (orderId, customerName, customerMobile, customerAddress, employeeName, date, grossTotal, netPayable, estimationNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);',
+                [order.orderId, order.customerName, order.customerMobile, order.customerAddress || null, order.employeeName, order.date, order.grossTotal, order.netPayable, order.estimationNumber || null]
             );
 
             // Clear existing items for this orderId before adding updated ones

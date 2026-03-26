@@ -39,14 +39,13 @@ export default function MpinScreen() {
         }
     }, [isAuthenticated, isMpinRequired]);
 
-    const handleVerify = async () => {
-        if (pin.length !== 4) {
-            setError(t('enter_4_digit_pin') || 'Please enter 4-digit PIN');
-            return;
-        }
+    const handleVerify = async (pinInput?: string) => {
+        const pinToVerify = pinInput || pin;
+        if (pinToVerify.length !== 4) return;
+
         setLoading(true);
         setError('');
-        const success = await verifyMpin(pin);
+        const success = await verifyMpin(pinToVerify);
         if (success) {
             // Check if we should suggest enabling biometrics
             if (isBiometricSupported && !isBiometricEnabled) {
@@ -54,17 +53,17 @@ export default function MpinScreen() {
                     t('use_biometrics') || 'Use Biometrics',
                     t('biometric_setup_prompt') || 'Would you like to enable biometric login for faster access?',
                     [
-                        { 
-                            text: t('no') || 'No', 
+                        {
+                            text: t('no') || 'No',
                             onPress: () => router.replace('/(tabs)/'),
-                            style: 'cancel' 
+                            style: 'cancel'
                         },
-                        { 
-                            text: t('yes') || 'Yes', 
+                        {
+                            text: t('yes') || 'Yes',
                             onPress: async () => {
                                 await setIsBiometricEnabled(true);
                                 router.replace('/(tabs)/');
-                            } 
+                            }
                         }
                     ]
                 );
@@ -110,32 +109,52 @@ export default function MpinScreen() {
                         </View>
                     ) : null}
 
-                    <View style={styles.inputContainer}>
+                    <View style={styles.pinContainer}>
+                        {[...Array(4)].map((_, i) => (
+                            <View
+                                key={i}
+                                style={[
+                                    styles.pinBox,
+                                    {
+                                        borderColor: error ? COLORS.error : pin.length > i ? activeColors.primary : activeColors.border,
+                                        backgroundColor: activeColors.background
+                                    }
+                                ]}
+                            >
+                                <Text style={[styles.pinDot, { color: activeColors.text }]}>
+                                    {pin.length > i ? '●' : ''}
+                                </Text>
+                            </View>
+                        ))}
                         <TextInput
-                            style={[styles.input, { color: activeColors.text, borderColor: activeColors.border, backgroundColor: activeColors.background }]}
+                            style={styles.hiddenInput}
                             value={pin}
                             onChangeText={(val: string) => {
                                 const cleanVal = val.replace(/[^0-9]/g, '');
-                                setPin(cleanVal);
-                                if (cleanVal.length === 4) {
-                                    // Auto verify if 4 digits
-                                    // setTimeout to allow UI update
-                                    setTimeout(() => handleVerify(), 100);
+                                if (cleanVal.length <= 4) {
+                                    setPin(cleanVal);
+                                    if (error) setError('');
+                                    if (cleanVal.length === 4) {
+                                        handleVerify(cleanVal);
+                                    }
                                 }
                             }}
-                            placeholder="****"
-                            placeholderTextColor={activeColors.textLight}
                             keyboardType="numeric"
-                            secureTextEntry
                             maxLength={4}
-                            autoFocus={true}
+                            autoFocus={false}
                         />
                     </View>
 
-                    <TouchableOpacity 
-                        style={[styles.loginButton, { backgroundColor: activeColors.primary }]} 
-                        onPress={handleVerify}
-                        disabled={loading}
+                    <TouchableOpacity
+                        style={[
+                            styles.loginButton,
+                            {
+                                backgroundColor: pin.length === 4 ? activeColors.primary : activeColors.border,
+                                opacity: loading ? 0.7 : 1
+                            }
+                        ]}
+                        onPress={() => handleVerify()}
+                        disabled={loading || pin.length < 4}
                     >
                         {loading ? (
                             <ActivityIndicator color="#fff" />
@@ -146,7 +165,7 @@ export default function MpinScreen() {
 
                     {isBiometricSupported && isBiometricEnabled && (
                         <TouchableOpacity style={styles.biometricButton} onPress={handleBiometric}>
-                            <Icon name="finger-print" size={48} color={activeColors.primary} />
+                            <Icon name="finger-print" size={36} color={activeColors.primary} />
                             <Text style={[styles.biometricText, { color: activeColors.primary }]}>{t('use_biometrics') || 'Use Biometrics'}</Text>
                         </TouchableOpacity>
                     )}
@@ -195,18 +214,36 @@ const styles = StyleSheet.create({
         fontSize: FONT_SIZES.sm,
         marginTop: 4,
     },
-    inputContainer: {
+    pinContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: SPACING.md,
         marginBottom: SPACING.xl,
-        alignItems: 'center',
     },
-    input: {
-        width: '100%',
+    pinBox: {
+        width: 50,
+        height: 60,
         borderRadius: BORDER_RADIUS.md,
-        padding: SPACING.md,
-        fontSize: 32,
-        borderWidth: 1,
-        textAlign: 'center',
-        letterSpacing: 20,
+        borderWidth: 2,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    pinDot: {
+        fontSize: 24,
+        fontWeight: 'bold',
+    },
+    hiddenInput: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0,
     },
     errorBanner: {
         backgroundColor: '#FEF2F2',

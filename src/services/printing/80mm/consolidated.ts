@@ -117,7 +117,7 @@ export const getConsolidated80mmPayload = (
     if (data.purchaseItems.length > 0 && !summaryOnly) {
         payload += `${thermalCommands.center}${thermalCommands.boldOn}PURCHASE (OLD GOLD)${thermalCommands.boldOff}\x0a`;
         payload += divider;
-        payload += `${padR('ITEM', 15)}${padR('G.WT', 11)}${padR('RATE', 8)}${padL('AMOUNT', 14)}\x0a`;
+        payload += `${padR('ITEM', 15)}${padR('WT', 10)}${padR('RATE', 10)}${padL('AMOUNT', 13)}\x0a`;
         payload += divider;
 
         data.purchaseItems.forEach(item => {
@@ -125,7 +125,7 @@ export const getConsolidated80mmPayload = (
             const rateStr = `${item.rate}`;
             const amountStr = formatCurrency(item.amount);
             const itemName = item.category.toUpperCase().substring(0, 14);
-            payload += `${padR(itemName, 15)}${padR(weightStr, 11)}${padR(rateStr, 8)}${padL(amountStr, 14)}\x0a`;
+            payload += `${padR(itemName, 15)}${padR(weightStr, 10)}${padR(rateStr, 10)}${padL(amountStr, 13)}\x0a`;
 
         });
         payload += divider;
