@@ -98,7 +98,7 @@ export const getConsolidated58mmPayload = (
             const vaStr = vWeight.toFixed(3);
 
             payload += `  Pcs:${item.pcs}  WT:${weightStr}  MC:${mcStr}\n`;
-            payload += `  Wastage:${vaStr}g`;
+            payload += `  VA:${vaStr}g`;
 
             if (item.stoneWeight > 0) {
                 payload += `  Stone:${item.stoneWeight.toFixed(3)}g`;
